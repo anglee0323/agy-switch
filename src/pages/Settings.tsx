@@ -9,6 +9,7 @@ import { open } from '@tauri-apps/plugin-dialog';
 import UpdateSettings from '../components/settings/UpdateSettings';
 import DesktopSettings from '../components/settings/DesktopSettings';
 import ModelDisplaySettings from '../components/settings/ModelDisplaySettings';
+import CustomModelSettings from '../components/settings/CustomModelSettings';
 import { AutoSwitchSettings } from '../components/autoSwitch/AutoSwitch';
 import SettingsNavigation, { SETTINGS_SECTIONS, SettingsSection } from '../components/settings/SettingsNavigation';
 import '../components/settings/SettingsLayout.css';
@@ -357,6 +358,7 @@ function Settings() {
                 </section>
             </div>
         ),
+        customModels: <CustomModelSettings />,
         autoSwitch: <AutoSwitchSettings />,
     };
 

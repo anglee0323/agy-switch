@@ -39,6 +39,10 @@ export function setupSettingsFixture(options: { theme?: string; language?: strin
             if (command === 'set_desktop_preferences') { desktop = { ...desktop, ...args.patch }; general.desktop = { launch_at_login: desktop.launch_at_login, hide_dock_icon: desktop.hide_dock_icon, start_minimized: desktop.start_minimized }; return copy(desktop); }
             if (command === 'set_menu_bar_preferences') { general.menu_bar = { ...general.menu_bar, ...args.patch, ...(args.quotaScope ? { quota_scope: args.quotaScope } : {}) }; return copy(general.menu_bar); }
             if (command === 'set_window_theme' || command === 'set_window_language') return null;
+            if (command === 'get_custom_models') return [];
+            if (command === 'get_custom_models_file_path') return '/synthetic/antigravity/custom_models.json';
+            if (command === 'save_custom_models') return null;
+            if (command === 'test_custom_model_connection') return { success: true, latency_ms: 100, message: 'HTTP 200 OK' };
             if (command === 'plugin:event|listen') return callback++;
             if (command.startsWith('plugin:window|')) {
                 if (/size$/.test(command)) return { width: 1100, height: 780 };

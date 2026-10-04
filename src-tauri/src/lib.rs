@@ -325,6 +325,10 @@ pub fn run() {
             commands::get_menu_bar_usage,
             commands::get_api_pricing,
             commands::check_for_updates,
+            commands::get_custom_models,
+            commands::save_custom_models,
+            commands::test_custom_model_connection,
+            commands::get_custom_models_file_path,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

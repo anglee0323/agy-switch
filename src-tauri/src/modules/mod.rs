@@ -39,3 +39,4 @@ pub mod menu_bar_projection;
 pub mod native_menu;
 pub mod auto_switch;
 pub mod updater;
+pub mod custom_models;

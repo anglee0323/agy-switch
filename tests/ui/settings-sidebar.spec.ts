@@ -6,8 +6,8 @@ test.beforeEach(async ({ page }, info) => {
   await page.goto('/settings'); await expect(page.getByRole('tab', { name: '常规偏好', exact: true })).toHaveAttribute('aria-selected', 'true');
 });
 test('three retained panels preserve fields and localization is absent', async ({ page }) => {
-  expect(await page.getByRole('tab').allTextContents()).toEqual(['常规偏好', '配额与模型', '智能切换策略']);
-  for (const name of ['配额与模型', '智能切换策略', '常规偏好']) {
+  expect(await page.getByRole('tab').allTextContents()).toEqual(['常规偏好', '配额与模型', '自定义模型', '智能切换策略']);
+  for (const name of ['配额与模型', '自定义模型', '智能切换策略', '常规偏好']) {
     await page.getByRole('tab', { name, exact: true }).click(); await expect(page.getByRole('tabpanel')).toHaveCount(1); await expect(page.getByRole('tabpanel', { name, exact: true })).toBeVisible();
   }
   await expect(page.getByText('/synthetic/antigravity-tools', { exact: true })).toBeVisible();
@@ -94,7 +94,7 @@ test('keyboard navigation wraps and mounted hidden panels stay outside the tab o
   await page.getByRole('tab').first().focus(); await page.keyboard.press('ArrowLeft'); await expect(page.locator('#settings-tab-autoSwitch')).toBeFocused(); await page.keyboard.press('Home'); await expect(page.locator('#settings-tab-general')).toBeFocused();
   await page.keyboard.press('Tab'); await expect(page.getByRole('tabpanel')).toBeFocused();
   for (let i = 0; i < 12; i++) { await page.keyboard.press('Tab'); expect(await page.evaluate(() => document.activeElement?.closest('[role="tabpanel"][hidden]') === null)).toBe(true); }
-  await expect(page.locator('[role="tabpanel"][hidden]')).toHaveCount(2);
+  await expect(page.locator('[role="tabpanel"][hidden]')).toHaveCount(3);
 });
 test('desktop preferences survive navigation and ordinary appearance saves', async ({ page }) => {
   const login = page.locator('#desktop-launch_at_login'); const dock = page.locator('#desktop-hide_dock_icon');
@@ -108,7 +108,7 @@ test('all categories and controls fit short bilingual windows; scrollers reset o
     await page.locator('#settings-tab-general').click(); await page.getByRole('button', { name: language === 'en' ? 'English' : '简体中文', exact: true }).click();
     for (const width of [760, 420]) {
       await page.setViewportSize({ width, height: 520 });
-      for (const id of ['general', 'quota', 'autoSwitch']) {
+      for (const id of ['general', 'quota', 'customModels', 'autoSwitch']) {
         await page.locator('#settings-tab-' + id).click(); const panel = page.locator('#settings-panel-' + id); await expect(panel).toBeVisible();
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
         expect(await panel.locator('input,select,button').evaluateAll(fields => fields.filter(f => (f as HTMLElement).offsetWidth > 2).every(f => { const r=f.getBoundingClientRect();return r.left>=0 && r.right<=innerWidth+1; }))).toBe(true);
@@ -131,3 +131,25 @@ test('candidate order supports keyboard dragging and survives saved navigation',
   await page.locator('#settings-tab-general').click(); await page.locator('#settings-tab-autoSwitch').click();
   await expect(page.locator('[data-candidate-id]').first()).toHaveAttribute('data-candidate-id', 'fixture-1');
 });
+
+test('custom model modal fits short windows without top clipping and closes with escape', async ({ page }) => {
+  await page.locator('#settings-tab-customModels').click();
+  await page.setViewportSize({ width: 720, height: 500 });
+  await page.getByRole('button', { name: /添加自定义模型|添加第一个模型/ }).first().click();
+
+  const title = page.getByRole('heading', { name: '添加自定义模型' });
+  await expect(title).toBeVisible();
+  const titleBox = await title.boundingBox();
+  expect(titleBox).not.toBeNull();
+  expect(titleBox!.y).toBeGreaterThanOrEqual(10);
+
+  const saveBtn = page.getByRole('button', { name: '保存并生效' });
+  await expect(saveBtn).toBeVisible();
+  const saveBox = await saveBtn.boundingBox();
+  expect(saveBox).not.toBeNull();
+  expect(saveBox!.y + saveBox!.height).toBeLessThanOrEqual(500);
+
+  await page.keyboard.press('Escape');
+  await expect(title).not.toBeVisible();
+});
+

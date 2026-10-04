@@ -576,3 +576,36 @@ pub async fn get_api_pricing() -> Result<crate::modules::api_pricing::ApiPricing
 pub async fn check_for_updates() -> Result<crate::modules::updater::UpdateInfo, String> {
     crate::modules::updater::check_for_updates().await
 }
+
+/// 读取已配置的自定义模型列表 (~/.gemini/antigravity/custom_models.json)
+#[tauri::command]
+pub async fn get_custom_models() -> Result<Vec<crate::modules::custom_models::CustomModelEntry>, String> {
+    tokio::task::spawn_blocking(crate::modules::custom_models::load_custom_models)
+        .await
+        .map_err(|e| format!("读取自定义模型失败: {}", e))?
+}
+
+/// 保存自定义模型列表至 ~/.gemini/antigravity/custom_models.json
+#[tauri::command]
+pub async fn save_custom_models(
+    models: Vec<crate::modules::custom_models::CustomModelEntry>,
+) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || crate::modules::custom_models::save_custom_models(models))
+        .await
+        .map_err(|e| format!("保存自定义模型失败: {}", e))?
+}
+
+/// 测试自定义模型端点连通性 (发送轻量 ping 测试)
+#[tauri::command]
+pub async fn test_custom_model_connection(
+    entry: crate::modules::custom_models::CustomModelEntry,
+) -> Result<crate::modules::custom_models::TestConnectionResult, String> {
+    crate::modules::custom_models::test_connection(&entry).await
+}
+
+/// 获取自定义模型配置文件的绝对路径
+#[tauri::command]
+pub async fn get_custom_models_file_path() -> Result<String, String> {
+    crate::modules::custom_models::get_custom_models_file_path()
+        .map(|p| p.to_string_lossy().to_string())
+}
