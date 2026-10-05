@@ -236,7 +236,7 @@ pub fn run() {
         .plugin(
             tauri_plugin_autostart::Builder::new()
                 .arg("--autostart")
-                .app_name("Antigravity Tools Lite")
+                .app_name("agy-switch")
                 .build(),
         )
         .plugin(

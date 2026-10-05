@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>agy-switch — Brand preview</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #eef3f7; color: #182838; font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  main { max-width: 1060px; margin: 44px auto; padding: 40px; border-radius: 28px; background: #fff; }
+  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 32px; }
+  header img { width: 320px; height: auto; }
+  header span { color: #637587; font-size: 13px; }
+  .row { display: grid; grid-template-columns: 1fr 1.25fr; gap: 24px; }
+  .app { display: flex; align-items: center; justify-content: center; border-radius: 24px; background: #f3f7fa; min-height: 350px; }
+  .app img { width: 288px; height: 288px; }
+  .surfaces { display: flex; flex-direction: column; gap: 16px; }
+  .surface { border-radius: 18px; overflow: hidden; background: #f6fafd; border: 1px solid #e4ebf1; }
+  .bar { height: 46px; display: flex; justify-content: flex-end; align-items: center; padding: 0 22px; gap: 18px; border-bottom: 1px solid #e4ebf1; font-size: 13px; }
+  .bar img { width: 20px; height: 20px; }
+  .identity { display: flex; gap: 10px; align-items: center; padding: 24px; }
+  .identity img { width: 38px; height: 38px; }
+  .identity strong { font-size: 18px; letter-spacing: -.4px; }
+  .identity small { display: block; color: #65788b; font-size: 12px; }
+  .dark { background: #1f2c39; color: #f5f8fb; border-color: #344454; }
+  .dark .bar { border-color: #344454; }
+  .dark .bar img { filter: invert(1); }
+  .dark small { color: #abbccc; }
+  .palette { display: grid; grid-template-columns: repeat(4,1fr); gap: 16px; margin-top: 28px; }
+  .swatch { display: flex; align-items: center; gap: 10px; color: #637587; font-size: 12px; }
+  .swatch i { width: 30px; height: 30px; border-radius: 9px; border: 1px solid #dce5ed; background: var(--color); }
+  footer { margin-top: 28px; color: #637587; font-size: 12px; }
+  @media (max-width:700px) { main { margin: 16px; padding: 24px; } .row { grid-template-columns: 1fr; } header { flex-wrap: wrap; } .palette { grid-template-columns: 1fr 1fr; } }
+</style>
+<main>
+  <header><img src="wordmark.svg" alt="agy-switch"><span>4.9.0 · Source preview</span></header>
+  <div class="row">
+    <div class="app"><img src="app-icon.svg" alt="New app icon"></div>
+    <div class="surfaces">
+      <div class="surface"><div class="bar"><img src="tray.svg" alt="Light menu bar mark"><span>Mon 09:41</span></div><div class="identity"><img src="app-icon.svg" alt=""><div><strong>AntiGravity Switch</strong><small>Accounts · Quotas · Usage</small></div></div></div>
+      <div class="surface dark"><div class="bar"><img src="tray.svg" alt="Dark menu bar mark"><span>Mon 09:41</span></div><div class="identity"><img src="app-icon.svg" alt=""><div><strong>AntiGravity Switch</strong><small>Accounts · Quotas · Usage</small></div></div></div>
+    </div>
+  </div>
+  <div class="palette">
+    <div class="swatch"><i style="--color:#3588fd"></i><span>Blue<br>#3588FD</span></div>
+    <div class="swatch"><i style="--color:#73bb79"></i><span>Green<br>#73BB79</span></div>
+    <div class="swatch"><i style="--color:#182838"></i><span>Ink<br>#182838</span></div>
+    <div class="swatch"><i style="--color:#f6fafd"></i><span>Porcelain<br>#F6FAFD</span></div>
+  </div>
+  <footer>Owner-selected raster app artwork and original vector menu bar mark. App and menu bar presentations shown here are brand mockups.</footer>
+</main>
+</html>

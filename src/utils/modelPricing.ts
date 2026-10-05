@@ -5,9 +5,12 @@ export interface ModelPricing {
     cached: number;
 }
 
-// Match the native menu estimator: punctuation and the observed -n alias only.
-// A neighbouring model's price is not evidence of this model's price.
-const normalize = (model: string) => model.toLowerCase().replace(/-n$/, '').replace(/[^a-z0-9]/g, '');
+// Match the native estimator, including the owner's explicit EXP-A estimate mapping.
+// Other versions and variants retain their own pricing identities.
+const normalize = (model: string) => {
+    const name = model.toLowerCase().replace(/-n$/, '');
+    return (name === 'gemini-3.8-flash-exp-a' ? 'gemini-3.8-flash' : name).replace(/[^a-z0-9]/g, '');
+};
 
 export function findModelPricing(model: string, snapshot: { prices: ModelPricing[] } | null) {
     const matches = snapshot?.prices.filter(entry => normalize(entry.model) === normalize(model)) || [];

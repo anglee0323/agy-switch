@@ -1,10 +1,10 @@
-# Tools Lite CLI (`agy-switch`)
+# agy-switch CLI (`agy-switch`)
 
-`agy-switch` manages accounts saved by Antigravity Tools Lite. It is separate from Google's `agy`: it does not run an AI session. The same interactive workflow works on macOS, Windows and Linux, including masked refresh-token entry.
+`agy-switch` manages accounts saved by agy-switch. It is separate from Google's `agy`: it does not run an AI session. The same interactive workflow works on macOS, Windows and Linux, including masked refresh-token entry.
 
 ## Install and run
 
-- **macOS:** the [Homebrew cask](homebrew.md) installs `agy-switch`. A manual app installation also exposes commands through `/Applications/Antigravity Tools Lite.app/Contents/MacOS/antigravity-tools`.
+- **macOS:** the [Homebrew cask](homebrew.md) installs `agy-switch`. From 4.9.0, a manual app installation also exposes commands through `/Applications/agy-switch.app/Contents/MacOS/agy-switch-desktop`.
 - **Windows:** the installer includes console `agy-switch.exe` beside the desktop executable; the release also offers a standalone console ZIP. Open PowerShell in that directory and run `.\agy-switch.exe`. The console executable preserves normal shell waiting, stdout/stderr and `$LASTEXITCODE`; use it instead of scripting the GUI-subsystem executable. [Windows guide](windows.md)
 - **Linux:** the deb installs `/usr/bin/agy-switch`; a console tarball is also available. Cached reads and terminal interaction do not require a display, but the executable still needs GTK/WebKitGTK runtime libraries. [Linux guide](linux.md)
 
@@ -18,6 +18,8 @@ cargo build --locked --manifest-path src-tauri/Cargo.toml --bin agy-switch
 ```
 
 Use ↑/↓ to select, Enter/→ to enter and Esc/← to return. Number shortcuts, j/k and q remain supported. Terminal input is restored on exit. Secret entry refuses to proceed if the terminal cannot disable echo. In a pipe, bare `agy-switch` prints help. Launching the original desktop executable without arguments preserves GUI startup.
+
+Policy editing, ordering and update checks described below are available from **4.9.0**. Older v4.8.1 binaries do not include them. Check `agy-switch --version` before using these commands.
 
 ## Commands
 
@@ -34,12 +36,18 @@ agy-switch quota user@example.com --json
 agy-switch switch ACCOUNT_ID
 agy-switch switch user@example.com --target app --json
 agy-switch switch ACCOUNT_ID --target ide
+agy-switch policy show --json
+agy-switch policy set --mode wait --strategy priority --reserve 10 --minimum 30 --model gemini
+agy-switch policy set --enabled true --candidates ACCOUNT_B ACCOUNT_C
+agy-switch policy order ACCOUNT_C ACCOUNT_B --json
+agy-switch accounts order ACCOUNT_B ACCOUNT_A ACCOUNT_C --json
+agy-switch update check --json
 ```
 
 `accounts current`, `accounts quota` and `accounts switch` are also accepted. Selectors are exact account IDs or case-insensitive exact emails; duplicate emails require an ID. There is no fuzzy selection. Bare `agy-switch` opens the dashboard in an interactive terminal on all three platforms.
 
 - `accounts list`, `current`, and `quota` only read local files. They do not initialize the GUI, refresh tokens, query Google, create directories/logs, or repair corrupt indexes
-- `current` is Tools Lite's recorded selection, not a live check of the APP keyring or `agy` session. Changes made outside Tools Lite can make it stale
+- `current` is agy-switch's recorded selection, not a live check of the APP keyring or `agy` session. Changes made outside agy-switch can make it stale
 - `quota` reports cached data and `last_updated` (Unix seconds). Use `agy-switch refresh` when fresh quota is needed. A cache can be stale even when the command succeeds
 - `--json` may appear before or after a command. Success goes to stdout; errors go to stderr. All JSON has `schema_version: 1`
 - Output uses an explicit field allow-list: no access/refresh/ID tokens, raw OAuth responses, validation URLs, or stored error strings. Treat emails, account IDs, names and quota as personal data when sharing output
@@ -68,6 +76,18 @@ Exit codes:
 | 4 | No cached quota |
 | 5 | Another switch is in progress |
 
+Settings/order commands also use code 5 when another client has changed an editor's snapshot. Reload before retrying.
+
+## Policy, ordering and updates
+
+`policy show` reads the same `auto_switch.json` as the desktop app without creating files. `policy set` patches only the supplied fields. Options are `--enabled true|false`, `--mode wait|stop`, `--strategy priority|round-robin`, `--reserve 1..98`, `--minimum` (above reserve, up to 100), `--model all|gemini|claude|MODEL_ID`, `--target app|app-cli|ide|vscode`, `--candidates ID|EMAIL...` and `--clear-candidates`. `claude` selects the Claude/GPT family. Policy target `app` is global sync, `app-cli` is APP plus native agy, and `ide`/`vscode` select their independent backends.
+
+Changing the policy clears its cancellation/failure state. The desktop coordinator from this source revision reloads changed settings on its next five-second tick and invalidates pending selections. A settings write cannot run during a credential commit. The CLI configures this coordinator; it does not start a background scheduler or switch any account when saving settings. Without the desktop app, the saved policy takes effect on the next desktop launch.
+
+`accounts order` without selectors shows the local list order; with selectors it requires every saved account exactly once. `policy order` instead requires every selected candidate exactly once. To change the candidate selection, use `policy set --candidates`. Ordering leaves the current selection, account credentials and other index metadata intact. Duplicate, unknown, ambiguous or stale selections fail instead of being guessed. Keep GUI/CLI account additions and deletions separate from ordering; the switch lock does not serialize every account-management operation across processes.
+
+`update check` contacts this project's public GitHub release metadata with a 12-second timeout. It reports the compiled CLI version, latest stable version, update availability and release link; `--json` adds `schema_version: 1` and `check_only: true`. It does not download, run an installer or open a browser. Use the desktop updater or the original installation method to upgrade.
+
 ## Verification
 
 ```sh
@@ -87,12 +107,14 @@ The smoke test uses a temporary data directory and synthetic tokens. It does not
 
 ## Interactive workflow and coverage
 
-The main menu groups Accounts & Quotas, Statistics, Refresh, Add Account, and Status. Use Up/Down and Enter to navigate, or a displayed number to open a section; Escape returns. Account management supports switching, quota details, labels, enable/disable, and deletion with confirmation. Refresh and authorization use the network; switching can change credentials and restart clients. Read-only JSON commands are suitable for scripts.
+The main menu groups Accounts & Quotas, Statistics, Refresh, Add Account, Status, Settings & Order, and Check for Updates. Use Up/Down or Tab/Shift+Tab to select, Enter/Right to open or confirm, and Esc/Left/0 to return or cancel. Home/End jump to the first/last item; numbers and j/k remain shortcuts. Enter on an account opens its action menu; `S` explicitly switches it, while `V`, `R`, `T` and `X` retain their detail/label/toggle/delete shortcuts. Text fields support Left/Right, Home/End, Delete and Backspace; Esc cancels. Secret fields stay masked while editing.
 
-Cost estimates use the same exact model matching as the native menu and the cached public price table. Unknown prices display `Unpriced`; partial estimates are labelled. Missing quota windows are unknown, never inferred as 100%. API-equivalent costs are estimates, not the subscription bill.
+Settings separate **Switch timing** from **Account selection order**. Use Space to select backup candidates and Shift+Up/Down (or U/D) to reorder them. Enter applies the list to the policy draft; **Save changes** persists that draft. Back discards it, and **Reload settings** reads another client's changes. Account-list sorting has the same keys, with Enter saving and Esc discarding. Refresh and authorization use the network; switching can change credentials and restart clients. Read-only JSON commands are suitable for scripts.
 
-A future CLI expansion should expose account management, configuration, candidate ordering and update checks as stable commands, sharing the existing backend. Visual theme settings, menu layout and interactive charts belong in the GUI. The terminal menu and one-line commands should share the same operations rather than duplicate their implementations.
+Cost estimates share model matching with the dashboard and native menu. Native `-n` aliases are supported; the owner's explicit `gemini-3.8-flash-exp-a` mapping uses `gemini-3.8-flash` prices for estimation. Other versions and variants require their own matching rates. Unknown model prices display `Unpriced`; aggregate amounts contain only priced models and have no parenthetical suffix. The desktop dashboard fetches public pricing when its 24-hour cache expires or the parser revision changes. CLI reads use that cache without network requests. Missing quota windows are unknown, never inferred as 100%. API-equivalent costs are estimates, not the subscription bill.
+
+Policy editing, candidate ordering, account ordering and update checks share the same operations between terminal menus and one-line commands. Visual themes, menu layout and interactive charts remain GUI features.
 
 ## CLI scope
 
-Account management, cached quotas, refresh, switching and local usage are terminal workflows. Appearance, desktop startup, update notices and the background smart-switch scheduler remain desktop features. Linux terminal-only users can inspect/add/refresh accounts without a display; APP switching still requires an installed APP and its credential backend. No file-only agy switch or background CLI daemon is provided.
+Account management, cached quotas, refresh, switching, local usage, policy configuration, ordering and update checks are terminal workflows. Appearance, desktop startup, update installation and the background smart-switch scheduler remain desktop features. Linux terminal-only users can inspect/add/refresh accounts without a display; APP switching still requires an installed APP and its credential backend. No file-only agy switch or background CLI daemon is provided.

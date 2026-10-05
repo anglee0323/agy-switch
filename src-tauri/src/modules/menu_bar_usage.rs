@@ -56,9 +56,11 @@ pub fn project(summary: &LocalTokenUsageSummary, pricing: Option<&ApiPricingSnap
 }
 
 fn normalized(model: &str) -> String {
-    // The native model ID uses -n for the same API model, e.g. gemini-3.8-flash-n.
+    // Native -n alias and the explicit EXP-A estimate mapping requested by the owner.
     let model = model.to_ascii_lowercase();
-    model.strip_suffix("-n").unwrap_or(&model).chars().filter(|c| c.is_ascii_alphanumeric()).collect()
+    let model = model.strip_suffix("-n").unwrap_or(&model);
+    let model = if model == "gemini-3.8-flash-exp-a" { "gemini-3.8-flash" } else { model };
+    model.chars().filter(|c| c.is_ascii_alphanumeric()).collect()
 }
 
 pub(crate) fn estimate(models: &[LocalTokenModel], prices: &[ApiPricing]) -> (Option<f64>, usize) {
@@ -97,6 +99,14 @@ mod tests {
     fn native_alias_and_three_token_components_use_the_same_rate() {
         let (usd, missing) = estimate(&[model("gemini-3.8-flash-n")], &[price()]);
         assert!((usd.unwrap() - 1.275).abs() < 1e-9); assert_eq!(missing, 0);
+    }
+    #[test]
+    fn explicit_experimental_alias_preserves_version_and_variant_boundaries() {
+        let (usd, missing) = estimate(&[model("GEMINI-3.8-FLASH-EXP-A")], &[price()]);
+        assert!((usd.unwrap() - 1.275).abs() < 1e-9); assert_eq!(missing, 0);
+        for name in ["gemini-3.8-flash-exp-b", "gemini-3.7-flash", "gemini-3.8-flash-lite"] {
+            assert_eq!(estimate(&[model(name)], &[price()]), (None, 1));
+        }
     }
     #[test]
     fn unknown_and_ambiguous_models_are_not_free() {

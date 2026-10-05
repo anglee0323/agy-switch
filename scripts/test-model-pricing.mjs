@@ -7,6 +7,12 @@ const {findModelPricing,estimateApiCost}=await import(`data:text/javascript;base
 const price={model:'gemini-2.5-flash',input:.3,output:2.5,cached:.03};
 const snapshot={prices:[price]};
 const model=name=>({model:name,input_tokens:1e6,output_tokens:1e6,cached_tokens:1e6});
+test('explicit EXP-A estimate mapping does not absorb other versions or variants',()=>{
+ const flash={...price,model:'gemini-3.8-flash'};
+ const prices={prices:[flash]};
+ assert.equal(findModelPricing('GEMINI-3.8-FLASH-EXP-A',prices),flash);
+ for(const name of ['gemini-3.8-flash-exp-b','gemini-3.7-flash','gemini-3.8-flash-lite'])assert.equal(findModelPricing(name,prices),undefined);
+});
 test('exact aliases work without borrowing neighbouring model prices',()=>{
  assert.equal(findModelPricing('Gemini 2.5 Flash-n',snapshot),price);
  for(const name of ['gemini-2.5-flash-lite','gemini-2.5','claude-sonnet-4.6',''])assert.equal(findModelPricing(name,snapshot),undefined);

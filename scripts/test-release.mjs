@@ -8,10 +8,11 @@ import { packageNames, validateSource, verifyAssets, writeChecksum, writeManifes
 import { writeUpdateFeed } from './update-assets.mjs';
 import { renderCask } from './generate-homebrew.mjs';
 import { publishRelease, releaseNotes } from './publish-release.mjs';
+import { desktopBrand } from './release-brand.mjs';
 
 // Entirely synthetic packages and GitHub responses; no network or real release.
 const context = { tag: 'v4.7.7', commit: 'a'.repeat(40), repository: 'fixture/repository' };
-const template = readFileSync(new URL('../packaging/homebrew/antigravity-tools-lite.rb.in', import.meta.url), 'utf8');
+const template = readFileSync(new URL('../packaging/homebrew/agy-switch.rb.in', import.meta.url), 'utf8');
 function fixture(fn) {
   const root = mkdtempSync(join(tmpdir(), 'agy-release-test-'));
   try {
@@ -23,7 +24,7 @@ function fixture(fn) {
     assert.equal(spawnSync('zip', ['-qr', archive, 'Antigravity Tools Lite.app'], { cwd: source }).status, 0);
     for (const name of names.slice(1)) writeFileSync(join(directory, name), `synthetic ${name}`);
     for (const name of names) writeChecksum(join(directory, name));
-    writeFileSync(join(directory, 'antigravity-tools-lite.rb'), renderCask({ archive, version: '4.7.7', template,
+    writeFileSync(join(directory, 'agy-switch.rb'), renderCask({ archive, version: '4.7.7', template,
       url: `https://github.com/${context.repository}/releases/download/${context.tag}/${names[0]}` }));
     return fn(directory, names, root);
   } finally { rmSync(root, { recursive: true, force: true }); }
@@ -75,8 +76,8 @@ test('source validation requires the tag to match all six version fields', () =>
     writeFileSync(join(root, 'package.json'), '{"version":"4.7.7"}');
     writeFileSync(join(root, 'package-lock.json'), '{"version":"4.7.7","packages":{"":{"version":"4.7.7"}}}');
     writeFileSync(join(root, 'src-tauri/tauri.conf.json'), '{"version":"4.7.7"}');
-    writeFileSync(join(root, 'src-tauri/Cargo.toml'), '[package]\nname = "antigravity-tools"\nversion = "4.7.7"\n');
-    writeFileSync(join(root, 'src-tauri/Cargo.lock'), '[[package]]\nname = "antigravity-tools"\nversion = "4.7.7"\n');
+    writeFileSync(join(root, 'src-tauri/Cargo.toml'), '[package]\nname = "agy-switch"\nversion = "4.7.7"\n');
+    writeFileSync(join(root, 'src-tauri/Cargo.lock'), '[[package]]\nname = "agy-switch"\nversion = "4.7.7"\n');
   };
   write(); assert.equal(validateSource(root, context.tag), '4.7.7');
   assert.throws(() => validateSource(root, 'v4.7.6'));
@@ -93,7 +94,7 @@ test('all packages, exact checksums and exact generated cask are required before
   for (const change of ['missing', 'checksum', 'cask', 'extra']) fixture((directory, names) => {
     if (change === 'missing') unlinkSync(join(directory, names[2]));
     if (change === 'checksum') writeFileSync(join(directory, names[1]), 'changed');
-    if (change === 'cask') writeFileSync(join(directory, 'antigravity-tools-lite.rb'), 'sha256 :no_check');
+    if (change === 'cask') writeFileSync(join(directory, 'agy-switch.rb'), 'sha256 :no_check');
     if (change === 'extra') writeFileSync(join(directory, 'old-package.zip'), 'old');
     const api = fakeGithub(); assert.throws(() => publishRelease(directory, context, api.run)); assert.equal(api.calls.length, 0);
   });
@@ -140,7 +141,7 @@ test('reviewed release notes disclose native acceptance limits and cannot be sil
 test('release page links resolve from the reviewed source commit rather than the releases URL', () => {
   const notes = releaseNotes({ ...context, tag: 'v4.8.0' });
   assert.ok(notes.includes(`https://github.com/${context.repository}/blob/${context.commit}/docs/screenshots/4.8.0/README.md`));
-  assert.ok(notes.includes('https://github.com/anglee0323/antigravity-tools-lite/actions/runs/37240883985'));
+  assert.ok(notes.includes('https://github.com/anglee0323/agy-switch/actions/runs/37240883985'));
   assert.doesNotMatch(notes, /\]\(\.\.?\//);
 });
 
@@ -183,3 +184,25 @@ test('unsigned updater candidates validate for CI but cannot be published', () =
   assert.throws(() => publishRelease(directory, { ...context, candidate: true }, api.run));
   assert.equal(api.calls.length, 0);
 }));
+
+test('the branded candidate validates the complete new package, cask and updater set', () => {
+  const root = mkdtempSync(join(tmpdir(), 'agy-brand-release-test-'));
+  try {
+    const version = '4.9.0', brand = desktopBrand(version), directory = join(root, 'assets'), source = join(root, 'source');
+    mkdirSync(directory);
+    const bin = join(source, `${brand.app}.app/Contents/MacOS`);
+    mkdirSync(bin, { recursive: true }); writeFileSync(join(bin, brand.executable), 'synthetic app');
+    const names = packageNames(version), archive = join(directory, names[0]);
+    assert.equal(spawnSync('zip', ['-qr', archive, `${brand.app}.app`], { cwd: source }).status, 0);
+    for (const name of names.slice(1)) writeFileSync(join(directory, name), 'synthetic package');
+    for (const name of names) writeChecksum(join(directory, name));
+    writeFileSync(join(directory, 'agy-switch.rb'), renderCask({ archive, version, template,
+      url: `https://github.com/${context.repository}/releases/download/v${version}/${names[0]}` }));
+    writeFileSync(join(directory, `agy-switch-${version}-macos-arm64.app.tar.gz`), 'synthetic updater');
+    writeUpdateFeed(directory, version, context.repository, true);
+    const verified = verifyAssets(directory, { ...context, tag: `v${version}`, candidate: true });
+    assert.equal(verified.length, 13);
+    assert.ok(verified.every(name => name === 'latest.json' || name.startsWith('agy-switch')));
+    assert.throws(() => verifyAssets(directory, { ...context, tag: `v${version}`, candidate: false }));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

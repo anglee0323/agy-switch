@@ -4,12 +4,14 @@ import { createHash, createPublicKey, verify } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { desktopBrand } from './release-brand.mjs';
 
 export function updatePackages(version) {
+  const { prefix } = desktopBrand(version);
   return {
-    'darwin-aarch64': `Antigravity-Tools-Lite-${version}-macos-arm64.app.tar.gz`,
-    'windows-x86_64': `Antigravity-Tools-Lite-${version}-windows-x64-setup.exe`,
-    'linux-x86_64-deb': `Antigravity-Tools-Lite-${version}-linux-amd64.deb`,
+    'darwin-aarch64': `${prefix}-${version}-macos-arm64.app.tar.gz`,
+    'windows-x86_64': `${prefix}-${version}-windows-x64-setup.exe`,
+    'linux-x86_64-deb': `${prefix}-${version}-linux-amd64.deb`,
   };
 }
 export function verifyUpdateSignature(bytes, encodedSignature, encodedPublicKey) {
@@ -29,7 +31,7 @@ export function writeUpdateFeed(directory, version, repository, candidate = fals
     url: `https://github.com/${repository}/releases/download/v${version}/${name}`,
     signature: candidate ? 'UNSIGNED-CANDIDATE-NOT-FOR-PUBLICATION' : readFileSync(join(directory, `${name}.sig`), 'utf8').trim(),
   }]));
-  writeFileSync(join(directory, 'latest.json'), JSON.stringify({ version, notes: `Antigravity Tools Lite ${version}`, pub_date: execFileSync('git', ['show', '-s', '--format=%cI', 'HEAD'], { encoding: 'utf8' }).trim(), platforms }, null, 2) + '\n');
+  writeFileSync(join(directory, 'latest.json'), JSON.stringify({ version, notes: `${desktopBrand(version).app} ${version}`, pub_date: execFileSync('git', ['show', '-s', '--format=%cI', 'HEAD'], { encoding: 'utf8' }).trim(), platforms }, null, 2) + '\n');
 }
 export function verifyUpdateFeed(directory, version, repository, candidate = false) {
   const feed = JSON.parse(readFileSync(join(directory, 'latest.json'), 'utf8'));

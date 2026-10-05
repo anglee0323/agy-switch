@@ -16,7 +16,7 @@ try {
   copyFileSync(resolve(binary), join(root, executable));
   copyFileSync('LICENSE', join(root, 'LICENSE'));
   copyFileSync('docs/cli.md', join(root, 'CLI.md'));
-  writeFileSync(join(root, 'README.txt'), `agy-switch ${version}\n\nRun ${windows ? '.\\agy-switch.exe' : './agy-switch'} for the interactive dashboard.\nRun ${windows ? '.\\agy-switch.exe' : './agy-switch'} --help for script commands.\nAccount data is shared with the desktop app at ~/.antigravity_tools.\n${windows ? 'Windows x64 console executable; no desktop window is started.' : 'Linux x64, Ubuntu 22.04 baseline. Requires GTK3, WebKitGTK 4.1 and libayatana-appindicator3 runtime libraries even without a display. This is not a static/musl binary.'}\nThe CLI does not run the background smart-switch scheduler.\nDocumentation: https://github.com/anglee0323/antigravity-tools-lite/blob/main/docs/cli.md\n`);
+  writeFileSync(join(root, 'README.txt'), `agy-switch ${version}\n\nRun ${windows ? '.\\agy-switch.exe' : './agy-switch'} for the interactive dashboard.\nRun ${windows ? '.\\agy-switch.exe' : './agy-switch'} --help for script commands.\nAccount data is shared with the desktop app at ~/.antigravity_tools.\n${windows ? 'Windows x64 console executable; no desktop window is started.' : 'Linux x64, Ubuntu 22.04 baseline. Requires GTK3, WebKitGTK 4.1 and libayatana-appindicator3 runtime libraries even without a display. This is not a static/musl binary.'}\nThe CLI does not run the background smart-switch scheduler.\nDocumentation: https://github.com/anglee0323/agy-switch/blob/main/docs/cli.md\n`);
   if (windows) {
     // Paths originate from the controlled runner, quoted as PowerShell literals.
     const quote = s => "'" + s.replaceAll("'", "''") + "'";

@@ -7,6 +7,7 @@ on:
       - Casks/**
       - packaging/homebrew/**
       - scripts/generate-homebrew.mjs
+      - scripts/release-brand.mjs
       - .github/workflows/homebrew-cask.yml
   push:
     branches: [main]
@@ -36,19 +37,20 @@ jobs:
       - name: Load the cask and fetch its real archive without installing
         run: |
           set -euo pipefail
-          ruby -c Casks/antigravity-tools-lite.rb
-          TAP="anglee0323/antigravity-tools-lite"
-          TAP_PATH="$(brew --repository)/Library/Taps/anglee0323/homebrew-antigravity-tools-lite"
+          ruby -c Casks/agy-switch.rb
+          TAP="anglee0323/agy-switch"
+          TAP_PATH="$(brew --repository)/Library/Taps/anglee0323/homebrew-agy-switch"
           mkdir -p "$(dirname "$TAP_PATH")"
           ln -s "$GITHUB_WORKSPACE" "$TAP_PATH"
           brew readall "$TAP"
-          brew fetch --cask "$TAP/antigravity-tools-lite"
+          brew fetch --cask "$TAP/agy-switch"
           # The app version can advance before its release is published. Validate
           # the currently published cask, not the unreleased source version.
-          VERSION="$(node --input-type=module -e 'import { readFileSync } from "node:fs"; const match = readFileSync("Casks/antigravity-tools-lite.rb", "utf8").match(/^  version "(\d+\.\d+\.\d+)"$/m); if (!match) throw new Error("Invalid cask version"); process.stdout.write(match[1]);')"
-          ARCHIVE="$RUNNER_TEMP/Antigravity-Tools-Lite-${VERSION}-macos-arm64.zip"
-          cp "$(brew --cache --cask "$TAP/antigravity-tools-lite")" "$ARCHIVE"
+          VERSION="$(node --input-type=module -e 'import { readFileSync } from "node:fs"; const match = readFileSync("Casks/agy-switch.rb", "utf8").match(/^  version "(\d+\.\d+\.\d+)"$/m); if (!match) throw new Error("Invalid cask version"); process.stdout.write(match[1]);')"
+          NAME="$(node --input-type=module -e 'import { desktopBrand } from "./scripts/release-brand.mjs"; process.stdout.write(desktopBrand(process.argv[1]).prefix + "-" + process.argv[1] + "-macos-arm64.zip");' "$VERSION")"
+          ARCHIVE="$RUNNER_TEMP/$NAME"
+          cp "$(brew --cache --cask "$TAP/agy-switch")" "$ARCHIVE"
           node scripts/generate-homebrew.mjs --archive "$ARCHIVE" \
-            --url "https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION/Antigravity-Tools-Lite-${VERSION}-macos-arm64.zip" \
+            --url "https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION/$NAME" \
             --version "$VERSION" --output "$RUNNER_TEMP/verified-cask.rb"
-          cmp Casks/antigravity-tools-lite.rb "$RUNNER_TEMP/verified-cask.rb"
+          cmp Casks/agy-switch.rb "$RUNNER_TEMP/verified-cask.rb"

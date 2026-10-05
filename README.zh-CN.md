@@ -1,6 +1,8 @@
-# Antigravity Tools Lite
+# AntiGravity Switch
 
-[English](README.md) · [下载](https://github.com/anglee0323/antigravity-tools-lite/releases/latest) · [命令行指南](docs/cli.md)
+<img src="branding/app-icon.svg" width="88" height="88" alt="agy-switch 应用图标">
+
+[English](README.md) · [下载](https://github.com/anglee0323/agy-switch/releases/latest) · [命令行指南](docs/cli.md)
 
 在桌面应用或终端中管理 Antigravity 账号、查看剩余额度和本机用量。授权与额度查询直接连接 Google，账号数据和用量记录保存在本机。
 
@@ -16,20 +18,22 @@
 
 ## 安装
 
-从 **[GitHub Releases](https://github.com/anglee0323/antigravity-tools-lite/releases/latest)** 下载对应平台的文件。桌面和命令行下载包附有 SHA-256 校验文件，更新专用包附有签名；`release-manifest.json` 记录全部附件及对应源码提交。
+**4.9.0 发布候选版：** 应用全名为 AntiGravity Switch，仓库、安装包和命令使用 `agy-switch`，采用选定的双波图标。这一版补齐命令行策略设置、账号排序和更新检查。三端验收后发布安装包并同步 Homebrew，请在 Releases 页面确认可下载版本。历史下载的名称和校验值保持原样。
+
+从 **[GitHub Releases](https://github.com/anglee0323/agy-switch/releases/latest)** 下载对应平台的文件。桌面和命令行下载包附有 SHA-256 校验文件，更新专用包附有签名；`release-manifest.json` 记录全部附件及对应源码提交。
 
 ### macOS
 
 ```sh
-brew tap anglee0323/antigravity-tools-lite https://github.com/anglee0323/antigravity-tools-lite.git
-brew install --cask antigravity-tools-lite
+brew tap anglee0323/agy-switch https://github.com/anglee0323/agy-switch.git
+brew install --cask anglee0323/agy-switch/agy-switch
 ```
 
-这会同时安装应用和 `agy-switch`。手动安装时，解压 `Antigravity-Tools-Lite-<版本>-macos-arm64.zip`，将应用移入 Applications。升级和验证结果见 [Homebrew 指南](docs/homebrew.md)。
+这会同时安装应用和 `agy-switch`。手动安装时，解压 `agy-switch-<版本>-macos-arm64.zip`，将应用移入 Applications。升级和验证结果见 [Homebrew 指南](docs/homebrew.md)。
 
 ### Windows
 
-运行 `Antigravity-Tools-Lite-<版本>-windows-x64-setup.exe`。安装程序提供中文和英文，安装到当前用户目录，并在桌面程序旁附带命令行程序。
+运行 `agy-switch-<版本>-windows-x64-setup.exe`。安装程序提供中文和英文，安装到当前用户目录，并在桌面程序旁附带命令行程序。
 
 只使用终端时，解压 `agy-switch-<版本>-windows-x64.zip`，在该目录打开 PowerShell：
 
@@ -43,8 +47,8 @@ PowerShell 会等待这个控制台程序执行，并保留退出码。安装位
 ### Linux
 
 ```sh
-sudo apt install ./Antigravity-Tools-Lite-<版本>-linux-amd64.deb
-antigravity-tools-lite   # 桌面应用
+sudo apt install ./agy-switch-<版本>-linux-amd64.deb
+agy-switch-desktop       # 桌面应用
 agy-switch              # 终端看板
 ```
 
@@ -58,7 +62,7 @@ agy-switch              # 终端看板
 2. 刷新额度，再选择要使用的账号。切换可能关闭并重新打开 Antigravity，请先保存工作，并在客户端确认账号。
 3. 在首页或菜单栏、托盘中查看用量。如果需要自动选择备用账号，可在设置中启用智能切换。
 
-`agy-switch` 是 Tools Lite 的管理命令，Google 的 `agy` 用来执行 Antigravity 任务。切换账号会同步已初始化的原生 `agy` 会话；已经运行的任务可能仍保留之前的凭据。
+`agy-switch` 是管理命令，不带参数运行可打开终端看板；Google 的 `agy` 用来执行 Antigravity 任务。切换账号会同步已初始化的原生 `agy` 会话；已经运行的任务可能仍保留之前的凭据。
 
 ## 功能
 
@@ -84,12 +88,12 @@ agy-switch quota                 # 缓存额度
 agy-switch stats                 # 本机用量和费用估算
 agy-switch refresh               # 联网刷新额度
 agy-switch switch user@example.com
-agy-switch current --json         # Tools Lite 保存的选择
+agy-switch current --json         # agy-switch 保存的选择
 ```
 
 上下方向键选择，回车或右方向键进入，Esc 或左方向键返回；数字快捷键也可使用。交互式账号管理支持备注、启用或禁用、确认删除及添加账号。脚本命令支持 JSON 和明确的退出码，只读命令使用本机缓存，不会启动桌面应用。
 
-桌面偏好、更新弹窗和后台智能切换调度器保留在桌面应用中，命令行围绕账号管理工作流提供操作。[命令、切换边界及退出码](docs/cli.md)
+4.9.0 补齐了命令行策略设置、账号及候选排序和更新检查。桌面偏好、更新安装和后台策略执行仍由桌面应用提供。[命令、切换边界及退出码](docs/cli.md)
 
 ## 截图与验证
 

@@ -50,6 +50,9 @@ jobs:
       - name: Test menu-bar quota presentation
         run: node scripts/test-menubar-logic.mjs && node scripts/test-menubar-overview.mjs && node scripts/test-account-dashboard.mjs && node scripts/test-model-pricing.mjs
 
+      - name: Test brand metadata and release names
+        run: node --test scripts/test-branding.mjs
+
       - name: Test settings category component contracts
         run: node scripts/test-settings-layout.mjs
 
@@ -106,7 +109,7 @@ jobs:
       - name: Test serialized desktop preferences
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib modules::config::tests
 
-      - name: Test Tools Lite CLI on every platform
+      - name: Test agy-switch CLI on every platform
         run: "cargo test --locked --manifest-path src-tauri/Cargo.toml --lib cli::"
 
       - name: Build executable for headless CLI smoke test
@@ -115,7 +118,7 @@ jobs:
       - name: Smoke test CLI without a display or real credentials
         shell: bash
         run: |
-          BINARY=src-tauri/target/debug/antigravity-tools
+          BINARY=src-tauri/target/debug/agy-switch-desktop
           if [[ "$RUNNER_OS" == Windows ]]; then BINARY="${BINARY}.exe"; fi
           node scripts/test-cli.mjs "$BINARY"
 
@@ -155,7 +158,7 @@ jobs:
         timeout-minutes: 5
         env:
           SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: xvfb-run -a -s "-screen 0 1280x1024x24 -nolisten tcp" dbus-run-session -- node scripts/test-native-gui.mjs src-tauri/target/debug/antigravity-tools
+        run: xvfb-run -a -s "-screen 0 1280x1024x24 -nolisten tcp" dbus-run-session -- node scripts/test-native-gui.mjs src-tauri/target/debug/agy-switch-desktop
 
       - name: Test actual Windows Tauri window with isolated synthetic data
         if: runner.os == 'Windows'
@@ -163,7 +166,7 @@ jobs:
         env:
           SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
           NATIVE_GUI_TEST_FEATURE: '1'
-        run: node scripts/test-native-gui.mjs src-tauri/target/debug/antigravity-tools.exe
+        run: node scripts/test-native-gui.mjs src-tauri/target/debug/agy-switch-desktop.exe
 
       - name: Upload native GUI evidence (never substitute mock screenshots)
         if: runner.os != 'macOS' && always()
@@ -191,11 +194,11 @@ jobs:
         run: |
           set -euo pipefail
           npm run tauri bundle -- --debug --bundles app
-          APP="src-tauri/target/debug/bundle/macos/Antigravity Tools Lite.app"
-          [[ "$(lipo -archs "$APP/Contents/MacOS/antigravity-tools")" == "arm64" ]]
-          node scripts/test-cli.mjs "$APP/Contents/MacOS/antigravity-tools"
+          APP="src-tauri/target/debug/bundle/macos/agy-switch.app"
+          [[ "$(lipo -archs "$APP/Contents/MacOS/agy-switch-desktop")" == "arm64" ]]
+          node scripts/test-cli.mjs "$APP/Contents/MacOS/agy-switch-desktop"
           mkdir -p artifacts/macos-test
-          ARCHIVE="artifacts/macos-test/Antigravity-Tools-Lite-test-${SOURCE_HEAD}-macos-arm64.zip"
+          ARCHIVE="artifacts/macos-test/agy-switch-test-${SOURCE_HEAD}-macos-arm64.zip"
           ditto -c -k --sequesterRsrc --keepParent "$APP" "$ARCHIVE"
           shasum -a 256 "$ARCHIVE" > "$ARCHIVE.sha256"
           node --input-type=module -e 'import { writeFileSync } from "node:fs"; import { execFileSync } from "node:child_process"; writeFileSync("artifacts/macos-test/build-info.json", JSON.stringify({ source_head: process.env.SOURCE_HEAD, checkout_commit: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(), run_id: process.env.GITHUB_RUN_ID, architecture: "arm64", profile: "debug", distribution: "CI test build; not a signed or notarized release" }, null, 2) + "\n");'

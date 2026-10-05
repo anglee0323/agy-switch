@@ -47,6 +47,8 @@ function ownFresh(path) {
 function fixture(pricingHome) {
     for (const path of [home, data, join(data, 'accounts'), join(root, 'runtime'), join(home, '.config'), join(home, '.cache'), join(home, '.local/share'), join(home, 'AppData/Roaming'), join(home, 'AppData/Local')]) mkdirSync(path, { recursive: true, mode: 0o700 });
     const now = Math.floor(Date.now() / 1000);
+    const parserRevision = Number(readFileSync(new URL('../src-tauri/src/modules/api_pricing.rs', import.meta.url), 'utf8').match(/const PARSER_REVISION: u32 = (\d+);/)?.[1]);
+    assert.ok(Number.isInteger(parserRevision) && parserRevision > 0, 'Fixture requires the current pricing parser revision');
     const accounts = [8, 80].map((percentage, i) => ({
         id: `fixture-${i + 1}`, email: `example-${i + 1}@example.invalid`, name: `Example account ${i + 1} (synthetic)`,
         custom_label: 'Synthetic example data', created_at: now, last_used: now, disabled: false,
@@ -59,7 +61,7 @@ function fixture(pricingHome) {
     for (const account of accounts) json(join(data, 'accounts', `${account.id}.json`), account);
     json(join(data, 'gui_config.json'), { language: 'en', theme: 'light', auto_refresh: false, refresh_interval: 15, auto_sync: false, sync_interval: 5, quota_protection: { enabled: false, threshold_percentage: 10, monitored_models: [] }, pinned_quota_models: { models: [] } });
     json(join(data, 'auto_switch.json'), { enabled: false, mode: 'wait', reserve_percentage: 10, candidate_min_percentage: 30, monitored_model: '', candidate_account_ids: [], target: 'app' });
-    json(join(pricingHome, '.antigravity_tools/api_pricing.json'), { prices: [{ model: 'gemini-test', input: 0, output: 0, cached: 0 }], fetched_at: now, stale: false, source: 'Synthetic local acceptance data, not real pricing', warning: null });
+    json(join(pricingHome, '.antigravity_tools/api_pricing.json'), { parser_revision: parserRevision, prices: [{ model: 'gemini-test', input: 0, output: 0, cached: 0 }], fetched_at: now, stale: false, source: 'Synthetic local acceptance data, not real pricing', warning: null });
     for (const path of ['accounts.json', 'accounts/fixture-1.json', 'accounts/fixture-2.json', 'auto_switch.json']) originals.set(path, readFileSync(join(data, path), 'utf8'));
 }
 function isolatedEnv(info) {
@@ -144,7 +146,7 @@ async function screenshot(name, panel = false) {
 }
 function appProcesses(binary) {
     if (windows) {
-        const source = "@(Get-Process -Name antigravity-tools -ErrorAction SilentlyContinue | ForEach-Object { @{pid=$_.Id; executable=$_.Path} }) | ConvertTo-Json -Compress";
+        const source = "@(Get-Process -Name agy-switch-desktop -ErrorAction SilentlyContinue | ForEach-Object { @{pid=$_.Id; executable=$_.Path} }) | ConvertTo-Json -Compress";
         const result = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', source], { encoding: 'utf8' }).trim();
         return result ? [].concat(JSON.parse(result)).filter(p => p.executable?.toLowerCase() === binary.toLowerCase()) : [];
     }
@@ -163,7 +165,7 @@ try {
         }
     }
     if (!selfTest) {
-        binary = resolve(process.argv[2] || `src-tauri/target/debug/antigravity-tools${windows ? '.exe' : ''}`);
+        binary = resolve(process.argv[2] || `src-tauri/target/debug/agy-switch-desktop${windows ? '.exe' : ''}`);
         assertNoLinks(binary);
         report = { ...report, source_head: process.env.SOURCE_HEAD, checkout_commit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), run_id: process.env.GITHUB_RUN_ID, binary_sha256: hash(readFileSync(binary)), profile: 'debug, custom-protocol; Windows also enables native-gui-test', tauri_driver_version: '2.0.6', native_driver_version: windows ? info.driver_version : execFileSync('dpkg-query', ['-W', '-f=${Version}', 'webkit2gtk-driver'], { encoding: 'utf8' }) };
         assert.match(report.source_head || '', /^[a-f0-9]{40}$/);
@@ -243,7 +245,7 @@ try {
         await screenshot('settings-light-760');
         // Same native WebView, now exercise the compact cross-platform dashboard route.
         await execute("history.pushState({}, '', '/menubar'); dispatchEvent(new PopStateEvent('popstate')); return true");
-        await until(() => execute("return document.querySelector('.mb-eyebrow')?.textContent === 'AntiGravity tool lite' && document.querySelectorAll('.mb-account-row').length === 2"), 'native quick dashboard');
+        await until(() => execute("return document.querySelector('.mb-eyebrow')?.textContent === 'agy-switch' && document.querySelectorAll('.mb-account-row').length === 2"), 'native quick dashboard');
         rect = await command('POST', '/window/rect', { width: 424, height: 720 });
         for (let i = 0; i < 4; i++) { const width = await execute('return innerWidth'); if (width === 424) break; rect = await command('POST', '/window/rect', { width: Math.round(rect.width + 424 - width), height: 720 }); await delay(200); }
         assert.equal(await execute('return innerWidth'), 424);

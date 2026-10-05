@@ -4,7 +4,7 @@ This opt-in feature selects a permitted backup when monitored quota reaches the 
 
 ## Setup and the two modes
 
-Open **Settings → Auto Switch Policy**. Choose a model or family scope, the reserve threshold (default 10%), the minimum backup quota (default 30%) and allowed candidate accounts. Choose priority order or round robin; drag selected accounts or use their keyboard sorting controls to change the order. Settings save automatically. The feature is off by default; the original quota-protection setting is separate.
+Open **Settings → Auto Switch Policy**. Choose a model or family scope, the reserve threshold (default 10%), the minimum backup quota (default 30%) and allowed candidate accounts. The settings page separates **Switch timing** (when to switch) from **Account selection order** (which eligible backup to choose). Choose priority order or round robin; drag selected accounts or use their keyboard sorting controls to change the order. Settings save automatically. The feature is off by default; the original quota-protection setting is separate.
 
 - **Wait for detected inactivity:** Recent transcript/activity observations delay the switch; once no recent work is detected, the tool attempts to close the affected client and update credentials. This is a heuristic, not a task-completion guarantee.
 - **Switch at the threshold:** The tool attempts to close the affected client or interrupt a VS Code task before updating credentials. Running work may be interrupted.
@@ -13,13 +13,15 @@ After completion, reopen the client if necessary, verify the signed-in account, 
 
 **Cancel this switch** suppresses another attempt for that source account until its quota recovers to the configured backup minimum. Saving the settings clears the cancellation. Cancellations survive application restart. A failed or uncertain credential commit pauses automatic attempts until the settings are saved again; inspect both clients first.
 
+The current-source CLI also edits this policy and candidate order through `agy-switch policy` and its Settings & Order menu. It does not run the scheduler itself. See [CLI coverage and package availability](cli.md#policy-ordering-and-updates).
+
 ## Eligibility and safety
 
 - Only explicitly selected candidates are considered. Priority picks the first eligible candidate; round robin starts after the current account in that same list, wraps and skips the current account. Disabled, forbidden and validation-blocked accounts are excluded.
 - Known provider bucket IDs are used, not translated display labels. The current policy uses the five-hour bucket together with the model percentage; weekly-only FREE accounts use their weekly data. Bucket metadata and reset times must still be valid. Unsupported or missing information blocks switching instead of inventing quota.
 - Quota data older than three minutes, invalid/reset-expired data, refresh failures, disabled accounts, and validation-blocked accounts are not eligible. A reset deadline alone is not treated as quota recovery.
 - The Rust coordinator runs independently of the visible settings page. Routine per-account refreshes are limited to once a minute; explicit checks retain a ten-second floor. Backup quotas are refreshed only when the source reaches the threshold.
-- Config, cancellation, source identity, target eligibility, quota freshness and process observations are revalidated. The credential commit uses the same in-process and cross-process switch locks as the Tools Lite CLI.
+- Config, cancellation, source identity, target eligibility, quota freshness and process observations are revalidated. The credential commit uses the same in-process and cross-process switch locks as the agy-switch CLI.
 - An external client can still launch between process observations and the credential write. Process inspection is not a global execution lock. Do not open clients while the status says it is switching. Unknown process/configuration state blocks the operation.
 - The default APP credential store and an initialized native agy session are updated together. No generic Gemini CLI files are changed. A missing native session file inside an existing agy directory can be created; an existing file associated with a different account blocks the switch.
 - An installed modern APP and a matching current system-keyring identity are required. There is no file-only CLI switch option. On Linux, version discovery reads the installed `resources/app/package.json`; it never launches the APP with `--version` as a fallback. An installation without readable version metadata is reported as unsupported.

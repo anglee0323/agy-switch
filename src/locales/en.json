@@ -105,7 +105,7 @@
     "open_failed": "Couldn't open data folder: {{error}}"
   },
   "common": {
-    "app_name": "Antigravity Tools Lite",
+    "app_name": "AntiGravity Switch",
     "loading": "Loading...",
     "save": "Save",
     "cancel": "Cancel",
@@ -349,7 +349,7 @@
       "unsupported_client": "This client version does not support this safe switching mode",
       "state_unavailable": "Cannot read or save switch state; switching is paused"
     },
-    "strategy_title": "Selection strategy",
+    "strategy_title": "Account selection order",
     "strategy_round_robin": "Round robin",
     "strategy_round_robin_desc": "Start after the current account, following the candidate order.",
     "strategy_priority": "Priority order",

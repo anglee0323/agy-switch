@@ -455,7 +455,7 @@ fn web_dashboard(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow, String>
 #[tauri::command]
 pub fn open_project_page(app: tauri::AppHandle) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
-    app.opener().open_url("https://github.com/anglee0323/antigravity-tools-lite", None::<&str>).map_err(|e| e.to_string())
+    app.opener().open_url("https://github.com/anglee0323/agy-switch", None::<&str>).map_err(|e| e.to_string())
 }
 
 #[cfg(not(target_os = "macos"))]

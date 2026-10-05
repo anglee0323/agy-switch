@@ -14,4 +14,8 @@ Update signatures use a project key pinned in the application. The encrypted pri
 
 The updater signature is separate from Apple Developer ID or Windows Authenticode signing. A successful download verification does not imply operating-system trust.
 
-Older versions that only open the release page require a one-time installation of a version containing the new updater. They cannot acquire this behavior merely by checking for updates. Homebrew-managed installations may continue using `brew upgrade --cask antigravity-tools-lite` to keep the Homebrew receipt aligned.
+Older versions that only open the release page require a one-time installation of a version containing the new updater. They cannot acquire this behavior merely by checking for updates. Homebrew-managed installations may continue using `brew upgrade --cask agy-switch` to keep the Homebrew receipt aligned.
+
+## Repository rename
+
+The 4.9.0 source checks only `anglee0323/agy-switch` and accepts signed packages named `agy-switch-VERSION-PLATFORM`. Repository and filename checks remain strict. Versions through 4.8.1 pin the former repository URL; after the GitHub rename, their version check can reject the canonical new URL. Install the next branded release manually (or through the new Homebrew cask) once it is published. Saved accounts and configuration stay in the existing local directory. No old-name runtime alias is provided.

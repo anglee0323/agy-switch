@@ -5,7 +5,7 @@ import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 
-const binary = resolve(process.argv[2] ?? 'src-tauri/target/debug/antigravity-tools');
+const binary = resolve(process.argv[2] ?? 'src-tauri/target/debug/agy-switch-desktop');
 const root = mkdtempSync(join(tmpdir(), 'agy-lite-cli-'));
 const data = join(root, 'data');
 const env = { ...process.env, ABV_DATA_DIR: data, DISPLAY: '', WAYLAND_DISPLAY: '' };
@@ -22,6 +22,8 @@ try {
   assert.match(run(['--version']).stdout, /^agy-switch \d+\.\d+\.\d+/);
   assert.match(run(['--help']).stdout, /cached data/);
   assert.deepEqual(JSON.parse(run(['accounts', 'list', '--json']).stdout).accounts, []);
+  assert.equal(JSON.parse(run(['policy', 'show', '--json']).stdout).policy.enabled, false);
+  assert.deepEqual(JSON.parse(run(['accounts', 'order', '--json']).stdout).account_ids, []);
   assert.deepEqual(readdirSync(root), []); // Not even a log/data directory is created.
   run(['current'], 3);
   run(['quota', '--refresh'], 2);
@@ -43,6 +45,37 @@ try {
   const noQuota = JSON.parse(account); delete noQuota.quota;
   writeFileSync(join(data, 'accounts/test-1.json'), JSON.stringify(noQuota));
   run(['quota'], 4);
+  // Real settings/order writes stay inside synthetic local storage. Credential files
+  // and the current account must remain unchanged, including unknown index metadata.
+  const second = JSON.stringify({ ...JSON.parse(account), id: 'test-2', email: 'second@example.invalid' });
+  writeFileSync(join(data, 'accounts/test-2.json'), second);
+  writeFileSync(join(data, 'accounts.json'), JSON.stringify({ ...JSON.parse(index), accounts: [{ id: 'test-1', extra: 'retain' }, { id: 'test-2' }], extra: 'retain' }));
+  assert.deepEqual(JSON.parse(run(['accounts', 'order', 'second@example.invalid', 'test-1', '--json']).stdout).account_ids, ['test-2', 'test-1']);
+  const orderedIndex = readFileSync(join(data, 'accounts.json'), 'utf8');
+  assert.equal(JSON.parse(orderedIndex).current_account_id, 'test-1');
+  assert.equal(JSON.parse(orderedIndex).accounts[1].extra, 'retain');
+  run(['accounts', 'order', 'test-1', '--json'], 2);
+  run(['accounts', 'order', 'test-1', 'test-1'], 2);
+  assert.equal(readFileSync(join(data, 'accounts.json'), 'utf8'), orderedIndex);
+  const policy = JSON.parse(run(['policy', 'set', '--enabled', 'true', '--mode', 'wait', '--strategy', 'round-robin', '--reserve', '15', '--minimum', '40', '--model', 'gemini', '--target', 'app-cli', '--candidates', 'second@example.invalid', 'test-1', '--json']).stdout).policy;
+  assert.equal(policy.enabled, true); assert.equal(policy.strategy, 'round_robin');
+  assert.equal(policy.target, 'app_cli'); assert.equal(policy.reserve_percentage, 15);
+  assert.deepEqual(policy.candidate_account_ids, ['test-2', 'test-1']);
+  assert.deepEqual(JSON.parse(run(['policy', 'order', 'test-1', 'test-2', '--json']).stdout).policy.candidate_account_ids, ['test-1', 'test-2']);
+  const beforePolicy = readFileSync(join(data, 'auto_switch.json'), 'utf8');
+  run(['policy', 'set', '--reserve', '90', '--minimum', '40'], 2);
+  run(['policy', 'set', '--candidates', 'missing@example.invalid'], 3);
+  run(['policy', 'set', '--candidates', 'test-1', 'test@example.invalid'], 2);
+  run(['policy', 'order', 'test-1'], 2);
+  assert.equal(readFileSync(join(data, 'auto_switch.json'), 'utf8'), beforePolicy);
+  assert.equal(readFileSync(join(data, 'accounts.json'), 'utf8'), orderedIndex);
+  assert.equal(readFileSync(join(data, 'accounts/test-1.json'), 'utf8'), JSON.stringify(noQuota));
+  assert.equal(readFileSync(join(data, 'accounts/test-2.json'), 'utf8'), second);
+  writeFileSync(join(data, 'auto_switch.json'), JSON.stringify({ ...policy, candidate_account_ids: ['removed-account'] }));
+  assert.equal(JSON.parse(run(['policy', 'set', '--enabled', 'false', '--json']).stdout).policy.enabled, false);
+  writeFileSync(join(data, 'auto_switch.json'), 'corrupt');
+  run(['policy', 'set', '--enabled', 'false'], 1);
+  assert.equal(readFileSync(join(data, 'auto_switch.json'), 'utf8'), 'corrupt');
   writeFileSync(join(data, 'accounts.json'), 'corrupt');
   run(['list', '--json'], 1);
   assert.equal(readFileSync(join(data, 'accounts.json'), 'utf8'), 'corrupt');

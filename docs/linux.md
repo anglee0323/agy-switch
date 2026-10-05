@@ -4,12 +4,14 @@ Linux has two entry points: a desktop app for account management and a terminal 
 
 ## Desktop installation
 
+These names apply from version 4.9.0. Public 4.8.1 desktop packages keep their original names and executable paths.
+
 ```sh
-sudo apt install ./Antigravity-Tools-Lite-<version>-linux-amd64.deb
-antigravity-tools-lite
+sudo apt install ./agy-switch-<version>-linux-amd64.deb
+agy-switch-desktop
 ```
 
-The deb installs `antigravity-tools-lite`, its application-menu entry/icon, and `/usr/bin/agy-switch`. A desktop display and D-Bus session are needed for the GUI. Modern Antigravity APP credential switching needs an unlocked Secret Service such as GNOME Keyring. A compatible KWallet service has not been separately validated.
+The deb installs the `agy-switch` package, `/usr/bin/agy-switch-desktop` and its application-menu entry/icon, and the `/usr/bin/agy-switch` CLI. A desktop display and D-Bus session are needed for the GUI. Modern Antigravity APP credential switching needs an unlocked Secret Service such as GNOME Keyring. A compatible KWallet service has not been separately validated.
 
 The main app exposes the same account, quota, usage, switching strategy, update and appearance settings as Mac. A supported tray offers Quick Dashboard. If tray creation fails, the main window remains available and closing it exits. If the desktop creates an invisible tray icon, disable the tray as described below.
 

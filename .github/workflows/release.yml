@@ -15,6 +15,7 @@ on:
       - scripts/test-macos-bundle.mjs
       - docs/release-notes/**
       - scripts/generate-homebrew.mjs
+      - scripts/release-brand.mjs
       - scripts/build-linux-deb.sh
       - packaging/homebrew/**
       - package.json
@@ -105,22 +106,22 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/release
-          PACKAGE="artifacts/release/Antigravity-Tools-Lite-${VERSION}-linux-amd64.deb"
+          PACKAGE="artifacts/release/agy-switch-${VERSION}-linux-amd64.deb"
           cp src-tauri/target/release/bundle/deb/*.deb "$PACKAGE"
           [[ "$(dpkg-deb -f "$PACKAGE" Architecture)" == "amd64" ]]
           [[ "$(dpkg-deb -f "$PACKAGE" Version)" == "$VERSION" ]]
           PAYLOAD="$RUNNER_TEMP/release-deb-payload"
           dpkg-deb -x "$PACKAGE" "$PAYLOAD"
-          node scripts/test-cli.mjs "$PAYLOAD/usr/bin/antigravity-tools-lite"
+          node scripts/test-cli.mjs "$PAYLOAD/usr/bin/agy-switch-desktop"
           node scripts/test-cli.mjs "$PAYLOAD/usr/bin/agy-switch"
           node scripts/test-cli-terminal.mjs "$PAYLOAD/usr/bin/agy-switch"
           node scripts/package-cli.mjs "$PAYLOAD/usr/bin/agy-switch" artifacts/release "v$VERSION"
-          [[ "$("$PAYLOAD/usr/bin/antigravity-tools-lite" --version)" == "agy-switch $VERSION" ]]
+          [[ "$("$PAYLOAD/usr/bin/agy-switch-desktop" --version)" == "agy-switch $VERSION" ]]
           node scripts/release-assets.mjs checksum "$PACKAGE"
       - name: Test actual Linux package installation
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
-        run: bash scripts/test-linux-package.sh "artifacts/release/Antigravity-Tools-Lite-${VERSION}-linux-amd64.deb"
+        run: bash scripts/test-linux-package.sh "artifacts/release/agy-switch-${VERSION}-linux-amd64.deb"
       - name: Sign linux-amd64.deb updater package
         if: github.event_name != 'pull_request'
         shell: bash
@@ -131,7 +132,7 @@ jobs:
         run: |
           set -euo pipefail
           [[ -n "$TAURI_SIGNING_PRIVATE_KEY" ]]
-          npm run tauri signer sign -- "artifacts/release/Antigravity-Tools-Lite-${VERSION}-linux-amd64.deb" > /dev/null
+          npm run tauri signer sign -- "artifacts/release/agy-switch-${VERSION}-linux-amd64.deb" > /dev/null
       - uses: actions/upload-artifact@v4
         with:
           name: release-linux-${{ needs.prepare.outputs.commit }}
@@ -183,14 +184,14 @@ jobs:
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
-          $bytes = [IO.File]::ReadAllBytes('src-tauri/target/release/antigravity-tools.exe')
+          $bytes = [IO.File]::ReadAllBytes('src-tauri/target/release/agy-switch-desktop.exe')
           $peOffset = [BitConverter]::ToInt32($bytes, 0x3c)
           if ([BitConverter]::ToUInt16($bytes, $peOffset + 4) -ne 0x8664) { throw 'Expected x64 APP payload' }
-          node scripts/test-cli.mjs src-tauri/target/release/antigravity-tools.exe
+          node scripts/test-cli.mjs src-tauri/target/release/agy-switch-desktop.exe
           if ($LASTEXITCODE -ne 0) { throw 'CLI smoke failed' }
-          node --input-type=module -e 'import assert from "node:assert/strict"; import { execFileSync } from "node:child_process"; assert.equal(execFileSync("src-tauri/target/release/antigravity-tools.exe", ["--version"], { encoding: "utf8" }).trim(), "agy-switch " + process.env.VERSION);'
+          node --input-type=module -e 'import assert from "node:assert/strict"; import { execFileSync } from "node:child_process"; assert.equal(execFileSync("src-tauri/target/release/agy-switch-desktop.exe", ["--version"], { encoding: "utf8" }).trim(), "agy-switch " + process.env.VERSION);'
           if ($LASTEXITCODE -ne 0) { throw 'CLI version mismatch' }
-          ./scripts/test-windows-cli.ps1 -Binary ./src-tauri/target/release/antigravity-tools.exe
+          ./scripts/test-windows-cli.ps1 -Binary ./src-tauri/target/release/agy-switch-desktop.exe
           ./scripts/test-windows-cli.ps1 -Binary ./src-tauri/target/release/agy-switch.exe -Console
           node scripts/test-cli-terminal.mjs src-tauri/target/release/agy-switch.exe
           if ($LASTEXITCODE -ne 0) { throw 'Console terminal check failed' }
@@ -201,7 +202,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/release
-          PACKAGE="artifacts/release/Antigravity-Tools-Lite-${VERSION}-windows-x64-setup.exe"
+          PACKAGE="artifacts/release/agy-switch-${VERSION}-windows-x64-setup.exe"
           cp src-tauri/target/release/bundle/nsis/*.exe "$PACKAGE"
           node scripts/release-assets.mjs checksum "$PACKAGE"
           node scripts/package-cli.mjs src-tauri/target/release/agy-switch.exe artifacts/release "v$VERSION"
@@ -209,7 +210,7 @@ jobs:
         shell: pwsh
         env:
           VERSION: ${{ needs.prepare.outputs.version }}
-        run: ./scripts/test-windows-installer.ps1 -Installer "artifacts/release/Antigravity-Tools-Lite-$env:VERSION-windows-x64-setup.exe"
+        run: ./scripts/test-windows-installer.ps1 -Installer "artifacts/release/agy-switch-$env:VERSION-windows-x64-setup.exe"
       - name: Sign windows-x64-setup.exe updater package
         if: github.event_name != 'pull_request'
         shell: bash
@@ -220,7 +221,7 @@ jobs:
         run: |
           set -euo pipefail
           [[ -n "$TAURI_SIGNING_PRIVATE_KEY" ]]
-          npm run tauri signer sign -- "artifacts/release/Antigravity-Tools-Lite-${VERSION}-windows-x64-setup.exe" > /dev/null
+          npm run tauri signer sign -- "artifacts/release/agy-switch-${VERSION}-windows-x64-setup.exe" > /dev/null
       - uses: actions/upload-artifact@v4
         with:
           name: release-windows-${{ needs.prepare.outputs.commit }}
@@ -266,25 +267,25 @@ jobs:
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
-          APP="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Antigravity Tools Lite.app"
+          APP="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/agy-switch.app"
           EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Contents/Info.plist")"
-          [[ "$EXECUTABLE" == "antigravity-tools" ]]
+          [[ "$EXECUTABLE" == "agy-switch-desktop" ]]
           [[ -x "$APP/Contents/MacOS/$EXECUTABLE" ]]
-          [[ "$(lipo -archs "$APP/Contents/MacOS/antigravity-tools")" == "arm64" ]]
+          [[ "$(lipo -archs "$APP/Contents/MacOS/agy-switch-desktop")" == "arm64" ]]
           node scripts/verify-macos-bundle.mjs "$APP" "$VERSION"
-          [[ "$("$APP/Contents/MacOS/antigravity-tools" --version)" == "agy-switch $VERSION" ]]
-          node scripts/test-cli.mjs "$APP/Contents/MacOS/antigravity-tools"
+          [[ "$("$APP/Contents/MacOS/agy-switch-desktop" --version)" == "agy-switch $VERSION" ]]
+          node scripts/test-cli.mjs "$APP/Contents/MacOS/agy-switch-desktop"
           mkdir -p artifacts/release
-          NAME="Antigravity-Tools-Lite-${VERSION}-macos-arm64.zip"
+          NAME="agy-switch-${VERSION}-macos-arm64.zip"
           ditto -c -k --sequesterRsrc --keepParent "$APP" "artifacts/release/$NAME"
           ROUNDTRIP="$(mktemp -d "$RUNNER_TEMP/agy-macos-archive.XXXXXX")"
           ditto -x -k "artifacts/release/$NAME" "$ROUNDTRIP"
-          node scripts/verify-macos-bundle.mjs "$ROUNDTRIP/Antigravity Tools Lite.app" "$VERSION"
-          tar -czf "artifacts/release/Antigravity-Tools-Lite-${VERSION}-macos-arm64.app.tar.gz" -C "$(dirname "$APP")" "$(basename "$APP")"
+          node scripts/verify-macos-bundle.mjs "$ROUNDTRIP/agy-switch.app" "$VERSION"
+          tar -czf "artifacts/release/agy-switch-${VERSION}-macos-arm64.app.tar.gz" -C "$(dirname "$APP")" "$(basename "$APP")"
           node scripts/release-assets.mjs checksum "artifacts/release/$NAME"
           node scripts/generate-homebrew.mjs --archive "artifacts/release/$NAME" \
             --url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/${NAME}" \
-            --version "$VERSION" --output artifacts/release/antigravity-tools-lite.rb
+            --version "$VERSION" --output artifacts/release/agy-switch.rb
       - name: Sign macos-arm64.app.tar.gz updater package
         if: github.event_name != 'pull_request'
         shell: bash
@@ -295,7 +296,7 @@ jobs:
         run: |
           set -euo pipefail
           [[ -n "$TAURI_SIGNING_PRIVATE_KEY" ]]
-          npm run tauri signer sign -- "artifacts/release/Antigravity-Tools-Lite-${VERSION}-macos-arm64.app.tar.gz" > /dev/null
+          npm run tauri signer sign -- "artifacts/release/agy-switch-${VERSION}-macos-arm64.app.tar.gz" > /dev/null
       - uses: actions/upload-artifact@v4
         with:
           name: release-macos-${{ needs.prepare.outputs.commit }}

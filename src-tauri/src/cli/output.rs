@@ -75,13 +75,13 @@ impl Snapshot {
                     Ok(mut entries) => {
                         if entries.next().is_some() {
                             return Err(CliError::data(
-                                "Account index is missing. Open the Tools Lite GUI to recover it.",
+                                "Account index is missing. Open the agy-switch GUI to recover it.",
                             ));
                         }
                     }
                     _ => {
                         return Err(CliError::data(
-                            "Account index is missing. Open the Tools Lite GUI to recover it.",
+                            "Account index is missing. Open the agy-switch GUI to recover it.",
                         ))
                     }
                 }
@@ -97,11 +97,11 @@ impl Snapshot {
             }
         };
         let content = std::str::from_utf8(&bytes).map_err(|_| {
-            CliError::data("Account index is invalid. Open the Tools Lite GUI to recover it.")
+            CliError::data("Account index is invalid. Open the agy-switch GUI to recover it.")
         })?;
         let index: Index = serde_json::from_str(content.trim_start_matches(['\u{feff}', '\0']))
             .map_err(|_| {
-                CliError::data("Account index is invalid. Open the Tools Lite GUI to recover it.")
+                CliError::data("Account index is invalid. Open the agy-switch GUI to recover it.")
             })?;
         let mut accounts = vec![];
         for summary in index.accounts {
@@ -127,11 +127,11 @@ impl Snapshot {
             let bytes = fs::read(root.join("accounts").join(format!("{}.json", summary.id)))
                 .map_err(|_| {
                     CliError::data(
-                        "An indexed account cannot be read. Open the Tools Lite GUI to inspect it.",
+                        "An indexed account cannot be read. Open the agy-switch GUI to inspect it.",
                     )
                 })?;
             let mut account: AccountView = serde_json::from_slice(&bytes).map_err(|_| {
-                CliError::data("An account file is invalid. Open the Tools Lite GUI to inspect it.")
+                CliError::data("An account file is invalid. Open the agy-switch GUI to inspect it.")
             })?;
             if account.id != summary.id {
                 return Err(CliError::data(

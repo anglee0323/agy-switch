@@ -3,7 +3,7 @@
   "source_head": "6896ce61ea25ac402a12db0098e631b0fe45462d",
   "checkout_commit": "6896ce61ea25ac402a12db0098e631b0fe45462d",
   "build_profile": "debug",
-  "run_url": "https://github.com/anglee0323/antigravity-tools-lite/actions/runs/36930452189",
+  "run_url": "https://github.com/anglee0323/agy-switch/actions/runs/36930452189",
   "native_linux_artifact_id": 11195728431,
   "menu_browser_artifact_id": 11195373720,
   "native_linux_passed": true,

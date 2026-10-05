@@ -105,7 +105,7 @@ test('scope, language and accessibility material respond to backend events and s
   await page.evaluate(() => (window as any).__menuFixture.failSave()); await page.getByLabel('Menu bar aggregate quotas').selectOption('gemini'); await expect(page.getByRole('alert').filter({ hasText: 'Could not save' })).toBeVisible(); await expect(page.getByLabel('Menu bar aggregate quotas')).toHaveValue('other');
 });
 test('family selection stays in Settings and disabled quotas show zero without activation', async ({ page }) => {
-  await expect(page.locator('.mb-eyebrow')).toHaveText('AntiGravity tool lite');
+  await expect(page.locator('.mb-eyebrow')).toHaveText('agy-switch');
   await expect(page.locator('.mb-mini.other').first()).toBeVisible();
   await expect(page.locator('.mb-account-identity').first()).toContainText('a@example.invalid');
   const identity = page.locator('.mb-account-identity').first();

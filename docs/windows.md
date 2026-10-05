@@ -1,8 +1,10 @@
 # Windows delivery
 
-Tools Lite ships a per-user x64 desktop installer and a separate console download. The desktop app uses WebView2; `agy-switch.exe` starts the CLI before any desktop initialization. Both use the same account data.
+agy-switch ships a per-user x64 desktop installer and a separate console download. The desktop app uses WebView2; `agy-switch.exe` starts the CLI before any desktop initialization. Both use the same account data.
 
 ## Install and run
+
+From 4.9.0, the packages name the app `agy-switch` and the GUI executable `agy-switch-desktop.exe`. Public 4.8.1 downloads retain their original app/installer names.
 
 Use the NSIS `windows-x64-setup.exe` from the release page. Choose English or Simplified Chinese in the installer. It installs the desktop executable and `agy-switch.exe` into the selected directory. The CLI can also be extracted from `agy-switch-<version>-windows-x64.zip` without installing the app.
 

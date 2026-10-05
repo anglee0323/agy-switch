@@ -978,41 +978,28 @@ pub fn delete_accounts(account_ids: &[String]) -> Result<(), String> {
 /// Reorder account list
 /// Update account order in index file based on provided IDs
 pub fn reorder_accounts(account_ids: &[String]) -> Result<(), String> {
-    let _lock = ACCOUNT_INDEX_LOCK
-        .lock()
-        .map_err(|e| format!("failed_to_acquire_lock: {}", e))?;
-    let mut index = load_account_index()?;
+    reorder_accounts_at(&get_data_dir()?, account_ids, None)
+}
 
-    // Create a map of account ID to summary
-    let id_to_summary: std::collections::HashMap<_, _> = index
-        .accounts
-        .iter()
-        .map(|s| (s.id.clone(), s.clone()))
-        .collect();
-
-    // Rebuild account list with new order
-    let mut new_accounts = Vec::new();
-    for id in account_ids {
-        if let Some(summary) = id_to_summary.get(id) {
-            new_accounts.push(summary.clone());
-        }
-    }
-
-    // Add accounts missing from new order to the end
-    for summary in &index.accounts {
-        if !account_ids.contains(&summary.id) {
-            new_accounts.push(summary.clone());
-        }
-    }
-
-    index.accounts = new_accounts;
-
-    crate::modules::logger::log_info(&format!(
-        "Account order updated, {} accounts total",
-        index.accounts.len()
-    ));
-
-    save_account_index(&index)
+/// Preserve index metadata and account files; reject stale CLI ordering drafts.
+pub(crate) fn reorder_accounts_at(root: &std::path::Path, account_ids: &[String], expected: Option<&[String]>) -> Result<(), String> {
+    let _process = crate::cli::SwitchLock::acquire(root)?;
+    let _lock = lock_account_file_updates()?;
+    let path = root.join(ACCOUNTS_INDEX);
+    let bytes = fs::read(&path).map_err(|_| "Cannot read account index.")?;
+    let mut index: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| "Invalid account index.")?;
+    let accounts = index.get_mut("accounts").and_then(serde_json::Value::as_array_mut).ok_or("Invalid account index.")?;
+    let current = accounts.iter().map(|a| a.get("id").and_then(serde_json::Value::as_str).map(str::to_owned).ok_or("Invalid account index.")).collect::<Result<Vec<_>, _>>()?;
+    if expected.is_some_and(|ids| ids != current) { return Err("account_order_changed".into()); }
+    let mut seen = std::collections::HashSet::new();
+    if current.iter().any(|id| !seen.insert(id)) { return Err("Invalid account index.".into()); }
+    seen.clear();
+    if account_ids.iter().any(|id| !seen.insert(id) || !current.contains(id)) { return Err("Invalid account order.".into()); }
+    let ordered = account_ids.iter().chain(current.iter().filter(|id| !account_ids.contains(id)))
+        .map(|id| accounts[current.iter().position(|existing| existing == id).unwrap()].clone()).collect();
+    *accounts = ordered;
+    crate::utils::fs::write_atomic(path, &serde_json::to_vec_pretty(&index).map_err(|_| "Cannot encode account order.")?)
+        .map_err(|_| "Cannot save account order.".into())
 }
 
 /// Switch current account (Core Logic)
@@ -1251,7 +1238,7 @@ fn format_switch_refresh_error(message: &str) -> String {
         || lower.contains("invalid_grant")
     {
         return format!(
-            "Token refresh failed: OAuth client is not authorized for this account. Please sign in again in Antigravity-Manager and complete authorization/verification. Raw error: {}",
+            "Token refresh failed: OAuth client is not authorized for this account. Please sign in again in agy-switch and complete authorization/verification. Raw error: {}",
             message
         );
     }
@@ -1844,4 +1831,26 @@ pub async fn refresh_all_quotas_logic() -> Result<RefreshStats, String> {
         failed,
         details,
     })
+}
+
+#[cfg(test)]
+mod ordering_tests {
+    use super::*;
+    #[test]
+    fn ordering_preserves_selection_metadata_and_rejects_stale_or_duplicate_ids() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(ACCOUNTS_INDEX);
+        let index = serde_json::json!({"version":"fixture", "current_account_id":"A", "current_target_ide":"ide", "extra":"keep", "accounts":[{"id":"A","last_used":123,"extra":true},{"id":"B","last_used":456}]});
+        fs::write(&path, serde_json::to_vec(&index).unwrap()).unwrap();
+        let current = vec!["A".into(), "B".into()]; let ordered = vec!["B".into(), "A".into()];
+        reorder_accounts_at(dir.path(), &ordered, Some(&current)).unwrap();
+        let result: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(result["current_account_id"], "A"); assert_eq!(result["extra"], "keep");
+        assert_eq!(result["accounts"][1], index["accounts"][0]);
+        let before = fs::read(&path).unwrap();
+        assert!(reorder_accounts_at(dir.path(), &current, Some(&current)).is_err());
+        assert!(reorder_accounts_at(dir.path(), &["A".into(), "A".into()], None).is_err());
+        assert!(reorder_accounts_at(dir.path(), &["missing".into()], None).is_err());
+        assert_eq!(fs::read(&path).unwrap(), before);
+    }
 }
