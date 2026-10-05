@@ -12,6 +12,7 @@ artifacts/
 !.env.example
 src-tauri/.env
 environment/
+/AGENTS.local.md
 
 # Logs and operating-system files
 logs/
