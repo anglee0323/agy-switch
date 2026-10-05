@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, unlinkSync
 import { tmpdir } from 'node:os';
 import { join, basename } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { packageNames, validateSource, verifyAssets, writeChecksum, writeManifest, publicAssetNames } from './release-assets.mjs';
+import { packageNames, validateSource, verifyAssets, writeChecksum, writeManifest, publicAssetNames, focusedDownloads } from './release-assets.mjs';
 import { writeUpdateFeed } from './update-assets.mjs';
 import { renderCask } from './generate-homebrew.mjs';
 import { publishRelease, releaseNotes } from './publish-release.mjs';
@@ -211,6 +211,10 @@ test('the branded candidate validates the complete new package, cask and updater
     assert.equal(published.length, 8);
     assert.equal(JSON.parse(readFileSync(join(directory, 'release-manifest.json'))).files.length, 7);
     assert.deepEqual(publicAssetNames('4.9.0', verified), verified);
+    assert.equal(focusedDownloads('4.9.1'), true);
+    assert.equal(focusedDownloads('4.10.0'), true);
+    assert.equal(focusedDownloads('4.9.0'), false);
+    assert.equal(focusedDownloads('4.8.9'), false);
     assert.throws(() => verifyAssets(directory, { ...context, tag: `v${version}`, candidate: false }));
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

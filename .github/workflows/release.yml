@@ -25,6 +25,7 @@ on:
       - src-tauri/tauri*.json
       - src-tauri/Entitlements.plist
       - src-tauri/Info.plist
+      - src-tauri/Info.plist
   workflow_dispatch:
     inputs:
       tag:

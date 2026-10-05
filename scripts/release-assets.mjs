@@ -64,11 +64,15 @@ export function verifyAssets(directory, { tag, repository, candidate = false }) 
   return expected;
 }
 
-// From 4.9.1, publish user downloads and the signed update feed; keep build-only
-// checksum sidecars, detached signatures and generated cask in CI artifacts.
-export function publicAssetNames(version, verified) {
+// From 4.9.1, releases attach only user downloads and the signed update feed;
+// build-only checksum sidecars, detached signatures and the generated cask stay in CI artifacts.
+export function focusedDownloads(version) {
   const [major, minor, patch] = version.split('.').map(Number);
-  if (major < 4 || (major === 4 && (minor < 9 || (minor === 9 && patch < 1)))) return verified;
+  return major > 4 || (major === 4 && (minor > 9 || (minor === 9 && patch >= 1)));
+}
+
+export function publicAssetNames(version, verified) {
+  if (!focusedDownloads(version)) return verified;
   const wanted = new Set([...packageNames(version), ...Object.values(updatePackages(version)), 'latest.json']);
   return verified.filter(name => wanted.has(name));
 }

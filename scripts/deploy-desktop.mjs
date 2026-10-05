@@ -11,14 +11,13 @@ const BUNDLE_ID = 'com.lbjlaq.antigravity-tools-lite';
 function isAppRunning(appPath) {
   try {
     const stdout = execSync('pgrep -fl "agy-switch-desktop"', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
-    const lines = stdout.split('\n').filter(Boolean);
-    return lines.some(line => line.includes(appPath) || line.includes('agy-switch'));
+    return stdout.split('\n').filter(Boolean).some(line => line.includes(appPath));
   } catch {
     return false;
   }
 }
 
-function quitAppGracefully() {
+function quitAppGracefully(appPath) {
   try {
     execFileSync('/usr/bin/osascript', ['-e', `quit app id "${BUNDLE_ID}"`], {
       encoding: 'utf8',
@@ -26,9 +25,10 @@ function quitAppGracefully() {
       timeout: 5000,
     });
   } catch {
-    // If AppleScript quit fails, fallback to pkill
+    // If AppleScript quit fails, target only this bundle's executable; never
+    // pkill the generic "agy-switch" pattern, which also matches the CLI and dev servers.
     try {
-      execSync(`pkill -f "${BUNDLE_ID}" || pkill -f "agy-switch"`, { stdio: 'ignore' });
+      execSync(`pkill -f "${appPath}/Contents/MacOS/agy-switch-desktop"`, { stdio: 'ignore' });
     } catch {}
   }
 
@@ -61,7 +61,7 @@ export function deployDesktop({ appPath = DEFAULT_APP_PATH, forceRelaunch = fals
   const wasRunning = isAppRunning(resolvedApp);
   if (wasRunning) {
     console.log('[Deploy] Detected running app instance, quitting gracefully...');
-    quitAppGracefully();
+    quitAppGracefully(resolvedApp);
   }
 
   const destBin = join(resolvedApp, 'Contents/MacOS/agy-switch-desktop');
