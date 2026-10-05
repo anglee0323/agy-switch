@@ -129,7 +129,7 @@ pub fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
         .menu(&build_menu(app)?)
         // Linux does not deliver TrayIconEvent::Click, so retain its native menu.
         .show_menu_on_left_click(cfg!(target_os = "linux"))
-        .tooltip("Antigravity Tools Lite")
+        .tooltip("agy-switch")
         .icon(icon)
         .icon_as_template(cfg!(target_os = "macos"))
         .on_menu_event(|app, event| match event.id().as_ref() {

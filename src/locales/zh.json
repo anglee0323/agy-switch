@@ -105,7 +105,7 @@
     "open_failed": "打开数据目录失败：{{error}}"
   },
   "common": {
-    "app_name": "Antigravity Tools Lite",
+    "app_name": "agy-switch",
     "loading": "加载中...",
     "save": "保存",
     "cancel": "取消",

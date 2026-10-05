@@ -3,7 +3,7 @@
   "source_head": "5be961d3149be5f80bdd4b39b51b4a4020dea4cd",
   "checkout_commit": "5be961d3149be5f80bdd4b39b51b4a4020dea4cd",
   "build_profile": "debug, custom-protocol, same executable as CLI smoke",
-  "run_url": "https://github.com/anglee0323/antigravity-tools-lite/actions/runs/37233892799",
+  "run_url": "https://github.com/anglee0323/agy-switch/actions/runs/37233892799",
   "native_linux_artifact_id": 11314469250,
   "native_linux_passed": true,
   "native_windows_status": "blocked",

@@ -2,7 +2,7 @@
 
 ## 当前交付范围
 
-工作分支为 `feat/settings-category-sidebar`，对应 [草稿 PR #22](https://github.com/anglee0323/antigravity-tools-lite/pull/22)。该分支已经包含多轮 APP、CLI、账号身份与菜单栏改动，PR 不再只是设置分类调整。旧描述中的六分类和实验汉化已过时；当前设置保留常规、配额、智能换号三类，实验汉化已删除。
+工作分支为 `feat/settings-category-sidebar`，对应 [草稿 PR #22](https://github.com/anglee0323/agy-switch/pull/22)。该分支已经包含多轮 APP、CLI、账号身份与菜单栏改动，PR 不再只是设置分类调整。旧描述中的六分类和实验汉化已过时；当前设置保留常规、配额、智能换号三类，实验汉化已删除。
 
 菜单栏直接展示账号列表、各自 Gemini / Claude-GPT 的 5 小时与周额度，支持逐行查看和明确切换；顶部聚合范围可以在常规设置中选择。聚合是已知数据的等权平均剩余百分比，不能称为 Token 总量。共享池去重，未知、过期、禁用和受限数据不冒充可用额度。当前标记依据运行中独立 App 的已验证身份；核验失败不会任意选择第一个账号。
 
@@ -27,7 +27,7 @@ Mac 菜单栏改为 `NSMenu`，按照 CodexBar 的系统字体、细进度条和
 
 ### #11 / #12：环形轮换与任务完成提示
 
-[Issue #11](https://github.com/anglee0323/antigravity-tools-lite/issues/11) / [PR #12](https://github.com/anglee0323/antigravity-tools-lite/pull/12)，head `c55b4a17720e68267b0391375b9e3c3788485379`。
+[Issue #11](https://github.com/anglee0323/agy-switch/issues/11) / [PR #12](https://github.com/anglee0323/agy-switch/pull/12)，head `c55b4a17720e68267b0391375b9e3c3788485379`。
 
 **接入多端版本的适配限制。** `src/components/autoSwitch/AutoSwitch.tsx:66` 调用 `switchAccount(status.target_account_id!)`，没有传递目标程序。重新核对该 PR 固定 head，发现其 `Target` 枚举只有 `App`，因此默认 App 目标在原 PR 内一致；先前将其描述为原 PR 已经会切错 IDE 的 P1 故障不准确，现予更正。若移植到当前支持 App / AppCli / IDE / VS Code 的版本，需要明确传递目标，并重新验证 pending ID、配置和候选条件，不能直接照搬按钮调用。
 
@@ -39,7 +39,7 @@ Mac 菜单栏改为 `NSMenu`，按照 CodexBar 的系统字体、细进度条和
 
 ### #14 / #15：应用内更新
 
-[Issue #14](https://github.com/anglee0323/antigravity-tools-lite/issues/14) / [PR #15](https://github.com/anglee0323/antigravity-tools-lite/pull/15)，head `5603f7bcebbd27f6a293190ad9322fee3e824d87`。
+[Issue #14](https://github.com/anglee0323/agy-switch/issues/14) / [PR #15](https://github.com/anglee0323/agy-switch/pull/15)，head `5603f7bcebbd27f6a293190ad9322fee3e824d87`。
 
 **P1：下载路径和执行来源未建立后端边界。** `src-tauri/src/modules/updater.rs:164–205` 接受前端任意 `download_url` 与 `asset_name`，后者直接拼到临时目录；绝对路径或 `../` 可以逃出该目录。下载后没有校验发行资产 hash/签名；Windows 的 243–254 行直接执行文件并退出应用。需要后端从可信仓库 Release 元数据选择资产、限制文件名、使用独占临时文件、校验长度/hash/签名，并对并发下载加锁。不能依赖正常 UI 只传合法名称。
 
@@ -51,7 +51,7 @@ Mac 菜单栏改为 `NSMenu`，按照 CodexBar 的系统字体、细进度条和
 
 ### #17 / #18：按模型费用及环形图
 
-[Issue #17](https://github.com/anglee0323/antigravity-tools-lite/issues/17) / [PR #18](https://github.com/anglee0323/antigravity-tools-lite/pull/18)，head `2958c2ae4780c7f60ceb804efcc1d8c5b768415c`。
+[Issue #17](https://github.com/anglee0323/agy-switch/issues/17) / [PR #18](https://github.com/anglee0323/agy-switch/pull/18)，head `2958c2ae4780c7f60ceb804efcc1d8c5b768415c`。
 
 **P2：新规则把 Claude 不同系列按 Sonnet 价格计算。** `src/pages/Dashboard.tsx:120` 将原本只匹配 Sonnet 4.6 的规则扩展到 Sonnet/Opus/Haiku，仍统一为输入 $3、输出 $15、缓存读取 $0.30 / MTok。提取该 PR 的实际函数执行，Opus 4.6 与 Haiku 4.5 都命中此规则。[Anthropic 官方价格](https://platform.claude.com/docs/en/about-claude/pricing)分别为 Opus 4.6 的 $5/$25/$0.50 与 Haiku 4.5 的 $1/$5/$0.10；成本金额和饼图占比会同时出错。应按精确模型 ID、价格来源与有效日期维护规则，未知模型保留未知。
 

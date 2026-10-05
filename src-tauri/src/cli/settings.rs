@@ -72,8 +72,8 @@ pub(super) fn policy_text(config: &Config, lang: Lang) -> String {
     let strategy = match (lang, config.strategy) { (Lang::Zh, Strategy::Priority) => "优先顺序", (Lang::Zh, Strategy::RoundRobin) => "轮询", (Lang::En, Strategy::Priority) => "Priority", (Lang::En, Strategy::RoundRobin) => "Round robin" };
     let target = match config.target { Target::App => if zh { "全域同步" } else { "Global sync" }, Target::AppCli => "APP + agy", Target::Ide => "IDE", Target::Vscode => "VS Code" };
     let model = match (lang, config.monitored_model.as_str()) { (Lang::Zh, "all") => "全部模型", (Lang::En, "all") => "All models", (_, "gemini") => "Gemini", (Lang::Zh, "claude") => "Claude 和 GPT", (Lang::En, "claude") => "Claude & GPT", (_, value) => value };
-    if zh { format!("智能切换策略: {enabled}\n切换时机: {mode}\n账号选择顺序: {strategy}\n同步目标: {target}\n监控模型: {}\n保留额度: {}%\n候选最低额度: {}%\n候选账号顺序: {}\n后台执行需要运行 Tools Lite App。", terminal_text(model), config.reserve_percentage, config.candidate_min_percentage, config.candidate_account_ids.iter().map(|s| terminal_text(s)).collect::<Vec<_>>().join(" → ")) }
-    else { format!("Smart switching: {enabled}\nSwitch timing: {mode}\nAccount selection order: {strategy}\nSync target: {target}\nMonitored models: {}\nReserve: {}%\nBackup minimum: {}%\nCandidate order: {}\nBackground execution requires the Tools Lite desktop app.", terminal_text(model), config.reserve_percentage, config.candidate_min_percentage, config.candidate_account_ids.iter().map(|s| terminal_text(s)).collect::<Vec<_>>().join(" → ")) }
+    if zh { format!("智能切换策略: {enabled}\n切换时机: {mode}\n账号选择顺序: {strategy}\n同步目标: {target}\n监控模型: {}\n保留额度: {}%\n候选最低额度: {}%\n候选账号顺序: {}\n后台执行需要运行 agy-switch 桌面应用。", terminal_text(model), config.reserve_percentage, config.candidate_min_percentage, config.candidate_account_ids.iter().map(|s| terminal_text(s)).collect::<Vec<_>>().join(" → ")) }
+    else { format!("Smart switching: {enabled}\nSwitch timing: {mode}\nAccount selection order: {strategy}\nSync target: {target}\nMonitored models: {}\nReserve: {}%\nBackup minimum: {}%\nCandidate order: {}\nBackground execution requires the agy-switch desktop app.", terminal_text(model), config.reserve_percentage, config.candidate_min_percentage, config.candidate_account_ids.iter().map(|s| terminal_text(s)).collect::<Vec<_>>().join(" → ")) }
 }
 
 fn policy_output(config: &Config, json: bool, lang: Lang) -> String {
@@ -155,7 +155,7 @@ mod tests {
     }
     #[test]
     fn update_result_is_check_only_and_keeps_languages_separate() {
-        let info = crate::modules::updater::UpdateInfo { current_version: "4.8.1".into(), latest_version: "v4.8.2".into(), has_update: true, release_url: "https://github.com/anglee0323/antigravity-tools-lite/releases/tag/v4.8.2".into() };
+        let info = crate::modules::updater::UpdateInfo { current_version: "4.8.1".into(), latest_version: "v4.8.2".into(), has_update: true, release_url: "https://github.com/anglee0323/agy-switch/releases/tag/v4.8.2".into() };
         assert!(update_output(&info, false, Lang::En).contains("Update available"));
         assert!(update_output(&info, false, Lang::Zh).contains("有新版本"));
         assert_eq!(serde_json::from_str::<serde_json::Value>(&update_output(&info, true, Lang::En)).unwrap()["check_only"], true);

@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { releaseVersion, sha256, writeManifest } from './release-assets.mjs';
+import { desktopBrand } from './release-brand.mjs';
 
 const gh = args => execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 16 * 1024 * 1024 });
 const newer = (a, b) => { const aa = a.split('.').map(Number), bb = b.split('.').map(Number); for (let i = 0; i < 3; i++) { if (aa[i] !== bb[i]) return aa[i] > bb[i]; } return false; };
@@ -20,7 +21,7 @@ export function releaseNotes({ tag, commit, repository }) {
       return `](${new URL(target.startsWith('/') ? target.slice(1) : target, target.startsWith('/') ? base : `${base}docs/release-notes/`).href})`;
     });
   if (!acceptance) throw new Error('Release acceptance notes are empty');
-  return `Antigravity Tools Lite ${version}\n\nSource commit: ${commit}\n\nPackages: macOS Apple Silicon ZIP, Windows x64 NSIS installer, Linux amd64 deb, Windows console ZIP and Linux console tarball. Checksums and source manifest are attached.\n\nThese builds are not Developer ID signed/notarized or Windows Authenticode signed. Homebrew installation becomes available after the generated cask is verified and merged into the repository's Casks directory.\n\n${acceptance}\n\n[Detailed acceptance and screenshot provenance](https://github.com/${repository}/blob/${commit}/docs/native-gui-acceptance.md)\n`;
+  return `${desktopBrand(version).app} ${version}\n\nSource commit: ${commit}\n\nPackages: macOS Apple Silicon ZIP, Windows x64 NSIS installer, Linux amd64 deb, Windows console ZIP and Linux console tarball. Checksums and source manifest are attached.\n\nThese builds are not Developer ID signed/notarized or Windows Authenticode signed. Homebrew installation becomes available after the generated cask is verified and merged into the repository's Casks directory.\n\n${acceptance}\n\n[Detailed acceptance and screenshot provenance](https://github.com/${repository}/blob/${commit}/docs/native-gui-acceptance.md)\n`;
 }
 
 export function publishRelease(directory, context, runGh = gh) {
@@ -54,7 +55,7 @@ export function publishRelease(directory, context, runGh = gh) {
     if (!release) {
       const request = join(scratch, 'release.json');
       writeFileSync(request, JSON.stringify({ tag_name: tag, target_commitish: commit, draft: true,
-        name: `Antigravity Tools Lite ${version}`, body: expectedNotes }));
+        name: `${desktopBrand(version).app} ${version}`, body: expectedNotes }));
       // Use the creation response's ID; the release listing can lag behind.
       release = json(['api', '--method', 'POST', `repos/${repository}/releases`, '--input', request]);
     }

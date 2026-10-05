@@ -447,7 +447,9 @@ fn is_client_process(
     configured_paths: &[std::path::PathBuf],
 ) -> bool {
     let name = name.to_ascii_lowercase();
-    if name.starts_with("antigravity-tools") || name.starts_with("antigravity_tools") {
+    if name == "agy-switch" || name == "agy-switch.exe"
+        || name == "agy-switch-desktop" || name == "agy-switch-desktop.exe"
+        || name.starts_with("antigravity-tools") || name.starts_with("antigravity_tools") {
         return false;
     }
     if name.contains("antigravity") || name == "agy" || name == "agy.exe" {
@@ -1795,6 +1797,9 @@ mod tests {
             Some(Path::new("/Applications/Antigravity.app/tools")),
             &[]
         ));
+        for name in ["agy-switch", "agy-switch.exe", "agy-switch-desktop", "agy-switch-desktop.exe"] {
+            assert!(!is_client_process(name, Some(Path::new("/Applications/Antigravity.app/tools")), &[]));
+        }
         assert!(!is_client_process(
             "bash",
             Some(Path::new("/bin/bash")),

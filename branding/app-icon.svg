@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="surface" x1="150" y1="110" x2="890" y2="920" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff"/><stop offset="1" stop-color="#edf4fa"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="310" y1="460" x2="684" y2="270" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#245ee8"/><stop offset="1" stop-color="#438cf9"/>
+    </linearGradient>
+    <linearGradient id="mint" x1="340" y1="730" x2="714" y2="560" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#139a84"/><stop offset="1" stop-color="#35bea0"/>
+    </linearGradient>
+  </defs>
+  <rect x="92" y="100" width="840" height="840" rx="190" fill="#142d4a" opacity=".08"/>
+  <rect x="92" y="84" width="840" height="840" rx="190" fill="url(#surface)" stroke="#dde7ef" stroke-width="3"/>
+  <rect x="108" y="100" width="808" height="808" rx="176" fill="none" stroke="#fff" stroke-width="3" opacity=".9"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="76">
+    <path d="M310 452V418C310 354 362 302 426 302H684M618 236L684 302L618 368" stroke="url(#blue)"/>
+    <path d="M714 556V590C714 654 662 706 598 706H340M406 640L340 706L406 772" stroke="url(#mint)"/>
+  </g>
+</svg>

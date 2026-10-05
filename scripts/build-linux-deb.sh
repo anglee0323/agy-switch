@@ -5,13 +5,13 @@ cd "$(dirname "$0")/.."
 case "${1:---native}" in
   --docker)
     command -v docker >/dev/null || { echo 'Docker is required for --docker.' >&2; exit 1; }
-    task_cache="${XDG_CACHE_HOME:-$HOME/.cache}/antigravity-tools-lite-build"
+    task_cache="${XDG_CACHE_HOME:-$HOME/.cache}/agy-switch-build"
     mkdir -p "$task_cache/cargo"
-    docker build -f scripts/linux/Dockerfile -t antigravity-tools-lite-linux-builder .
+    docker build -f scripts/linux/Dockerfile -t agy-switch-linux-builder .
     docker run --rm --cpus "${CARGO_BUILD_JOBS:-4}" --user "$(id -u):$(id -g)" \
       -e HOME=/tmp/builder -e CARGO_HOME=/cargo -e CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-4}" \
       -v "$PWD:/work" -v "$task_cache/cargo:/cargo" -w /work \
-      antigravity-tools-lite-linux-builder ./scripts/build-linux-deb.sh --native
+      agy-switch-linux-builder ./scripts/build-linux-deb.sh --native
     ;;
   --native)
     for task_tool in cargo node npm pkg-config dpkg-deb; do

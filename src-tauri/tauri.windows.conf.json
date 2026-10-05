@@ -3,7 +3,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Antigravity Tools Lite",
+        "title": "agy-switch",
         "width": 1024,
         "height": 700,
         "transparent": false,

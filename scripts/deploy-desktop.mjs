@@ -4,14 +4,14 @@ import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { verifyMacosBundle } from './verify-macos-bundle.mjs';
 
-const DEFAULT_APP_PATH = '/Users/wallanceleon/Desktop/Antigravity Tools Lite (最新打磨版).app';
+const DEFAULT_APP_PATH = '/Users/wallanceleon/Desktop/agy-switch (最新打磨版).app';
 const BUNDLE_ID = 'com.lbjlaq.antigravity-tools-lite';
 
 function isAppRunning(appPath) {
   try {
-    const stdout = execSync('pgrep -fl "antigravity-tools"', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
+    const stdout = execSync('pgrep -fl "agy-switch-desktop"', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] });
     const lines = stdout.split('\n').filter(Boolean);
-    return lines.some(line => line.includes(appPath) || line.includes('Antigravity Tools Lite'));
+    return lines.some(line => line.includes(appPath) || line.includes('agy-switch'));
   } catch {
     return false;
   }
@@ -27,14 +27,14 @@ function quitAppGracefully() {
   } catch {
     // If AppleScript quit fails, fallback to pkill
     try {
-      execSync(`pkill -f "${BUNDLE_ID}" || pkill -f "Antigravity Tools Lite"`, { stdio: 'ignore' });
+      execSync(`pkill -f "${BUNDLE_ID}" || pkill -f "agy-switch"`, { stdio: 'ignore' });
     } catch {}
   }
 
   // Wait up to 5s for exit
   const start = Date.now();
   while (Date.now() - start < 5000) {
-    if (!isAppRunning('Antigravity Tools Lite')) {
+    if (!isAppRunning('agy-switch')) {
       return true;
     }
     execSync('sleep 0.3');
@@ -52,7 +52,7 @@ export function deployDesktop({ appPath = DEFAULT_APP_PATH, forceRelaunch = fals
   const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf8'));
   const version = pkg.version;
 
-  const releaseBin = resolve('src-tauri/target/release/antigravity-tools');
+  const releaseBin = resolve('src-tauri/target/release/agy-switch-desktop');
   if (!existsSync(releaseBin)) {
     throw new Error(`Release binary not found at ${releaseBin}. Run 'cargo build --release' first.`);
   }
@@ -63,7 +63,7 @@ export function deployDesktop({ appPath = DEFAULT_APP_PATH, forceRelaunch = fals
     quitAppGracefully();
   }
 
-  const destBin = join(resolvedApp, 'Contents/MacOS/antigravity-tools');
+  const destBin = join(resolvedApp, 'Contents/MacOS/agy-switch-desktop');
   copyFileSync(releaseBin, destBin);
   chmodSync(destBin, 0o755);
 

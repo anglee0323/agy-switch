@@ -1,11 +1,15 @@
 [package]
-name = "antigravity-tools"
-version = "4.8.1"
-description = "Antigravity Tools"
+name = "agy-switch"
+version = "4.9.0"
+description = "Local Antigravity account switching and usage dashboard"
 authors = ["you"]
 license = "CC-BY-NC-SA-4.0"
 edition = "2021"
-default-run = "antigravity-tools"
+default-run = "agy-switch-desktop"
+
+[[bin]]
+name = "agy-switch-desktop"
+path = "src/main.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

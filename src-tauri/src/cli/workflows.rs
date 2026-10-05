@@ -47,7 +47,7 @@ fn edit_policy(root: &Path, lang: Lang) {
     let mut selected = 0;
     loop {
         print!("\x1b[2J\x1b[H");
-        println!("{}\n", text(lang, "后台策略由 Tools Lite App 执行；返回会放弃未保存的修改。", "The desktop app runs this policy. Back discards unsaved changes."));
+        println!("{}\n", text(lang, "后台策略由 agy-switch 桌面应用 执行；返回会放弃未保存的修改。", "The desktop app runs this policy. Back discards unsaved changes."));
         let on = if draft.enabled { text(lang, "开启", "On") } else { text(lang, "关闭", "Off") };
         let mode = match draft.mode { Mode::Wait => text(lang, "检测空闲后切换", "Wait for inactivity"), Mode::Stop => text(lang, "达到阈值后切换", "Switch at threshold") };
         let strategy = match draft.strategy { Strategy::Priority => text(lang, "优先顺序", "Priority"), Strategy::RoundRobin => text(lang, "循环轮换", "Round robin") };

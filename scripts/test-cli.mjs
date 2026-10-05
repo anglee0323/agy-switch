@@ -5,7 +5,7 @@ import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 
-const binary = resolve(process.argv[2] ?? 'src-tauri/target/debug/antigravity-tools');
+const binary = resolve(process.argv[2] ?? 'src-tauri/target/debug/agy-switch-desktop');
 const root = mkdtempSync(join(tmpdir(), 'agy-lite-cli-'));
 const data = join(root, 'data');
 const env = { ...process.env, ABV_DATA_DIR: data, DISPLAY: '', WAYLAND_DISPLAY: '' };

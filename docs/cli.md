@@ -1,10 +1,10 @@
-# Tools Lite CLI (`agy-switch`)
+# agy-switch CLI (`agy-switch`)
 
-`agy-switch` manages accounts saved by Antigravity Tools Lite. It is separate from Google's `agy`: it does not run an AI session. The same interactive workflow works on macOS, Windows and Linux, including masked refresh-token entry.
+`agy-switch` manages accounts saved by agy-switch. It is separate from Google's `agy`: it does not run an AI session. The same interactive workflow works on macOS, Windows and Linux, including masked refresh-token entry.
 
 ## Install and run
 
-- **macOS:** the [Homebrew cask](homebrew.md) installs `agy-switch`. A manual app installation also exposes commands through `/Applications/Antigravity Tools Lite.app/Contents/MacOS/antigravity-tools`.
+- **macOS:** the [Homebrew cask](homebrew.md) installs `agy-switch`. From 4.9.0, a manual app installation also exposes commands through `/Applications/agy-switch.app/Contents/MacOS/agy-switch-desktop`.
 - **Windows:** the installer includes console `agy-switch.exe` beside the desktop executable; the release also offers a standalone console ZIP. Open PowerShell in that directory and run `.\agy-switch.exe`. The console executable preserves normal shell waiting, stdout/stderr and `$LASTEXITCODE`; use it instead of scripting the GUI-subsystem executable. [Windows guide](windows.md)
 - **Linux:** the deb installs `/usr/bin/agy-switch`; a console tarball is also available. Cached reads and terminal interaction do not require a display, but the executable still needs GTK/WebKitGTK runtime libraries. [Linux guide](linux.md)
 
@@ -47,7 +47,7 @@ agy-switch update check --json
 `accounts current`, `accounts quota` and `accounts switch` are also accepted. Selectors are exact account IDs or case-insensitive exact emails; duplicate emails require an ID. There is no fuzzy selection. Bare `agy-switch` opens the dashboard in an interactive terminal on all three platforms.
 
 - `accounts list`, `current`, and `quota` only read local files. They do not initialize the GUI, refresh tokens, query Google, create directories/logs, or repair corrupt indexes
-- `current` is Tools Lite's recorded selection, not a live check of the APP keyring or `agy` session. Changes made outside Tools Lite can make it stale
+- `current` is agy-switch's recorded selection, not a live check of the APP keyring or `agy` session. Changes made outside agy-switch can make it stale
 - `quota` reports cached data and `last_updated` (Unix seconds). Use `agy-switch refresh` when fresh quota is needed. A cache can be stale even when the command succeeds
 - `--json` may appear before or after a command. Success goes to stdout; errors go to stderr. All JSON has `schema_version: 1`
 - Output uses an explicit field allow-list: no access/refresh/ID tokens, raw OAuth responses, validation URLs, or stored error strings. Treat emails, account IDs, names and quota as personal data when sharing output

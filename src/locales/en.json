@@ -105,7 +105,7 @@
     "open_failed": "Couldn't open data folder: {{error}}"
   },
   "common": {
-    "app_name": "Antigravity Tools Lite",
+    "app_name": "agy-switch",
     "loading": "Loading...",
     "save": "Save",
     "cancel": "Cancel",

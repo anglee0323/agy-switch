@@ -45,7 +45,7 @@ export const menuBarMessages = {
     desktopTitle: "Startup & Menu Bar",
     desktopHint: "Keep your accounts and remaining quota one click away.",
     login: "Launch at login",
-    loginHint: "Start Antigravity Tools Lite automatically when you sign in.",
+    loginHint: "Start agy-switch automatically when you sign in.",
     dock: "Show in Menu Bar only",
     dockUnknown: "Dock state is uncertain; the saved preference is shown. Retry the toggle or quit and reopen",
     dockHint:

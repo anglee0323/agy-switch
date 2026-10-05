@@ -1238,7 +1238,7 @@ fn format_switch_refresh_error(message: &str) -> String {
         || lower.contains("invalid_grant")
     {
         return format!(
-            "Token refresh failed: OAuth client is not authorized for this account. Please sign in again in Antigravity-Manager and complete authorization/verification. Raw error: {}",
+            "Token refresh failed: OAuth client is not authorized for this account. Please sign in again in agy-switch and complete authorization/verification. Raw error: {}",
             message
         );
     }

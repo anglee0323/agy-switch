@@ -41,7 +41,7 @@ pub async fn get_api_pricing() -> Result<ApiPricingSnapshot, String> {
 
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(12))
-        .user_agent("Antigravity Tools local usage dashboard")
+        .user_agent("agy-switch local usage dashboard")
         .build()
         .map_err(|error| error.to_string())?;
 

@@ -3,7 +3,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Antigravity Tools Lite",
+        "title": "agy-switch",
         "width": 1024,
         "height": 700,
         "transparent": false,
@@ -15,7 +15,9 @@
   "bundle": {
     "linux": {
       "deb": {
-        "files": { "/usr/bin/agy-switch": "target/release/agy-switch" },
+        "files": {
+          "/usr/bin/agy-switch": "target/release/agy-switch"
+        },
         "depends": [
           "xdg-utils"
         ],
@@ -25,5 +27,5 @@
       }
     }
   },
-  "mainBinaryName": "antigravity-tools-lite"
+  "mainBinaryName": "agy-switch-desktop"
 }

@@ -1,8 +1,10 @@
-# Antigravity Tools Lite
+# agy-switch
 
-[简体中文](README.zh-CN.md) · [Download](https://github.com/anglee0323/antigravity-tools-lite/releases/latest) · [CLI guide](docs/cli.md)
+<img src="branding/app-icon.svg" width="88" height="88" alt="agy-switch app icon">
 
-Manage Antigravity accounts, check remaining quotas, and review local token usage from a desktop app or terminal. Tools Lite connects directly to Google for authorization and quota requests. Account data and usage records stay on your machine.
+[简体中文](README.zh-CN.md) · [Download](https://github.com/anglee0323/agy-switch/releases/latest) · [CLI guide](docs/cli.md)
+
+Manage Antigravity accounts, check remaining quotas, and review local token usage from a desktop app or terminal. agy-switch connects directly to Google for authorization and quota requests. Account data and usage records stay on your machine.
 
 ## Choose how to use it
 
@@ -16,20 +18,22 @@ The desktop app and CLI share the same accounts. Linux supports desktop use as w
 
 ## Install
 
-Download the package for your platform from **[GitHub Releases](https://github.com/anglee0323/antigravity-tools-lite/releases/latest)**. Desktop and CLI downloads include SHA-256 checksum files. Updater packages have cryptographic signatures, and `release-manifest.json` records every asset and its source commit.
+**Brand update in development:** source version 4.9.0 uses the new name and artwork. It has not been packaged or released. The public latest release remains 4.8.1, with the original Tools Lite app and archive names. The installation names below describe the next release; [historical downloads](https://github.com/anglee0323/agy-switch/releases/tag/v4.8.1) and their checksums are unchanged.
+
+Download the package for your platform from **[GitHub Releases](https://github.com/anglee0323/agy-switch/releases/latest)**. Desktop and CLI downloads include SHA-256 checksum files. Updater packages have cryptographic signatures, and `release-manifest.json` records every asset and its source commit.
 
 ### macOS
 
 ```sh
-brew tap anglee0323/antigravity-tools-lite https://github.com/anglee0323/antigravity-tools-lite.git
-brew install --cask antigravity-tools-lite
+brew tap anglee0323/agy-switch https://github.com/anglee0323/agy-switch.git
+brew install --cask anglee0323/agy-switch/agy-switch
 ```
 
-This installs the app and `agy-switch`. For a manual installation, unpack `Antigravity-Tools-Lite-<version>-macos-arm64.zip` and move the app to Applications. See the [Homebrew guide](docs/homebrew.md) for upgrades and validation.
+This installs the app and `agy-switch`. For a manual installation, unpack `agy-switch-<version>-macos-arm64.zip` and move the app to Applications. See the [Homebrew guide](docs/homebrew.md) for upgrades and validation.
 
 ### Windows
 
-Run `Antigravity-Tools-Lite-<version>-windows-x64-setup.exe`. The installer includes English and Simplified Chinese and installs for the current user. It includes the console CLI next to the desktop executable.
+Run `agy-switch-<version>-windows-x64-setup.exe`. The installer includes English and Simplified Chinese and installs for the current user. It includes the console CLI next to the desktop executable.
 
 For terminal use alone, extract `agy-switch-<version>-windows-x64.zip`, open PowerShell in that folder, and run:
 
@@ -43,8 +47,8 @@ PowerShell waits for this console executable and preserves its exit code. See [W
 ### Linux
 
 ```sh
-sudo apt install ./Antigravity-Tools-Lite-<version>-linux-amd64.deb
-antigravity-tools-lite   # desktop app
+sudo apt install ./agy-switch-<version>-linux-amd64.deb
+agy-switch-desktop       # desktop app
 agy-switch              # terminal dashboard
 ```
 
@@ -58,7 +62,7 @@ For terminal use alone, use `agy-switch-<version>-linux-amd64.tar.gz`. The [Linu
 2. Refresh quotas, then choose the account you want to use. A switch may close and reopen Antigravity; save work first and verify the selected account in the client afterward.
 3. Check usage on the home page or in the menu bar/tray. Enable smart switching in Settings if you want automatic backup-account selection.
 
-`agy-switch` is Tools Lite’s management command. Google’s `agy` runs Antigravity tasks. A switch synchronizes an initialized native `agy` session along with the Antigravity app; an already running task can retain its previous credentials.
+`agy-switch` is the management command; run it without arguments for the terminal dashboard. Google’s `agy` runs Antigravity tasks. A switch synchronizes an initialized native `agy` session along with the Antigravity app; an already running task can retain its previous credentials.
 
 ## What you can do
 
@@ -84,7 +88,7 @@ agy-switch quota                 # cached quotas
 agy-switch stats                 # local usage and estimated cost
 agy-switch refresh               # fetch current quotas
 agy-switch switch user@example.com
-agy-switch current --json         # Tools Lite’s saved selection
+agy-switch current --json         # agy-switch’s saved selection
 ```
 
 Use ↑/↓ to select, Enter/→ to enter, and Esc/← to return. Number shortcuts remain available. Interactive account management includes remarks, enable/disable, confirmed deletion and account addition. Script commands support JSON and documented exit codes. Read commands use cached local data and do not start the desktop app.
@@ -107,7 +111,7 @@ Native window tests, terminal tests and package tests are tracked separately. Bu
 
 Accounts and preferences are stored in `~/.antigravity_tools`; `ABV_DATA_DIR` overrides this directory. Imported credentials are sensitive local files. Usage comes from local Antigravity databases and archives; the app does not upload conversation content. Google authorization, token refresh and quota requests use the network. Pricing and optional update checks also use the network.
 
-Tools Lite has no project-operated credential relay or proxy service. Account switching changes the credential stores used by the selected client and can report a partial update; inspect the client before retrying after a failure. [CLI behavior and shared switch lock](docs/cli.md)
+agy-switch has no project-operated credential relay or proxy service. Account switching changes the credential stores used by the selected client and can report a partial update; inspect the client before retrying after a failure. [CLI behavior and shared switch lock](docs/cli.md)
 
 ## Build and contribute
 

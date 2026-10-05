@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="72" viewBox="0 0 420 72">
+  <g transform="translate(8 12) scale(2)" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4">
+    <path d="M4 10V8.5A4.5 4.5 0 0 1 8.5 4H20M16.5 1L20 4L16.5 7" stroke="#3478f6"/>
+    <path d="M20 14v1.5a4.5 4.5 0 0 1-4.5 4.5H4M7.5 17L4 20L7.5 23" stroke="#1aa58b"/>
+  </g>
+  <text x="80" y="48" fill="#182838" font-family="system-ui, -apple-system, 'Segoe UI', sans-serif" font-size="40" font-weight="650" letter-spacing="-1.3">agy-switch</text>
+</svg>

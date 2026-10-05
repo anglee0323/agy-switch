@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-const RELEASE_ROOT: &str = "https://github.com/anglee0323/antigravity-tools-lite/releases/tag/";
-const API_URL: &str = "https://api.github.com/repos/anglee0323/antigravity-tools-lite/releases/latest";
+const RELEASE_ROOT: &str = "https://github.com/anglee0323/agy-switch/releases/tag/";
+const API_URL: &str = "https://api.github.com/repos/anglee0323/agy-switch/releases/latest";
 
 #[derive(Debug, Serialize)]
 pub struct UpdateInfo {
@@ -37,7 +37,7 @@ pub async fn check_for_updates() -> Result<UpdateInfo, String> {
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(12))
         .redirect(reqwest::redirect::Policy::none())
-        .user_agent(concat!("antigravity-tools-lite/", env!("CARGO_PKG_VERSION")))
+        .user_agent(concat!("agy-switch/", env!("CARGO_PKG_VERSION")))
         .build().map_err(|_| "update_network_failed")?;
     let response = client.get(API_URL).header("Accept", "application/vnd.github+json")
         .send().await.map_err(|_| "update_network_failed")?;
@@ -82,7 +82,7 @@ fn trusted_download(version: &str, url: &str) -> bool {
     let platform = if cfg!(target_os = "macos") { "macos-arm64.app.tar.gz" }
         else if cfg!(target_os = "windows") { "windows-x64-setup.exe" }
         else { "linux-amd64.deb" };
-    url == format!("https://github.com/anglee0323/antigravity-tools-lite/releases/download/v{version}/Antigravity-Tools-Lite-{version}-{platform}")
+    url == format!("https://github.com/anglee0323/agy-switch/releases/download/v{version}/agy-switch-{version}-{platform}")
 }
 
 /// Only a user-triggered command can download and install. The caller supplies no URL or path.
@@ -137,7 +137,7 @@ fn install_macos(bytes: &[u8], expected_version: &str) -> Result<(), String> {
     std::fs::create_dir(&extracted).map_err(|_| "update_install_failed")?;
     let status = Command::new("/usr/bin/tar").args(["-xzf"]).arg(&archive).arg("-C").arg(&extracted).status().map_err(|_| "update_install_failed")?;
     if !status.success() { return Err("update_install_failed".into()); }
-    let candidate = extracted.join("Antigravity Tools Lite.app");
+    let candidate = extracted.join("agy-switch.app");
     let info: plist::Value = plist::from_file(candidate.join("Contents/Info.plist")).map_err(|_| "invalid_release")?;
     let info = info.as_dictionary().ok_or("invalid_release")?;
     if info.get("CFBundleIdentifier").and_then(plist::Value::as_string) != Some("com.lbjlaq.antigravity-tools-lite")
@@ -169,10 +169,10 @@ mod download_tests {
     #[test]
     fn updater_payload_is_pinned_to_repository_version_and_platform() {
         let suffix = if cfg!(target_os = "macos") { "macos-arm64.app.tar.gz" } else if cfg!(target_os = "windows") { "windows-x64-setup.exe" } else { "linux-amd64.deb" };
-        let valid = format!("https://github.com/anglee0323/antigravity-tools-lite/releases/download/v4.8.1/Antigravity-Tools-Lite-4.8.1-{suffix}");
-        assert!(trusted_download("4.8.1", &valid));
-        for changed in [valid.replace("anglee0323", "attacker"), valid.replace("v4.8.1", "v4.8.0"), format!("{valid}?redirect=evil"), valid.replace("https:", "http:"), "file:///tmp/update".into()] { assert!(!trusted_download("4.8.1", &changed)); }
-        assert!(!trusted_download("4.8.1/path", &valid));
+        let valid = format!("https://github.com/anglee0323/agy-switch/releases/download/v4.9.0/agy-switch-4.9.0-{suffix}");
+        assert!(trusted_download("4.9.0", &valid));
+        for changed in [valid.replace("anglee0323", "attacker"), valid.replace("v4.9.0", "v4.8.1"), format!("{valid}?redirect=evil"), valid.replace("https:", "http:"), "file:///tmp/update".into()] { assert!(!trusted_download("4.9.0", &changed)); }
+        assert!(!trusted_download("4.9.0/path", &valid));
     }
 }
 
@@ -194,10 +194,10 @@ mod signature_metadata_tests {
     use base64::Engine;
     #[test]
     fn signed_filename_cannot_relabel_an_older_or_different_platform_package() {
-        let url = url::Url::parse("https://github.com/anglee0323/antigravity-tools-lite/releases/download/v4.8.1/Antigravity-Tools-Lite-4.8.1-windows-x64-setup.exe").unwrap();
+        let url = url::Url::parse("https://github.com/anglee0323/agy-switch/releases/download/v4.9.0/agy-switch-4.9.0-windows-x64-setup.exe").unwrap();
         let signed_comment = |filename: &str| base64::engine::general_purpose::STANDARD.encode(format!("untrusted comment: fixture\nfixture\ntrusted comment: timestamp:1\tfile:{filename}\nfixture\n"));
-        assert!(signed_filename_matches(&signed_comment("Antigravity-Tools-Lite-4.8.1-windows-x64-setup.exe"), &url));
-        for filename in ["Antigravity-Tools-Lite-4.8.0-windows-x64-setup.exe", "Antigravity-Tools-Lite-4.8.1-linux-amd64.deb", "Antigravity-Tools-Lite-4.8.1-windows-x64-setup.exe\tfile:other"] {
+        assert!(signed_filename_matches(&signed_comment("agy-switch-4.9.0-windows-x64-setup.exe"), &url));
+        for filename in ["agy-switch-4.8.1-windows-x64-setup.exe", "agy-switch-4.9.0-linux-amd64.deb", "agy-switch-4.9.0-windows-x64-setup.exe\tfile:other"] {
             assert!(!signed_filename_matches(&signed_comment(filename), &url));
         }
         assert!(!signed_filename_matches("invalid-base64", &url));

@@ -8,7 +8,7 @@ for (const language of ['zh', 'en']) test(`update prompt and manual check are lo
             w.__updateFixture.calls.push(command);
             if(command==='check_for_updates'){
                 if(w.__updateFixture.fail)throw 'raw backend language should not appear';
-                return {current_version:'4.7.8',latest_version:'v4.7.9',has_update:w.__updateFixture.newer,release_url:'https://github.com/anglee0323/antigravity-tools-lite/releases/tag/v4.7.9'};
+                return {current_version:'4.7.8',latest_version:'v4.7.9',has_update:w.__updateFixture.newer,release_url:'https://github.com/anglee0323/agy-switch/releases/tag/v4.7.9'};
             }
             if(command==='get_running_version')return '4.7.8';
             if(command==='download_and_install_update'){

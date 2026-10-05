@@ -3,11 +3,13 @@ import { execFileSync } from 'node:child_process';
 import { statSync, lstatSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { desktopBrand } from './release-brand.mjs';
 
 export function verifyMacosBundle(app, version, { strict = true } = {}) {
   if (process.platform !== 'darwin') throw new Error('macOS bundle verification requires macOS');
   if (!/^\d+\.\d+\.\d+$/.test(version ?? '')) throw new Error('Expected a release version');
   app = resolve(app);
+  const brand = desktopBrand(version);
   const run = (file, args, input) => {
     try { return execFileSync(file, args, { encoding: 'utf8', input, stdio: ['pipe', 'pipe', 'pipe'], timeout: 30000 }).trim(); }
     catch (error) { throw new Error(`${file} verification failed: ${error.stderr?.toString().trim() || error.message}`); }
@@ -19,9 +21,9 @@ export function verifyMacosBundle(app, version, { strict = true } = {}) {
   regular(plist);
   const field = key => run('/usr/libexec/PlistBuddy', ['-c', 'Print :' + key, plist]);
   if (field('CFBundleIdentifier') !== 'com.lbjlaq.antigravity-tools-lite') throw new Error('Unexpected bundle identifier');
-  if (field('CFBundleExecutable') !== 'antigravity-tools') throw new Error('Unexpected bundle executable');
+  if (field('CFBundleExecutable') !== brand.executable) throw new Error('Unexpected bundle executable');
   if (field('CFBundleShortVersionString') !== version) throw new Error('Bundle version mismatch');
-  const executable = join(app, 'Contents/MacOS/antigravity-tools');
+  const executable = join(app, `Contents/MacOS/${brand.executable}`);
   regular(executable);
   if (!(statSync(executable).mode & 0o111)) throw new Error('Bundle executable is not executable');
   if (run('/usr/bin/lipo', ['-archs', executable]) !== 'arm64') throw new Error('Expected arm64-only executable');

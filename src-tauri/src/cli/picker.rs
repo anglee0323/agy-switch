@@ -1208,11 +1208,11 @@ pub fn run_interactive_dashboard(root: &Path) -> Result<(), CliError> {
         print!("\x1b[2J\x1b[H");
         match lang {
             Lang::Zh => println!(
-                "\x1b[1mAntigravity 账号管理\x1b[0m · \x1b[36magy-switch v{}\x1b[0m",
+                "\x1b[1magy-switch 账号管理\x1b[0m · \x1b[36magy-switch v{}\x1b[0m",
                 env!("CARGO_PKG_VERSION")
             ),
             Lang::En => println!(
-                "\x1b[1mAntigravity Tools Lite\x1b[0m · \x1b[36magy-switch v{}\x1b[0m",
+                "\x1b[1magy-switch\x1b[0m · \x1b[36mv{}\x1b[0m",
                 env!("CARGO_PKG_VERSION")
             ),
         }
