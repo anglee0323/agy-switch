@@ -39,13 +39,12 @@ AntiGravity Switch 把你的 Antigravity 账号集中到一个地方：查看哪
   </tr>
 </table>
 
-**设置**
-
-![设置](docs/screenshots/2026-10-06/settings-zh.png)
-
-**命令行看板**
-
-![命令行看板](docs/screenshots/2026-10-06/cli-zh.png)
+<table>
+  <tr>
+    <td width="50%" valign="top"><strong>设置</strong><br><img src="docs/screenshots/2026-10-06/settings-zh.png" alt="设置"></td>
+    <td width="50%" valign="top"><strong>命令行看板</strong><br><img src="docs/screenshots/2026-10-06/cli-zh.png" alt="命令行看板"></td>
+  </tr>
+</table>
 
 菜单栏的用量和额度为展示用示例数据，账号备注保留用户输入的语言。[截图来源](docs/screenshots/2026-10-06/README.md)
 

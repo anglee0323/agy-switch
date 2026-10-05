@@ -39,13 +39,12 @@ In smart-switch settings, choose Global Sync, Desktop App & CLI, Antigravity IDE
   </tr>
 </table>
 
-**Settings**
-
-![Settings](docs/screenshots/2026-10-06/settings-en.png)
-
-**Terminal dashboard**
-
-![Terminal dashboard](docs/screenshots/2026-10-06/cli-en.png)
+<table>
+  <tr>
+    <td width="50%" valign="top"><strong>Settings</strong><br><img src="docs/screenshots/2026-10-06/settings-en.png" alt="Settings"></td>
+    <td width="50%" valign="top"><strong>Terminal dashboard</strong><br><img src="docs/screenshots/2026-10-06/cli-en.png" alt="Terminal dashboard"></td>
+  </tr>
+</table>
 
 Menu bar usage and quotas are example data. Account remarks retain the language entered by the user. [Screenshot sources](docs/screenshots/2026-10-06/README.md)
 
