@@ -2,15 +2,15 @@
 
 ## Status
 
-The repository and cask token are now `agy-switch`. Brand assets and app name in 4.9.0 are source-only until the next release. The renamed recipe on this development branch still installs the immutable 4.8.1 bundle; it does not claim to install new artwork. Do not install it alongside an existing old-name cask: both own the same app and CLI path. Updating main and the public recipe waits for the next authorized delivery.
+The Apple Silicon cask at `Casks/agy-switch.rb` installs **AntiGravity Switch 4.9.0** from the public [v4.9.0 release](https://github.com/anglee0323/agy-switch/releases/tag/v4.9.0). It uses this repository as an explicit-URL tap; no separate tap repository is required. The archive contains `agy-switch.app`, and the bundled CLI entry is linked as `agy-switch`.
 
-This repository contains the **macOS Apple Silicon cask** at `Casks/agy-switch.rb`, backed by the public [v4.8.1 release](https://github.com/anglee0323/agy-switch/releases/tag/v4.8.1). It uses this repository as an explicit-URL tap; no separate tap repository is required.
+All seventeen public attachments were downloaded and checked against the source manifest. The three updater signatures passed cryptographic verification. The cask matches the actual Mac ZIP, version and URL; its SHA-256 is `b8799230d6a378a447dbeee654aaf108eff33e696e1378987bd9af243f22b02f`. See [4.9.0 verification](4.9.0-public-acceptance.md).
 
-All seventeen v4.8.1 public assets were downloaded and checked against the source manifest; the three updater signatures also passed cryptographic verification. The Mac ZIP contains an ARM64 executable and bundle version 4.8.1. The renamed root cask keeps the same archive and ZIP SHA-256 `e36a70b759c2ecbff6d3863dcc7a4a5aa4673295c7e92313b3538f196e141dc0`. See [4.8.1 verification](4.8.1-public-acceptance.md).
+The Mac package passes strict signature integrity checks but is ad-hoc signed, without Developer ID or notarization. Gatekeeper rejected it with exit 3. Homebrew does not bypass that restriction. A fresh Homebrew recipe load/fetch is checked separately from native installation, launch and upgrade acceptance.
 
-**Historical v4.8.0 native acceptance:** Homebrew upgraded v4.7.9 to v4.8.0 in `/Applications`, correctly linked `agy-switch`, and preserved twelve existing account/configuration JSON files byte-for-byte. The installed bundle passed strict signature verification. Gatekeeper rejected the app (exit 3); the quarantined Brew CLI timed out after ten seconds. This is an installation/upgrade pass, **not a launch pass**. The separately downloaded public ZIP passed 14 isolated CLI read checks and 13 real PTY checks through its `agy-switch` entry point. Uninstall and authenticated switching remain separate. No trust checks or quarantine attributes were removed. See [public-package acceptance](4.8.0-public-acceptance.md). The earlier custom-app-directory check remains recorded in [4.7.9 acceptance](release-notes/4.7.9-public-acceptance.md).
+The cask installs the app and management command through Homebrew's documented [`app` and `binary` artifacts](https://docs.brew.sh/Cask-Cookbook#stanza-binary). A separate formula would still carry the current desktop-linked executable, so no lightweight CLI-only formula is claimed. Linux and Intel macOS Homebrew packages are not provided.
 
-The cask installs both `Antigravity Tools Lite.app` and the management command `agy-switch`. It uses Homebrew's documented [`app` and `binary` artifacts](https://docs.brew.sh/Cask-Cookbook#stanza-binary). A separate formula would still carry the current desktop-linked executable, so no lightweight CLI-only formula is claimed here. Linux and Intel macOS Homebrew packages are not provided; use the existing Linux packages or build from source.
+Do not install this alongside an old Tools Lite cask: both own the `agy-switch` CLI link and share application data. The old app may still be installed under its original name. Back it up and review conflicts before migration; this guide does not force adoption or overwrite. Historical native Brew installation and launch results remain in [4.8.0 acceptance](4.8.0-public-acceptance.md) and [4.8.1 verification](4.8.1-public-acceptance.md).
 
 ## Release inputs and generation
 
@@ -55,11 +55,11 @@ Review any Homebrew trust prompt yourself. `brew uninstall` retains saved accoun
 
 ## Signing and Gatekeeper
 
-The v4.8.0 release uses complete ad-hoc bundle signing. The public ZIP extracted into a fresh OS temporary directory and the Brew app installed in `/Applications` pass strict signature verification with empty entitlements. Neither has been repaired or re-signed during acceptance. The release workflow does not configure Developer ID signing/notarization and does not disable quarantine/Gatekeeper. Homebrew installation does not remove that limitation. Trusted distribution needs appropriate signing/notarization or explicit user review of the ad-hoc signed app; do not add quarantine-removal commands to the cask. The actual Brew launch remains blocked on the tested Mac.
+The v4.9.0 release uses complete ad-hoc bundle signing. Its ZIP, extracted into a fresh OS temporary directory, passes strict signature verification with empty entitlements. The package was not repaired or re-signed during acceptance. The release workflow does not configure Developer ID signing/notarization and does not disable quarantine/Gatekeeper. Homebrew installation does not remove that limitation. Trusted distribution needs appropriate signing/notarization or explicit user review of the ad-hoc signed app; do not add quarantine-removal commands to the cask. The package remains rejected by Gatekeeper on the tested Mac; a successful archive fetch does not establish a successful Brew launch.
 
 ## Publish the cask in this repository
 
-A separate `homebrew-*` repository is optional. Homebrew's [two-argument tap form](https://docs.brew.sh/Taps) supports this existing Git repository. The root `Casks/agy-switch.rb` uses the new cask token while pinning the existing v4.8.1 ZIP and its real SHA-256. The archive still contains the old app name. A release attachment alone is not a tap entry.
+A separate `homebrew-*` repository is optional. Homebrew's [two-argument tap form](https://docs.brew.sh/Taps) supports this existing Git repository. The root `Casks/agy-switch.rb` pins the public v4.9.0 ZIP and its verified SHA-256. The archive contains `agy-switch.app`. A release attachment alone is not a tap entry.
 
 Install from the repository with:
 

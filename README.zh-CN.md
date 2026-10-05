@@ -18,7 +18,7 @@
 
 ## 安装
 
-**4.9.0 发布候选版：** 应用全名为 AntiGravity Switch，仓库、安装包和命令使用 `agy-switch`，采用选定的双波图标。这一版补齐命令行策略设置、账号排序和更新检查。三端验收后发布安装包并同步 Homebrew，请在 Releases 页面确认可下载版本。历史下载的名称和校验值保持原样。
+**[4.9.0 已发布](https://github.com/anglee0323/agy-switch/releases/tag/v4.9.0)**，提供三端安装包，采用选定的双波图标，补齐命令行策略设置、账号排序和更新检查。Homebrew 配方已指向这一版。应用全名为 AntiGravity Switch，仓库、安装包和命令使用 `agy-switch`。历史下载的名称和校验值保持原样。
 
 从 **[GitHub Releases](https://github.com/anglee0323/agy-switch/releases/latest)** 下载对应平台的文件。桌面和命令行下载包附有 SHA-256 校验文件，更新专用包附有签名；`release-manifest.json` 记录全部附件及对应源码提交。
 
@@ -54,7 +54,7 @@ agy-switch              # 终端看板
 
 只使用终端时，可以下载 `agy-switch-<版本>-linux-amd64.tar.gz`。[Linux 指南](docs/linux.md)介绍运行库、无显示环境的安装、系统凭据服务及桌面兼容性。
 
-**安装包信任：** 当前 Mac 安装包尚无 Developer ID 签名和公证，Windows 安装包尚无 Authenticode 签名，系统信任检查可能阻止运行。Homebrew 不会绕过这些检查。实际测到的 Mac 启动限制见[4.8.1 公开安装包验收记录](docs/4.8.1-public-acceptance.md)；文件完整性验证和系统信任验证是两项独立检查。
+**安装包信任：** 当前 Mac 安装包尚无 Developer ID 签名和公证，Windows 安装包尚无 Authenticode 签名，系统信任检查可能阻止运行。Homebrew 不会绕过这些检查。实际测到的 Mac 启动限制见[4.9.0 公开安装包验收记录](docs/4.9.0-public-acceptance.md)；文件完整性验证和系统信任验证是两项独立检查。
 
 ## 开始使用
 
