@@ -2,6 +2,20 @@
 
 The app checks the latest stable GitHub release and shows the version of the running executable separately from the available version. Checking for updates never installs anything. Select **Download and install** to download the package, verify its update signature, install it and restart where supported.
 
+Repository commits, PR merges and CI artifacts do not notify installed users.
+Several maintenance changes can be combined into one release. Pushing an authorized
+new `v*` tag starts packaging; only the verified public stable release becomes
+eligible for update checks. Drafts and prereleases are excluded from the stable
+check. The current workflow publishes stable releases, not a beta channel.
+
+With startup checks enabled, the main app schedules one check four seconds after
+its configuration becomes available. There is no server push or continuous
+background update poll. A running app can use the manual check in Settings; a
+later startup can discover the new release automatically. Dismissing a version
+suppresses that same version on startup, while manual checks can show it again and
+a newer version can prompt normally. The CLI's `update check` only reports the
+available version. Homebrew checks for new recipes when the user runs `brew update`.
+
 The backend chooses the platform package from the project's release feed. The frontend cannot supply a download URL or installation path. A second update cannot run concurrently. A changed release, invalid signature or failed download stops before installation. Account data remains outside the application bundle.
 
 Update signatures use a project key pinned in the application. The encrypted private key and its password are GitHub Actions secrets; neither is checked into the repository. Pull-request builds receive no signing secrets and their updater feed is explicitly an unsigned candidate. Public release verification checks both the package signature and its authenticated comment before publishing.
@@ -14,7 +28,7 @@ Update signatures use a project key pinned in the application. The encrypted pri
 
 The updater signature is separate from Apple Developer ID or Windows Authenticode signing. A successful download verification does not imply operating-system trust.
 
-Older versions that only open the release page require a one-time installation of a version containing the new updater. They cannot acquire this behavior merely by checking for updates. Homebrew-managed installations may continue using `brew upgrade --cask agy-switch` to keep the Homebrew receipt aligned.
+Older versions that only open the release page require a one-time installation of a version containing the new updater. They cannot acquire this behavior merely by checking for updates. Homebrew-managed installations may continue using `brew upgrade --cask anglee0323/agy-switch/agy-switch` to keep the Homebrew receipt aligned.
 
 ## Repository rename
 
