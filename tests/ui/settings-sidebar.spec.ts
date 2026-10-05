@@ -125,8 +125,12 @@ test('candidate order supports keyboard dragging and survives saved navigation',
   await page.getByLabel('primary@example.invalid', { exact: true }).check();
   await page.getByLabel('backup@example.invalid', { exact: true }).check();
   await page.getByLabel('studio@example.invalid', { exact: true }).check();
+  await expect.poll(() => page.evaluate(() => (window as any).__settingsFixture.lowQuota().candidate_account_ids)).toEqual(['fixture-0', 'fixture-1', 'fixture-2']);
   const handle = page.getByRole('button', { name: '调整 primary@example.invalid 的顺序', exact: true });
-  await handle.focus(); await page.keyboard.press('Space'); await expect(handle).toHaveAttribute('aria-pressed', 'true'); await page.keyboard.press('ArrowDown'); await expect(page.locator('[role="status"]').filter({ hasText: '目标位置：backup@example.invalid' })).toBeVisible(); await page.keyboard.press('Space');
+  await handle.focus(); await page.keyboard.press('Space'); await expect(handle).toHaveAttribute('aria-pressed', 'true');
+  // The initial collision announcement confirms measured rows and an active sensor.
+  await expect(page.locator('[role="status"]').filter({ hasText: '目标位置：primary@example.invalid' })).toBeVisible();
+  await page.keyboard.press('ArrowDown'); await expect(page.locator('[role="status"]').filter({ hasText: '目标位置：backup@example.invalid' })).toBeVisible(); await page.keyboard.press('Space');
   await expect.poll(() => page.evaluate(() => (window as any).__settingsFixture.lowQuota())).toMatchObject({ strategy: 'round_robin', candidate_account_ids: ['fixture-1', 'fixture-0', 'fixture-2'] });
   await page.locator('#settings-tab-general').click(); await page.locator('#settings-tab-autoSwitch').click();
   await expect(page.locator('[data-candidate-id]').first()).toHaveAttribute('data-candidate-id', 'fixture-1');
