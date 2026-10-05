@@ -12,7 +12,7 @@ test('source app, npm, Rust and both languages agree on the new identity', () =>
   const version = json('package.json').version;
   assert.equal(validateSource(root.pathname, `v${version}`), version);
   assert.equal(json('package.json').name, 'agy-switch');
-  for (const lang of ['en', 'zh']) assert.equal(json(`src/locales/${lang}.json`).common.app_name, 'agy-switch');
+  for (const lang of ['en', 'zh']) assert.equal(json(`src/locales/${lang}.json`).common.app_name, 'AntiGravity Switch');
   const conf = json('src-tauri/tauri.conf.json');
   assert.equal(conf.productName, 'agy-switch');
   assert.equal(conf.mainBinaryName, 'agy-switch-desktop');

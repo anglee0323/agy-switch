@@ -16,7 +16,7 @@ export function NavLogo() {
                     e.currentTarget.src = '/logo.png';
                 }}
             />
-            <span className="text-nowrap">{t('common.app_name', 'agy-switch')}</span>
+            <span className="text-nowrap">{t('common.app_name', 'AntiGravity Switch')}</span>
         </Link>
     );
 }

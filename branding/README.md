@@ -1,6 +1,6 @@
 # agy-switch identity
 
-Use the name **agy-switch**, lowercase and with the hyphen, in both languages. Antigravity remains the name of Google's client; it is not renamed by this project.
+The main application navigation displays **AntiGravity Switch** in both languages. The repository, command and package identifier remain **agy-switch**, lowercase with the hyphen. Antigravity remains the name of Google's client; it is not renamed by this project. The existing icon assets below remain installed while the owner reviews the next logo concepts.
 
 The two rounded arrows represent switching between accounts. Blue and mint keep the mark distinct at small sizes and sit comfortably beside the dashboard's green/yellow/red quota bars. The app icon uses a porcelain surface and a subtle edge instead of a dark purple tile. The menu bar uses the same shape as a monochrome macOS template image, adapting to system light/dark appearance.
 
