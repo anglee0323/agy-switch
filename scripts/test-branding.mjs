@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { packageNames, validateSource } from './release-assets.mjs';
 import { updatePackages } from './update-assets.mjs';
 import { desktopBrand } from './release-brand.mjs';
@@ -10,7 +11,7 @@ const read = file => readFileSync(new URL(file, root));
 const json = file => JSON.parse(read(file));
 test('source app, npm, Rust and both languages agree on the new identity', () => {
   const version = json('package.json').version;
-  assert.equal(validateSource(root.pathname, `v${version}`), version);
+  assert.equal(validateSource(fileURLToPath(root), `v${version}`), version);
   assert.equal(json('package.json').name, 'agy-switch');
   for (const lang of ['en', 'zh']) assert.equal(json(`src/locales/${lang}.json`).common.app_name, 'AntiGravity Switch');
   const conf = json('src-tauri/tauri.conf.json');
