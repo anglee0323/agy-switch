@@ -4,7 +4,7 @@ This opt-in feature selects a permitted backup when monitored quota reaches the 
 
 ## Setup and the two modes
 
-Open **Settings → Auto Switch Policy**. Choose a model or family scope, the reserve threshold (default 10%), the minimum backup quota (default 30%) and allowed candidate accounts. Choose priority order or round robin; drag selected accounts or use their keyboard sorting controls to change the order. Settings save automatically. The feature is off by default; the original quota-protection setting is separate.
+Open **Settings → Auto Switch Policy**. Choose a model or family scope, the reserve threshold (default 10%), the minimum backup quota (default 30%) and allowed candidate accounts. The settings page separates **Switch timing** (when to switch) from **Account selection order** (which eligible backup to choose). Choose priority order or round robin; drag selected accounts or use their keyboard sorting controls to change the order. Settings save automatically. The feature is off by default; the original quota-protection setting is separate.
 
 - **Wait for detected inactivity:** Recent transcript/activity observations delay the switch; once no recent work is detected, the tool attempts to close the affected client and update credentials. This is a heuristic, not a task-completion guarantee.
 - **Switch at the threshold:** The tool attempts to close the affected client or interrupt a VS Code task before updating credentials. Running work may be interrupted.
@@ -12,6 +12,8 @@ Open **Settings → Auto Switch Policy**. Choose a model or family scope, the re
 After completion, reopen the client if necessary, verify the signed-in account, open the original conversation from history and continue manually. There is no claim that a running command or model generation has migrated to another account. A ten-percent reserve is a trigger, not a guarantee that a long task can finish within that balance.
 
 **Cancel this switch** suppresses another attempt for that source account until its quota recovers to the configured backup minimum. Saving the settings clears the cancellation. Cancellations survive application restart. A failed or uncertain credential commit pauses automatic attempts until the settings are saved again; inspect both clients first.
+
+The current-source CLI also edits this policy and candidate order through `agy-switch policy` and its Settings & Order menu. It does not run the scheduler itself. See [CLI coverage and package availability](cli.md#policy-ordering-and-updates).
 
 ## Eligibility and safety
 

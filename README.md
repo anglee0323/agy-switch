@@ -89,7 +89,7 @@ agy-switch current --json         # Tools Lite’s saved selection
 
 Use ↑/↓ to select, Enter/→ to enter, and Esc/← to return. Number shortcuts remain available. Interactive account management includes remarks, enable/disable, confirmed deletion and account addition. Script commands support JSON and documented exit codes. Read commands use cached local data and do not start the desktop app.
 
-Desktop preferences, update notices and the background smart-switch scheduler remain desktop features. The CLI does not need to recreate window settings to support its account-management workflow. [Commands, safety and exit codes](docs/cli.md)
+Current source also adds policy configuration, account/candidate ordering and update checks to the CLI; these additions have not been packaged into a new release. Desktop preferences, update installation and background policy execution remain desktop features. [Commands, safety and exit codes](docs/cli.md)
 
 ## Screenshots and validation
 
