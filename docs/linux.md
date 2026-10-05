@@ -48,9 +48,9 @@ Quotas are cached observations. Missing windows, stale records and disabled acco
 
 Windows are opaque. GNOME/KDE tray presentation depends on the desktop’s AppIndicator/StatusNotifier support; merely having a library installed does not prove a visible tray. Wayland restricts absolute placement and activation, so tray positioning needs validation on each compositor. If the desktop does not display its tray icon, use `ANTIGRAVITY_DISABLE_TRAY=1` so closing the main window exits instead of hiding it.
 
-![Linux quick dashboard](screenshots/4.8.0/linux-quick-dashboard-light.png)
+![Linux quick dashboard](screenshots/4.9.0/linux-quick-dashboard-light.png)
 
-Actual Linux WebKitGTK viewport, CI debug build with synthetic quota observations. This is a compact-route capture, not a Wayland/tray-placement test. [Source and hashes](screenshots/4.8.0/README.md)
+Actual Linux WebKitGTK viewport, CI debug build with synthetic quota observations. This is a compact-route capture, not a Wayland/tray-placement test. [Source and hashes](screenshots/4.9.0/README.md)
 
 Existing overrides remain available:
 

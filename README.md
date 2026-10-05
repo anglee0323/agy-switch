@@ -1,6 +1,6 @@
 # AntiGravity Switch
 
-<img src="branding/app-icon.svg" width="88" height="88" alt="agy-switch app icon">
+<img src="branding/app-icon.png" width="88" height="88" alt="agy-switch app icon">
 
 [简体中文](README.zh-CN.md) · [Download](https://github.com/anglee0323/agy-switch/releases/latest) · [CLI guide](docs/cli.md)
 
@@ -18,7 +18,7 @@ The desktop app and CLI share the same accounts. Linux supports desktop use as w
 
 ## Install
 
-**4.9.0 release candidate:** AntiGravity Switch uses the `agy-switch` repository, package and command names, with the selected twin-wave icon. This version adds CLI policy editing, account ordering and update checks. Release publication and the matching Homebrew recipe follow platform acceptance; use the Releases page to confirm availability. Historical downloads retain their original names and checksums.
+**[4.9.0 is available](https://github.com/anglee0323/agy-switch/releases/tag/v4.9.0)** for all three platforms, with the selected twin-wave artwork, CLI policy editing, account ordering and update checks. The Homebrew recipe targets this release. Historical downloads retain their original names and checksums.
 
 Download the package for your platform from **[GitHub Releases](https://github.com/anglee0323/agy-switch/releases/latest)**. Desktop and CLI downloads include SHA-256 checksum files. Updater packages have cryptographic signatures, and `release-manifest.json` records every asset and its source commit.
 
@@ -54,7 +54,7 @@ agy-switch              # terminal dashboard
 
 For terminal use alone, use `agy-switch-<version>-linux-amd64.tar.gz`. The [Linux guide](docs/linux.md) covers runtime libraries, installation without a display, Secret Service and desktop compatibility.
 
-**Package trust:** macOS packages currently lack Developer ID signing/notarization, and Windows packages lack Authenticode signing. System trust checks may block them. Homebrew does not bypass those checks. See [4.8.1 distribution validation](docs/4.8.1-public-acceptance.md) for the observed Mac launch restriction; file integrity and trusted distribution are separate checks.
+**Package trust:** macOS packages currently lack Developer ID signing/notarization, and Windows packages lack Authenticode signing. System trust checks may block them. Homebrew does not bypass those checks. See [4.9.0 distribution validation](docs/4.9.0-public-acceptance.md) for the observed Mac launch restriction; file integrity and trusted distribution are separate checks.
 
 ## Get started
 
@@ -97,13 +97,13 @@ Version 4.9.0 adds policy configuration, account/candidate ordering and update c
 
 ## Screenshots and validation
 
-![Windows usage dashboard](docs/screenshots/4.8.0/windows-dashboard-light.png)
+![Windows usage dashboard](docs/screenshots/4.9.0/windows-dashboard-light.png)
 
 Windows native WebView2 usage dashboard.
 
-![Linux quick dashboard](docs/screenshots/4.8.0/linux-quick-dashboard-light.png)
+![Linux quick dashboard](docs/screenshots/4.9.0/linux-quick-dashboard-light.png)
 
-Linux native WebKitGTK quick dashboard. Both images come from the documented 4.8.0 CI debug build with synthetic example data and exclude the system window frame. [Image provenance](docs/screenshots/4.8.0/README.md)
+Linux native WebKitGTK quick dashboard. Both images come from the documented 4.9.0 CI debug build with synthetic example data and exclude the system window frame. [Image provenance](docs/screenshots/4.9.0/README.md)
 
 Native window tests, terminal tests and package tests are tracked separately. Build success alone does not prove authenticated switching, login startup, tray placement on every monitor or compatibility with every Linux desktop. [Platform acceptance](docs/native-gui-acceptance.md)
 

@@ -1,0 +1,7 @@
+# Screenshot sources
+
+These are actual Windows WebView2 and Linux WebKitGTK viewports from the [4.9.0 native Build run](https://github.com/anglee0323/agy-switch/actions/runs/37320154989), at release source and checkout commit [`e1c3b80de1ed3e7043c3dc73a7d1e56259e8a5bd`](https://github.com/anglee0323/agy-switch/commit/e1c3b80de1ed3e7043c3dc73a7d1e56259e8a5bd). They are CI debug builds, not screenshots of installed release packages.
+
+Both [Windows](https://github.com/anglee0323/agy-switch/actions/runs/37320154989/artifacts/11351100599) and [Linux](https://github.com/anglee0323/agy-switch/actions/runs/37320154989/artifacts/11350605364) reports record `passed: true`, seven native captures, real Rust IPC, theme persistence, narrow layouts and completed process/fixture cleanup. The three selected images were visually reviewed and copied unchanged; [provenance.json](provenance.json) records their dimensions and SHA-256 hashes.
+
+Images use English and synthetic example accounts, with no active account and no credentials. The main usage dashboard has empty local usage records; the compact dashboard shows synthetic quota observations. Captures exclude the OS window frame. The compact route runs in the native WebView at 424 × 720; it verifies content and alignment, not tray placement, opening speed or physical monitor behavior. No real login, authenticated switch, startup registration or installed-package GUI launch is established by these images. See [native acceptance](../../native-gui-acceptance.md).

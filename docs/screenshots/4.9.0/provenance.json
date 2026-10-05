@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "images": [
+    {
+      "file": "windows-dashboard-light.png",
+      "platform": "windows",
+      "source_commit": "e1c3b80de1ed3e7043c3dc73a7d1e56259e8a5bd",
+      "checkout_commit": "e1c3b80de1ed3e7043c3dc73a7d1e56259e8a5bd",
+      "run_id": "37320154989",
+      "artifact_id": 11351100599,
+      "profile": "debug, custom-protocol; Windows also enables native-gui-test",
+      "capture": "Actual Tauri native WebView viewport; excludes OS window frame; synthetic example data",
+      "width": 1024,
+      "height": 700,
+      "sha256": "26a494029984071607d1373cbd23617a3a8abcbb6265b735c6325760bd4d43ac",
+      "passed": true,
+      "cleanup_completed": true
+    },
+    {
+      "file": "windows-quick-dashboard-light.png",
+      "platform": "windows",
+      "source_commit": "e1c3b80de1ed3e7043c3dc73a7d1e56259e8a5bd",
+      "checkout_commit": "e1c3b80de1ed3e7043c3dc73a7d1e56259e8a5bd",
+      "run_id": "37320154989",
+      "artifact_id": 11351100599,
+      "profile": "debug, custom-protocol; Windows also enables native-gui-test",
+      "capture": "Actual Tauri native WebView viewport; excludes OS window frame; synthetic example data",
+      "width": 424,
+      "height": 720,
+      "sha256": "123de1bab8d8b620108c22e60ab2ae81da537af2c2624566576f1fc7cd6cec1a",
+      "passed": true,
+      "cleanup_completed": true
+    },
+    {
+      "file": "linux-quick-dashboard-light.png",
+      "platform": "linux",
+      "source_commit": "e1c3b80de1ed3e7043c3dc73a7d1e56259e8a5bd",
+      "checkout_commit": "e1c3b80de1ed3e7043c3dc73a7d1e56259e8a5bd",
+      "run_id": "37320154989",
+      "artifact_id": 11350605364,
+      "profile": "debug, custom-protocol; Windows also enables native-gui-test",
+      "capture": "Actual Tauri native WebView viewport; excludes OS window frame; synthetic example data",
+      "width": 424,
+      "height": 720,
+      "sha256": "4be984cdfae23635e6cf7d733014f904e2561e3a6ac64ef3b702b3f9f234c68e",
+      "passed": true,
+      "cleanup_completed": true
+    }
+  ]
+}

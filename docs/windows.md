@@ -27,9 +27,9 @@ The main app provides the same accounts, usage, smart-switch strategy/order, upd
 
 The panel is prepared while hidden, reused across opens and clamped to the monitor work area. Escape and focus loss dismiss it. Missing tray support preserves access to the main window. Native Mac menu materials are specific to AppKit; no transparent glass overlay is used on Windows.
 
-![Windows quick dashboard](screenshots/4.8.0/windows-quick-dashboard-light.png)
+![Windows quick dashboard](screenshots/4.9.0/windows-quick-dashboard-light.png)
 
-Actual Windows WebView2 viewport, CI debug build with synthetic quota observations. This is a compact-route capture, not a tray-placement test. [Source and hashes](screenshots/4.8.0/README.md)
+Actual Windows WebView2 viewport, CI debug build with synthetic quota observations. This is a compact-route capture, not a tray-placement test. [Source and hashes](screenshots/4.9.0/README.md)
 
 WebView2 is required for the desktop app. Tauri’s NSIS installer handles the configured runtime bootstrapper when needed. The console’s read commands do not initialize WebView2. Downloaded executables are currently not Authenticode signed; SmartScreen or enterprise policies may block them. This project does not change those policies.
 

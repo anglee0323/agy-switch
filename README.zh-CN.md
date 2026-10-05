@@ -1,6 +1,6 @@
 # AntiGravity Switch
 
-<img src="branding/app-icon.svg" width="88" height="88" alt="agy-switch 应用图标">
+<img src="branding/app-icon.png" width="88" height="88" alt="agy-switch 应用图标">
 
 [English](README.md) · [下载](https://github.com/anglee0323/agy-switch/releases/latest) · [命令行指南](docs/cli.md)
 
@@ -18,7 +18,7 @@
 
 ## 安装
 
-**4.9.0 发布候选版：** 应用全名为 AntiGravity Switch，仓库、安装包和命令使用 `agy-switch`，采用选定的双波图标。这一版补齐命令行策略设置、账号排序和更新检查。三端验收后发布安装包并同步 Homebrew，请在 Releases 页面确认可下载版本。历史下载的名称和校验值保持原样。
+**[4.9.0 已发布](https://github.com/anglee0323/agy-switch/releases/tag/v4.9.0)**，提供三端安装包，采用选定的双波图标，补齐命令行策略设置、账号排序和更新检查。Homebrew 配方已指向这一版。应用全名为 AntiGravity Switch，仓库、安装包和命令使用 `agy-switch`。历史下载的名称和校验值保持原样。
 
 从 **[GitHub Releases](https://github.com/anglee0323/agy-switch/releases/latest)** 下载对应平台的文件。桌面和命令行下载包附有 SHA-256 校验文件，更新专用包附有签名；`release-manifest.json` 记录全部附件及对应源码提交。
 
@@ -54,7 +54,7 @@ agy-switch              # 终端看板
 
 只使用终端时，可以下载 `agy-switch-<版本>-linux-amd64.tar.gz`。[Linux 指南](docs/linux.md)介绍运行库、无显示环境的安装、系统凭据服务及桌面兼容性。
 
-**安装包信任：** 当前 Mac 安装包尚无 Developer ID 签名和公证，Windows 安装包尚无 Authenticode 签名，系统信任检查可能阻止运行。Homebrew 不会绕过这些检查。实际测到的 Mac 启动限制见[4.8.1 公开安装包验收记录](docs/4.8.1-public-acceptance.md)；文件完整性验证和系统信任验证是两项独立检查。
+**安装包信任：** 当前 Mac 安装包尚无 Developer ID 签名和公证，Windows 安装包尚无 Authenticode 签名，系统信任检查可能阻止运行。Homebrew 不会绕过这些检查。实际测到的 Mac 启动限制见[4.9.0 公开安装包验收记录](docs/4.9.0-public-acceptance.md)；文件完整性验证和系统信任验证是两项独立检查。
 
 ## 开始使用
 
@@ -97,13 +97,13 @@ agy-switch current --json         # agy-switch 保存的选择
 
 ## 截图与验证
 
-![Windows 用量看板](docs/screenshots/4.8.0/windows-dashboard-light.png)
+![Windows 用量看板](docs/screenshots/4.9.0/windows-dashboard-light.png)
 
 Windows 原生 WebView2 用量看板。
 
-![Linux 快捷看板](docs/screenshots/4.8.0/linux-quick-dashboard-light.png)
+![Linux 快捷看板](docs/screenshots/4.9.0/linux-quick-dashboard-light.png)
 
-Linux 原生 WebKitGTK 快捷看板。两张截图来自记录完整的 4.8.0 CI 调试构建，使用合成示例数据，不含系统窗框。[截图来源](docs/screenshots/4.8.0/README.md)
+Linux 原生 WebKitGTK 快捷看板。两张截图来自记录完整的 4.9.0 CI 调试构建，使用合成示例数据，不含系统窗框。[截图来源](docs/screenshots/4.9.0/README.md)
 
 原生窗口、终端和安装包分别验证。构建成功不等于已经验证真实授权切换、登录启动、所有显示器上的托盘定位，或所有 Linux 桌面环境。[各平台验收](docs/native-gui-acceptance.md)
 
