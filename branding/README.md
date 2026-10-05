@@ -4,7 +4,7 @@ The main application navigation displays **AntiGravity Switch** in both language
 
 The owner selected the desktop artwork `AntiGravity_Switch_Icon_Concept2.png`: two overlapping spectral wave peaks on a white rounded tile. The supplied 512×512 PNG is retained unchanged as the authoritative app artwork; larger sizes are raster resamples, not newly drawn detail. The two waves represent active and standby accounts and the handoff between them. This is the project's design metaphor, not a claim about the official Antigravity logo's physical meaning.
 
-The menu bar uses an original solid double-wave silhouette with a small transparent clearance at the overlap. Its 22×22 vector viewport renders to a 44px macOS template image. `currentColor` supplies the source ink and the existing native template mechanism adapts it to the system appearance. It has no colored background tile or faint secondary wave.
+The menu bar uses an original solid double-wave silhouette with a small transparent clearance at the overlap. Its 22×22 vector viewport renders to a 44px macOS template image. The mark is scaled uniformly by 1.15 inside that viewport to reduce the excess padding; its visible pixel bounds are 42×28, with one pixel of horizontal clearance on each side. `currentColor` supplies the source ink and the existing native template mechanism adapts it to the system appearance. It has no colored background tile or faint secondary wave.
 
 | Asset | Use |
 | --- | --- |

@@ -6,6 +6,8 @@
       <use href="#wave" transform="translate(6.2 -.4)" fill="black" stroke="black" stroke-width=".9" stroke-linejoin="round"/>
     </mask>
   </defs>
-  <use href="#wave" fill="currentColor" mask="url(#overlap)"/>
-  <use href="#wave" transform="translate(6.2 -.4)" fill="currentColor"/>
+  <g transform="translate(11 11.6) scale(1.15) translate(-11 -11.6)">
+    <use href="#wave" fill="currentColor" mask="url(#overlap)"/>
+    <use href="#wave" transform="translate(6.2 -.4)" fill="currentColor"/>
+  </g>
 </svg>
