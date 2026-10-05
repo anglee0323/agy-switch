@@ -1,6 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
-  <g fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.4">
-    <path d="M4 10V8.5A4.5 4.5 0 0 1 8.5 4H20M16.5 1L20 4L16.5 7" stroke="#3478f6"/>
-    <path d="M20 14v1.5a4.5 4.5 0 0 1-4.5 4.5H4M7.5 17L4 20L7.5 23" stroke="#1aa58b"/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">
+  <defs>
+    <path id="wave" d="M2.3 16.8C4.1 16.2 4.6 7 7.4 6C10.1 5.1 10.6 14.5 13.4 16.6C14.1 17.1 13.5 17.7 12.8 17.3C10.1 16.3 10 11.1 7.4 11.2C5.1 11.2 4.4 16.6 2.7 17.2C2 17.4 1.7 17.1 2.3 16.8Z"/>
+    <mask id="overlap" maskUnits="userSpaceOnUse" x="0" y="0" width="22" height="22">
+      <rect width="22" height="22" fill="white"/>
+      <use href="#wave" transform="translate(6.2 -.4)" fill="black" stroke="black" stroke-width=".9" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <defs><linearGradient id="spectrum" x1="0" y1="1" x2=".35" y2="0"><stop stop-color="#3588fd"/><stop offset=".45" stop-color="#3588fd"/><stop offset=".72" stop-color="#73bb79"/><stop offset=".86" stop-color="#fbbc05"/><stop offset="1" stop-color="#ff5252"/></linearGradient></defs>
+  <g fill="url(#spectrum)"><use href="#wave" mask="url(#overlap)"/><use href="#wave" transform="translate(6.2 -.4)"/></g>
 </svg>
