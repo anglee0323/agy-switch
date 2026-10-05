@@ -4,7 +4,7 @@ cask "agy-switch" do
   sha256 "@SHA256@"
 
   url "@URL@"
-  name "agy-switch"
+  name "@APP_NAME@"
   desc "Antigravity account manager, local usage dashboard and agy-switch CLI"
   homepage "https://github.com/anglee0323/agy-switch"
 

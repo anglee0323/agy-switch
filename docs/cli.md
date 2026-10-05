@@ -4,7 +4,7 @@
 
 ## Install and run
 
-- **macOS:** the [Homebrew cask](homebrew.md) installs `agy-switch`. From 4.9.0, a manual app installation also exposes commands through `/Applications/agy-switch.app/Contents/MacOS/agy-switch-desktop`.
+- **macOS:** the [Homebrew cask](homebrew.md) installs `agy-switch`. A manual installation includes the console executable at `"/Applications/AntiGravity Switch.app/Contents/MacOS/agy-switch"`.
 - **Windows:** the installer includes console `agy-switch.exe` beside the desktop executable; the release also offers a standalone console ZIP. Open PowerShell in that directory and run `.\agy-switch.exe`. The console executable preserves normal shell waiting, stdout/stderr and `$LASTEXITCODE`; use it instead of scripting the GUI-subsystem executable. [Windows guide](windows.md)
 - **Linux:** the deb installs `/usr/bin/agy-switch`; a console tarball is also available. Cached reads and terminal interaction do not require a display, but the executable still needs GTK/WebKitGTK runtime libraries. [Linux guide](linux.md)
 
@@ -111,7 +111,7 @@ The main menu groups Accounts & Quotas, Statistics, Refresh, Add Account, Status
 
 Settings separate **Switch timing** from **Account selection order**. Use Space to select backup candidates and Shift+Up/Down (or U/D) to reorder them. Enter applies the list to the policy draft; **Save changes** persists that draft. Back discards it, and **Reload settings** reads another client's changes. Account-list sorting has the same keys, with Enter saving and Esc discarding. Refresh and authorization use the network; switching can change credentials and restart clients. Read-only JSON commands are suitable for scripts.
 
-Cost estimates share model matching with the dashboard and native menu. Native `-n` aliases are supported; the owner's explicit `gemini-3.8-flash-exp-a` mapping uses `gemini-3.8-flash` prices for estimation. Other versions and variants require their own matching rates. Unknown model prices display `Unpriced`; aggregate amounts contain only priced models and have no parenthetical suffix. The desktop dashboard fetches public pricing when its 24-hour cache expires or the parser revision changes. CLI reads use that cache without network requests. Missing quota windows are unknown, never inferred as 100%. API-equivalent costs are estimates, not the subscription bill.
+Cost estimates share model matching with the dashboard and native menu. Native `-n` aliases are supported; `gemini-3.8-flash-exp-a` uses `gemini-3.8-flash` prices for estimation. Other versions and variants require their own matching rates. Unknown model prices display `Unpriced`; aggregate amounts contain only priced models and have no parenthetical suffix. The desktop dashboard fetches public pricing when its 24-hour cache expires or the parser revision changes. CLI reads use that cache without network requests. Missing quota windows are unknown, never inferred as 100%. API-equivalent costs are estimates, not the subscription bill.
 
 Policy editing, candidate ordering, account ordering and update checks share the same operations between terminal menus and one-line commands. Visual themes, menu layout and interactive charts remain GUI features.
 
