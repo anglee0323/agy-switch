@@ -1,6 +1,6 @@
 # AntiGravity Switch
 
-<img src="branding/app-icon.svg" width="88" height="88" alt="agy-switch 应用图标">
+<img src="branding/app-icon.png" width="88" height="88" alt="agy-switch 应用图标">
 
 [English](README.md) · [下载](https://github.com/anglee0323/agy-switch/releases/latest) · [命令行指南](docs/cli.md)
 
@@ -97,13 +97,13 @@ agy-switch current --json         # agy-switch 保存的选择
 
 ## 截图与验证
 
-![Windows 用量看板](docs/screenshots/4.8.0/windows-dashboard-light.png)
+![Windows 用量看板](docs/screenshots/4.9.0/windows-dashboard-light.png)
 
 Windows 原生 WebView2 用量看板。
 
-![Linux 快捷看板](docs/screenshots/4.8.0/linux-quick-dashboard-light.png)
+![Linux 快捷看板](docs/screenshots/4.9.0/linux-quick-dashboard-light.png)
 
-Linux 原生 WebKitGTK 快捷看板。两张截图来自记录完整的 4.8.0 CI 调试构建，使用合成示例数据，不含系统窗框。[截图来源](docs/screenshots/4.8.0/README.md)
+Linux 原生 WebKitGTK 快捷看板。两张截图来自记录完整的 4.9.0 CI 调试构建，使用合成示例数据，不含系统窗框。[截图来源](docs/screenshots/4.9.0/README.md)
 
 原生窗口、终端和安装包分别验证。构建成功不等于已经验证真实授权切换、登录启动、所有显示器上的托盘定位，或所有 Linux 桌面环境。[各平台验收](docs/native-gui-acceptance.md)
 

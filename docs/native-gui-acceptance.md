@@ -131,3 +131,9 @@ The [4.8.0 Build run](https://github.com/anglee0323/agy-switch/actions/runs/3724
 Windows CI explicitly builds the opt-in `native-gui-test` feature. Only Windows debug builds with that feature and the fixture marker forward the driver's validated numeric port through Tauri's `additional_browser_args` WebView2 API. Release builds cannot enable this path. This resolves the hosted elevated-process automation limitation without registry changes, runtime downgrades or security-policy changes. The older blocked reports remain valid for their recorded source; they are not current Windows UI results.
 
 Native GUI acceptance remains independent of package installation, real Google authorization, authenticated switching, login startup, physical monitors, Wayland/KDE and platform signing. Console acceptance separately uses real PTY/ConPTY, direct PowerShell invocations and JSON/exit-code checks.
+
+## Integrated 4.9.0 test build
+
+The [final main Build run](https://github.com/anglee0323/agy-switch/actions/runs/37320154989) checked out `e1c3b80de1ed3e7043c3dc73a7d1e56259e8a5bd`, the v4.9.0 release source. Both Windows and Linux reports record `status: passed`, `passed: true`, seven native captures, real Rust IPC, persisted themes, 760px Settings layouts, a 424px quick dashboard and completed cleanup. The selected twin-wave app artwork, full navigation name and separate switch timing/account ordering groups are present. Three unchanged, visually reviewed images are in [4.9.0 screenshot sources](screenshots/4.9.0/README.md).
+
+The [release CLI run](https://github.com/anglee0323/agy-switch/actions/runs/37320155019) also passed Windows/Linux console, PowerShell and real PTY/ConPTY checks, including policy editing and ordering. These results use isolated synthetic data and do not establish live Google authorization or authenticated account switching. Public package verification is recorded separately after publication.

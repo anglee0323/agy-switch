@@ -1,6 +1,6 @@
 # AntiGravity Switch
 
-<img src="branding/app-icon.svg" width="88" height="88" alt="agy-switch app icon">
+<img src="branding/app-icon.png" width="88" height="88" alt="agy-switch app icon">
 
 [简体中文](README.zh-CN.md) · [Download](https://github.com/anglee0323/agy-switch/releases/latest) · [CLI guide](docs/cli.md)
 
@@ -97,13 +97,13 @@ Version 4.9.0 adds policy configuration, account/candidate ordering and update c
 
 ## Screenshots and validation
 
-![Windows usage dashboard](docs/screenshots/4.8.0/windows-dashboard-light.png)
+![Windows usage dashboard](docs/screenshots/4.9.0/windows-dashboard-light.png)
 
 Windows native WebView2 usage dashboard.
 
-![Linux quick dashboard](docs/screenshots/4.8.0/linux-quick-dashboard-light.png)
+![Linux quick dashboard](docs/screenshots/4.9.0/linux-quick-dashboard-light.png)
 
-Linux native WebKitGTK quick dashboard. Both images come from the documented 4.8.0 CI debug build with synthetic example data and exclude the system window frame. [Image provenance](docs/screenshots/4.8.0/README.md)
+Linux native WebKitGTK quick dashboard. Both images come from the documented 4.9.0 CI debug build with synthetic example data and exclude the system window frame. [Image provenance](docs/screenshots/4.9.0/README.md)
 
 Native window tests, terminal tests and package tests are tracked separately. Build success alone does not prove authenticated switching, login startup, tray placement on every monitor or compatibility with every Linux desktop. [Platform acceptance](docs/native-gui-acceptance.md)
 
