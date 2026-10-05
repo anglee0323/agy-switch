@@ -1,129 +1,194 @@
-# AntiGravity Switch
+<div align="center">
+  <img src="branding/app-icon.png" width="88" height="88" alt="AntiGravity Switch 应用图标">
+  <h1>AntiGravity Switch</h1>
+  <p>集中管理 Antigravity 账号，快捷切换，随时查看额度和用量。</p>
+  <p><a href="README.md">English</a> · <a href="#安装">安装方法</a> · <a href="https://github.com/anglee0323/agy-switch/releases/latest">下载</a> · <a href="docs/cli.md">命令行指南</a></p>
+</div>
 
-<img src="branding/app-icon.png" width="88" height="88" alt="agy-switch 应用图标">
+## 能做什么
 
-[English](README.md) · [下载](https://github.com/anglee0323/agy-switch/releases/latest) · [命令行指南](docs/cli.md)
+AntiGravity Switch 把你的 Antigravity 账号集中到一个地方：查看哪个账号还有额度，切换到需要的账号，再了解本机记录的 Token 用量。桌面应用、菜单栏或托盘、命令行共用同一份账号数据，可以按自己的习惯选择入口。
 
-在桌面应用或终端中管理 Antigravity 账号、查看剩余额度和本机用量。授权与额度查询直接连接 Google，账号数据和用量记录保存在本机。
+- **管理账号：** 添加账号，查看额度和重置时间，修改备注，调整顺序，禁用不可用的账号。
+- **快捷切换：** 在应用或快捷看板中选择账号；也可以启用智能切换，在额度不足时选择备用账号。
+- **查看用量：** 了解输入、输出、缓存 Token 的构成，查看用量趋势和各模型的 API 费用估算。
+- **终端操作：** 用键盘或命令管理账号，设置切换策略，调整候选顺序，检查更新。
 
-## 选择使用方式
+### 支持的客户端
 
-| 平台 | 桌面应用 | 快捷入口 | 命令行 |
-| --- | --- | --- | --- |
-| macOS · Apple Silicon | 应用程序包 | 原生菜单栏 | Homebrew 安装自带 `agy-switch` |
-| Windows · x64 | 按用户安装 | 托盘看板 | 安装程序自带 `agy-switch.exe`，也可单独下载 |
-| Linux · x64 | Debian 安装包，以 Ubuntu 22.04 为构建基线 | 桌面支持托盘时可用 | deb 自带 `agy-switch`，也可单独下载 |
+| 客户端 | 同步内容 |
+| --- | --- |
+| Antigravity 桌面客户端 | 当前选择账号的桌面凭据 |
+| Antigravity 命令行（`agy`） | 随桌面凭据一起同步原生命令行会话，需要先初始化客户端 |
+| Antigravity IDE | 独立 IDE 的账号凭据 |
+| VS Code 中的 Antigravity 插件 | 插件凭据，无需重启 VS Code 主编辑器 |
 
-桌面应用和命令行共用账号数据。Linux 同时提供桌面应用和无需显示环境的终端操作；目前 Linux 命令行仍依赖 GTK3/WebKitGTK 运行库，并非静态服务器程序。暂不提供 Intel Mac、Windows ARM 和 Linux ARM 安装包。
+智能切换设置可选择全域同步、桌面客户端与命令行、Antigravity IDE 或 VS Code 插件。请先安装并初始化需要使用的客户端。兼容性取决于客户端版本和凭据存储方式；切换不会迁移正在运行的任务。本工具的管理命令 `agy-switch` 与 Google 的 `agy` 是两个不同的命令。
+
+![AntiGravity Switch 中文用量首页](docs/screenshots/2026-10-06/dashboard-zh.png)
+
+首页按选定的时间范围展示本机用量，并提供模型分布和费用估算。
+
+<details>
+<summary><strong>查看账号视图、命令行和 macOS 菜单栏</strong></summary>
+
+### 账号列表
+
+逐行比较各账号的额度，查看重置倒计时，并直接切换或管理账号。
+
+![中文账号列表](docs/screenshots/2026-10-06/accounts-list-zh.png)
+
+### 账号卡片
+
+用卡片查看各账号的状态，工具栏可以切换 5 小时和每周额度。
+
+![中文账号卡片](docs/screenshots/2026-10-06/accounts-cards-zh.png)
+
+### 命令行看板
+
+在终端中管理账号、修改切换策略、调整顺序和检查更新。
+
+![中文命令行看板](docs/screenshots/2026-10-06/cli-zh.png)
+
+### macOS 菜单栏
+
+不用打开主窗口，就能查看今日用量、整体剩余额度和各账号状态。
+
+<img src="docs/screenshots/2026-10-06/menu-bar-zh.png" width="420" alt="中文 macOS 菜单栏看板">
+
+菜单栏截图中的用量和额度为展示用示例数据。[截图来源](docs/screenshots/2026-10-06/README.md)
+
+</details>
 
 ## 安装
 
-**[4.9.0 已发布](https://github.com/anglee0323/agy-switch/releases/tag/v4.9.0)**，提供三端安装包，采用选定的双波图标，补齐命令行策略设置、账号排序和更新检查。Homebrew 配方已指向这一版。应用全名为 AntiGravity Switch，仓库、安装包和命令使用 `agy-switch`。历史下载的名称和校验值保持原样。
+从 **[GitHub Releases](https://github.com/anglee0323/agy-switch/releases/latest)** 下载对应平台的安装包，当前版本为 **4.9.0**。应用全名是 AntiGravity Switch，仓库和命令行使用 `agy-switch`。
 
-从 **[GitHub Releases](https://github.com/anglee0323/agy-switch/releases/latest)** 下载对应平台的文件。桌面和命令行下载包附有 SHA-256 校验文件，更新专用包附有签名；`release-manifest.json` 记录全部附件及对应源码提交。
+| 平台 | 桌面安装方式 | 命令行入口 |
+| --- | --- | --- |
+| macOS · Apple Silicon | Homebrew 或 macOS ARM64 ZIP | Homebrew 安装自带 |
+| Windows · x64 | Windows x64 安装程序 | 安装程序自带，也可单独下载命令行 ZIP |
+| Linux · x64 | Linux AMD64 deb | deb 自带，也可单独下载命令行 tar.gz |
+
+目前不提供 Intel Mac、Windows ARM 和 Linux ARM 安装包。Linux 桌面包以 Ubuntu 22.04 为构建基线；命令行无需显示环境，但仍需要 GTK3/WebKitGTK 运行库。
 
 ### macOS
+
+通过 Homebrew 同时安装应用和命令行：
 
 ```sh
 brew tap anglee0323/agy-switch https://github.com/anglee0323/agy-switch.git
 brew install --cask anglee0323/agy-switch/agy-switch
 ```
 
-这会同时安装应用和 `agy-switch`。手动安装时，解压 `agy-switch-<版本>-macos-arm64.zip`，将应用移入 Applications。升级和验证结果见 [Homebrew 指南](docs/homebrew.md)。
+也可以下载 **macOS ARM64 ZIP**，解压后将应用移入 Applications（应用程序）目录。[Homebrew 安装与升级](docs/homebrew.md)
 
 ### Windows
 
-运行 `agy-switch-<版本>-windows-x64-setup.exe`。安装程序提供中文和英文，安装到当前用户目录，并在桌面程序旁附带命令行程序。
+下载并运行 **Windows x64 安装程序**（`agy-switch-<版本>-windows-x64-setup.exe`）。安装程序支持中文和英文，安装到当前用户目录。
 
-只使用终端时，解压 `agy-switch-<版本>-windows-x64.zip`，在该目录打开 PowerShell：
+如果只用命令行，解压 **Windows x64 命令行 ZIP**，在该目录打开 PowerShell：
 
 ```powershell
 .\agy-switch.exe
-.\agy-switch.exe accounts list --json
 ```
 
-PowerShell 会等待这个控制台程序执行，并保留退出码。安装位置、运行环境和故障排查见 [Windows 指南](docs/windows.md)。
+[Windows 安装与故障排查](docs/windows.md)
 
 ### Linux
 
+下载 **Linux AMD64 deb**，使用实际文件名安装：
+
 ```sh
-sudo apt install ./agy-switch-<版本>-linux-amd64.deb
+sudo apt install ./agy-switch-4.9.0-linux-amd64.deb
 agy-switch-desktop       # 桌面应用
-agy-switch              # 终端看板
+agy-switch              # 命令行看板
 ```
 
-只使用终端时，可以下载 `agy-switch-<版本>-linux-amd64.tar.gz`。[Linux 指南](docs/linux.md)介绍运行库、无显示环境的安装、系统凭据服务及桌面兼容性。
+如果只用命令行，可以下载 **Linux AMD64 命令行 tar.gz**。桌面托盘是否可用取决于桌面环境。[Linux 依赖与安装](docs/linux.md)
 
-**安装包信任：** 当前 Mac 安装包尚无 Developer ID 签名和公证，Windows 安装包尚无 Authenticode 签名，系统信任检查可能阻止运行。Homebrew 不会绕过这些检查。实际测到的 Mac 启动限制见[4.9.0 公开安装包验收记录](docs/4.9.0-public-acceptance.md)；文件完整性验证和系统信任验证是两项独立检查。
+**系统信任检查：** 当前 macOS 安装包尚无 Developer ID 签名和公证，Windows 安装程序尚无 Authenticode 签名，系统可能阻止启动或提示安全确认。Homebrew 不会绕过这些检查。下载包附有 SHA-256 校验文件，更新包还附有更新签名。[安装包验证与当前限制](docs/4.9.0-public-acceptance.md)
 
-## 开始使用
+## 第一次使用
 
-1. 打开应用，通过 Google 授权、刷新令牌或本机导入添加账号。终端看板也支持授权和遮罩输入令牌。
-2. 刷新额度，再选择要使用的账号。切换可能关闭并重新打开 Antigravity，请先保存工作，并在客户端确认账号。
-3. 在首页或菜单栏、托盘中查看用量。如果需要自动选择备用账号，可在设置中启用智能切换。
+1. **添加账号。** 打开账号管理，点击添加按钮，通过 Google 授权、刷新令牌或本机导入添加账号。命令行看板也支持授权和遮罩输入令牌。
+2. **刷新额度。** 查看各账号的剩余额度和重置时间，选择准备使用的账号。
+3. **切换账号。** 先保存 Antigravity 中的工作，再点击切换。切换可能关闭并重新打开客户端，完成后请在 Antigravity 中确认当前账号。
+4. **调整偏好。** 在设置中选择语言、主题和快捷看板的显示方式。如果需要自动选择备用账号，可以开启智能切换；它默认关闭。
 
-`agy-switch` 是管理命令，不带参数运行可打开终端看板；Google 的 `agy` 用来执行 Antigravity 任务。切换账号会同步已初始化的原生 `agy` 会话；已经运行的任务可能仍保留之前的凭据。
+## 日常操作
 
-## 功能
-
-| 板块 | 功能 |
+| 想做什么 | 在哪里操作 |
 | --- | --- |
-| 账号 | 额度与重置时间、列表和卡片视图、备注、启用或禁用、排序及批量操作 |
-| 用量 | 每日和近期用量、输入输出与缓存构成、各模型费用估算及分布图 |
-| 快捷看板 | 今日用量、整体剩余额度、各账号额度及明确的切换按钮 |
-| 智能切换 | 优先级或轮询、拖动候选账号排序、额度阈值及活动检查，默认关闭 |
-| 更新 | 检查版本、签名校验下载、安装进度及支持平台上的重启。[平台限制](docs/software-updates.md) |
-| 外观 | 简体中文和英文、浅色和深色主题、模型选择及快捷看板偏好 |
+| 查看近期用量和模型费用 | 首页，选择统计范围，再切换 Token 用量或预估费用 |
+| 比较 5 小时和每周额度 | 账号管理，选择额度周期及列表或卡片视图 |
+| 修改账号备注或调整顺序 | 账号管理，编辑备注或拖动账号排序 |
+| 不打开主窗口就查看额度和切换 | macOS 菜单栏，或 Windows/Linux 托盘看板 |
+| 选择快捷看板显示的模型系列 | 设置，选择 Gemini、Claude/GPT 或两组系列 |
+| 显示重置倒计时 | 设置，选择悬浮显示、始终显示或隐藏 |
+| 自动选择备用账号 | 设置，配置切换时机、选择顺序、额度阈值和候选账号 |
 
-三端快捷看板采用相同的三个信息区块。Mac 使用系统原生菜单，Windows 和 Linux 使用不透明的紧凑窗口。在设置中选择显示 Gemini、Claude/GPT 或两组系列，并调整账号名称、不可用账号的显示方式，以及重置时间的悬浮显示、始终显示或隐藏。额度条默认在大于 60% 时为绿色、20% 至 60% 时为黄色、低于 20% 时为红色；百分比使用正常文字颜色。
+智能切换分为两个独立选项：**什么时候切换**（检测空闲后切换，或达到阈值后切换），以及**按什么顺序选账号**（优先顺序，或循环轮换）。候选账号可以排序。后台策略由桌面应用执行；命令行修改的是同一份策略，但不会启动后台调度程序。
 
-整体额度是有效账号数据的等权平均值，并显示可用账号数，不代表可相加的总令牌量。缺失或过期的额度会显示为未知。费用来自已知模型价格的估算，不是 Antigravity 账单；无法计价的模型会明确标识。智能切换不会迁移正在运行的任务，也不能保证所有任务已经结束。[切换机制](docs/low-quota-switching.md) · [看板数据说明](docs/menu-bar-dashboard.md)
+## 命令行使用
 
-## 终端工作流
+直接运行 `agy-switch`，即可打开交互看板。上下方向键或 Tab 选择，回车或右方向键进入，Esc 或左方向键返回。在策略编辑中，空格选择候选账号，Shift 加上下方向键调整顺序。
 
 ```sh
-agy-switch                       # 交互看板
-agy-switch accounts list
-agy-switch quota                 # 缓存额度
-agy-switch stats                 # 本机用量和费用估算
+agy-switch                       # 打开交互看板
+agy-switch accounts list         # 查看已保存的账号
+agy-switch quota                 # 查看当前选择账号的缓存额度
+agy-switch stats                 # 查看本机用量和费用估算
 agy-switch refresh               # 联网刷新额度
 agy-switch switch user@example.com
-agy-switch current --json         # agy-switch 保存的选择
+agy-switch policy show --json    # 查看切换策略
+agy-switch update check          # 检查是否有新版本
 ```
 
-上下方向键选择，回车或右方向键进入，Esc 或左方向键返回；数字快捷键也可使用。交互式账号管理支持备注、启用或禁用、确认删除及添加账号。脚本命令支持 JSON 和明确的退出码，只读命令使用本机缓存，不会启动桌面应用。
+PowerShell 中使用 `.\agy-switch.exe`。只读命令使用本机缓存，需要最新额度时执行 `refresh`。JSON 输出、策略编辑、排序命令和退出码见[命令行指南](docs/cli.md)。
 
-4.9.0 补齐了命令行策略设置、账号及候选排序和更新检查。桌面偏好、更新安装和后台策略执行仍由桌面应用提供。[命令、切换边界及退出码](docs/cli.md)
+`agy-switch` 用于管理账号，Google 的 `agy` 用于执行 Antigravity 任务。切换也会同步已初始化的原生 `agy` 会话；切换后请启动新的任务，已经运行的任务可能仍使用之前的凭据。
 
-## 截图与验证
+## 常见问题
 
-![Windows 用量看板](docs/screenshots/4.9.0/windows-dashboard-light.png)
+### 额度百分比代表什么？
 
-Windows 原生 WebView2 用量看板。
+表示各账号在对应周期的剩余额度。快捷看板的整体额度是有效账号数据的等权平均值，同时显示可用账号数，不是可相加的 Token 总量。数据缺失或过期时显示为未知。额度条默认在大于 60% 时为绿色、20% 至 60% 时为黄色、低于 20% 时为红色。
 
-![Linux 快捷看板](docs/screenshots/4.9.0/linux-quick-dashboard-light.png)
+### API 费用估算是实际账单吗？
 
-Linux 原生 WebKitGTK 快捷看板。两张截图来自记录完整的 4.9.0 CI 调试构建，使用合成示例数据，不含系统窗框。[截图来源](docs/screenshots/4.9.0/README.md)
+不是。它根据已知模型价格，估算本机记录的用量按 API 计费时对应的费用。无法计价的模型会明确标识，不计入预估合计。桌面应用会刷新价格缓存，命令行读取本机缓存。[用量与额度说明](docs/menu-bar-dashboard.md)
 
-原生窗口、终端和安装包分别验证。构建成功不等于已经验证真实授权切换、登录启动、所有显示器上的托盘定位，或所有 Linux 桌面环境。[各平台验收](docs/native-gui-acceptance.md)
+### 切换账号会把正在运行的任务移过去吗？
 
-## 数据与隐私
+不会。切换前请保存工作。智能切换可以检查近期活动，但不能保证所有任务已结束，也不会迁移正在运行的任务。切换失败时，请先确认客户端状态再重试，因为部分凭据可能已经更新。[切换机制](docs/low-quota-switching.md)
 
-账号和偏好默认保存在 `~/.antigravity_tools`，可用 `ABV_DATA_DIR` 指定其他目录。导入的凭据属于敏感本地文件。用量来自 Antigravity 本机数据库和归档，应用不会上传对话内容。Google 授权、刷新令牌和额度查询需要联网；价格同步和可选的版本检查也会联网。
+### 怎么更新？
 
-本项目不提供凭据中转或代理服务。切换会修改目标客户端使用的凭据位置，也可能报告部分更新；失败后请先确认客户端状态，再重试。[命令行行为及共享切换锁](docs/cli.md)
+在应用中检查更新，有新版本时选择**下载并安装**。安装仍受系统权限和信任检查限制；目前 Mac 的无感安装受上述签名问题限制。Homebrew 用户也可以执行：
 
-## 构建与贡献
+```sh
+brew update
+brew upgrade --cask anglee0323/agy-switch/agy-switch
+```
 
-使用 Node.js 22+、Rust stable，并安装平台指南中列出的依赖。
+命令行只检查更新，不执行安装。[各平台更新方式](docs/software-updates.md)
+
+### 数据保存在哪里？
+
+账号和偏好默认保存在 `~/.antigravity_tools`。如需更换目录，可设置 `ABV_DATA_DIR`，应用和命令行应使用相同的值。凭据属于敏感本地文件。用量来自 Antigravity 本机数据库和归档，应用不会上传对话内容。Google 授权和额度查询、价格同步、更新检查需要联网；本项目不提供凭据中转服务。
+
+## 更多文档与开发
+
+[命令行参考](docs/cli.md) · [macOS/Homebrew](docs/homebrew.md) · [Windows](docs/windows.md) · [Linux](docs/linux.md) · [平台验证记录](docs/native-gui-acceptance.md) · [发布检查清单](docs/release-checklist.md)
+
+从源码运行需要 Node.js 22+、Rust stable，以及平台指南中列出的依赖：
 
 ```sh
 npm ci
 npm run tauri dev
-cargo test --locked --manifest-path src-tauri/Cargo.toml --lib
-npx playwright test
 ```
 
-Mac 使用 `npm run tauri build` 构建；Windows 使用 `./scripts/build-windows.ps1`；Linux 使用 `./scripts/build-linux-deb.sh --native` 或 `--docker`。发布流程生成桌面安装包和命令行下载包，验证校验值，只发布已打标签的 main 分支源码。[发布检查清单](docs/release-checklist.md)
+macOS 使用 `npm run tauri build`，Windows 使用 `./scripts/build-windows.ps1`，Linux 使用 `./scripts/build-linux-deb.sh --native` 或 `--docker`。原生窗口、命令行和安装包的验证记录见上方链接；构建成功不代表所有真实账号操作和桌面集成场景均已验证。
 
-基于 [lbjlaq/Antigravity-Manager](https://github.com/lbjlaq/Antigravity-Manager) 衍生。本分支聚焦本机账号、额度和用量，提供独立的命令行、设置和快捷看板。采用 [CC BY-NC-SA 4.0](LICENSE) 许可。
+基于 [lbjlaq/Antigravity-Manager](https://github.com/lbjlaq/Antigravity-Manager) 衍生，采用 [CC BY-NC-SA 4.0](LICENSE) 许可。
