@@ -20,7 +20,9 @@ The two menu bar screenshots use temporary example usage and quota data (3.384 m
 | 01:22:26 | `cli-zh.png` | 中文命令行看板 |
 | 01:22:54 | `menu-bar-zh.png` | 中文 macOS 菜单栏 |
 | 01:27:56 | `dashboard-zh.png` | 中文用量首页（补拍） |
+| 02:09:53 | `settings-en.png` | English settings |
+| 02:10:10 | `settings-zh.png` | 中文设置 |
 
-The main README uses only the English set; `README.zh-CN.md` uses only the Chinese set. In each guide the dashboard and menu bar are displayed side by side, followed by the two account views and terminal. All images are visible without expanding a gallery. These are product illustrations, not cross-platform acceptance evidence. For Windows/Linux native-window validation see [the 4.9.0 capture record](../4.9.0/README.md).
+The main README uses only the English set; `README.zh-CN.md` uses only the Chinese set. In each guide the dashboard and menu bar are displayed side by side, followed by the two account views, settings as the fifth image and terminal as the sixth. All images are visible without expanding a gallery. These are product illustrations, not cross-platform acceptance evidence. For Windows/Linux native-window validation see [the 4.9.0 capture record](../4.9.0/README.md).
 
-英文 README 只使用英文组，中文 README 只使用中文组。两份文档均将首页与菜单栏并排展示，下面依次展示两种账号视图和命令行；所有图片直接显示，无需展开。这些图片用于产品介绍；Windows/Linux 原生窗口验证见 [4.9.0 截图记录](../4.9.0/README.md)。
+英文 README 只使用英文组，中文 README 只使用中文组。两份文档均将首页与菜单栏并排展示，下面依次展示两种账号视图、第 5 张设置和第 6 张命令行；所有图片直接显示，无需展开。这些图片用于产品介绍；Windows/Linux 原生窗口验证见 [4.9.0 截图记录](../4.9.0/README.md)。

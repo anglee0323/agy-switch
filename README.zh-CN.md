@@ -39,6 +39,10 @@ AntiGravity Switch 把你的 Antigravity 账号集中到一个地方：查看哪
   </tr>
 </table>
 
+**设置**
+
+![设置](docs/screenshots/2026-10-06/settings-zh.png)
+
 **命令行看板**
 
 ![命令行看板](docs/screenshots/2026-10-06/cli-zh.png)

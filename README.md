@@ -39,6 +39,10 @@ In smart-switch settings, choose Global Sync, Desktop App & CLI, Antigravity IDE
   </tr>
 </table>
 
+**Settings**
+
+![Settings](docs/screenshots/2026-10-06/settings-en.png)
+
 **Terminal dashboard**
 
 ![Terminal dashboard](docs/screenshots/2026-10-06/cli-en.png)
