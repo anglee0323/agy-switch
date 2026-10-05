@@ -4,7 +4,7 @@ import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { desktopBrand } from './release-brand.mjs';
-import { verifyUpdateFeed } from './update-assets.mjs';
+import { updatePackages, verifyUpdateFeed } from './update-assets.mjs';
 import { renderCask } from './generate-homebrew.mjs';
 
 export function releaseVersion(tag) {
@@ -64,9 +64,23 @@ export function verifyAssets(directory, { tag, repository, candidate = false }) 
   return expected;
 }
 
+// From 4.9.1, releases attach only user downloads and the signed update feed;
+// build-only checksum sidecars, detached signatures and the generated cask stay in CI artifacts.
+export function focusedDownloads(version) {
+  const [major, minor, patch] = version.split('.').map(Number);
+  return major > 4 || (major === 4 && (minor > 9 || (minor === 9 && patch >= 1)));
+}
+
+export function publicAssetNames(version, verified) {
+  if (!focusedDownloads(version)) return verified;
+  const wanted = new Set([...packageNames(version), ...Object.values(updatePackages(version)), 'latest.json']);
+  return verified.filter(name => wanted.has(name));
+}
+
 export function writeManifest(directory, context) {
   if (!/^[0-9a-f]{40}$/.test(context.commit ?? '')) throw new Error('A full source commit SHA is required');
-  const files = verifyAssets(directory, context).map(name => ({ name, sha256: sha256(join(directory, name)) }));
+  const verified = verifyAssets(directory, context);
+  const files = publicAssetNames(releaseVersion(context.tag), verified).map(name => ({ name, sha256: sha256(join(directory, name)) }));
   writeFileSync(join(directory, 'release-manifest.json'), `${JSON.stringify({ schema_version: 1,
     repository: context.repository, tag: context.tag, source_commit: context.commit, files }, null, 2)}\n`);
   return [...files.map(f => f.name), 'release-manifest.json'];

@@ -24,6 +24,7 @@ on:
       - src-tauri/Cargo.lock
       - src-tauri/tauri*.json
       - src-tauri/Entitlements.plist
+      - src-tauri/Info.plist
   workflow_dispatch:
     inputs:
       tag:
@@ -267,7 +268,12 @@ jobs:
           VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           set -euo pipefail
-          APP="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/agy-switch.app"
+          APP_DIR="src-tauri/target/aarch64-apple-darwin/release/bundle/macos"
+          APP_NAME="$(node --input-type=module -e 'import {desktopBrand} from "./scripts/release-brand.mjs"; console.log(desktopBrand(process.env.VERSION).app)')"
+          if [[ "$APP_NAME" != "agy-switch" ]]; then
+            mv "$APP_DIR/agy-switch.app" "$APP_DIR/$APP_NAME.app"
+          fi
+          APP="$APP_DIR/$APP_NAME.app"
           EXECUTABLE="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Contents/Info.plist")"
           [[ "$EXECUTABLE" == "agy-switch-desktop" ]]
           [[ -x "$APP/Contents/MacOS/$EXECUTABLE" ]]
@@ -280,8 +286,12 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent "$APP" "artifacts/release/$NAME"
           ROUNDTRIP="$(mktemp -d "$RUNNER_TEMP/agy-macos-archive.XXXXXX")"
           ditto -x -k "artifacts/release/$NAME" "$ROUNDTRIP"
-          node scripts/verify-macos-bundle.mjs "$ROUNDTRIP/agy-switch.app" "$VERSION"
-          tar -czf "artifacts/release/agy-switch-${VERSION}-macos-arm64.app.tar.gz" -C "$(dirname "$APP")" "$(basename "$APP")"
+          node scripts/verify-macos-bundle.mjs "$ROUNDTRIP/$APP_NAME.app" "$VERSION"
+          # Installed 4.9.0 expects this archive root. Bundle display names stay full.
+          UPDATE_STAGE="$(mktemp -d "$RUNNER_TEMP/agy-macos-update.XXXXXX")"
+          ditto "$APP" "$UPDATE_STAGE/agy-switch.app"
+          node scripts/verify-macos-bundle.mjs "$UPDATE_STAGE/agy-switch.app" "$VERSION"
+          tar -czf "artifacts/release/agy-switch-${VERSION}-macos-arm64.app.tar.gz" -C "$UPDATE_STAGE" agy-switch.app
           node scripts/release-assets.mjs checksum "artifacts/release/$NAME"
           node scripts/generate-homebrew.mjs --archive "artifacts/release/$NAME" \
             --url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${RELEASE_TAG}/${NAME}" \

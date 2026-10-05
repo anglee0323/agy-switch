@@ -96,6 +96,25 @@ pub async fn download_and_install(app: tauri::AppHandle, expected_version: Strin
     if !metadata.has_update || metadata.latest_version.trim_start_matches('v') != expected_version.trim_start_matches('v') {
         return Err("update_changed".into());
     }
+    #[cfg(target_os = "macos")]
+    {
+        // Ad-hoc distributed installs can never pass the Gatekeeper assessment that
+        // install_macos applies to the extracted candidate, so downloading the whole
+        // package first only wastes bandwidth. Judge from the running app bundle with
+        // the very same assessment: while releases stay ad-hoc signed, route the user
+        // straight to the release page instead. Once a Developer ID signed and
+        // notarized release exists, ad-hoc installs take one final manual download;
+        // installs that already pass the assessment keep the automated path.
+        let manual_required = match app_bundle_of(&std::env::current_exe().map_err(|_| "update_install_failed")?) {
+            Some(app_path) => !gatekeeper_accepts(&app_path),
+            None => true,
+        };
+        if manual_required {
+            use tauri_plugin_opener::OpenerExt;
+            app.opener().open_url(metadata.release_url.clone(), None::<&str>).map_err(|_| "update_open_failed")?;
+            return Err("update_mac_manual_required".into());
+        }
+    }
     let updater = app.updater_builder().timeout(std::time::Duration::from_secs(180))
         .build().map_err(|_| "update_unavailable")?;
     let mut update = updater.check().await.map_err(|_| "update_unavailable")?.ok_or("update_changed")?;
@@ -120,14 +139,35 @@ pub async fn download_and_install(app: tauri::AppHandle, expected_version: Strin
     Ok(())
 }
 
+/// Resolve the .app bundle that wraps `exe` (…/Foo.app/Contents/MacOS/exe).
+#[cfg(target_os = "macos")]
+fn app_bundle_of(exe: &std::path::Path) -> Option<std::path::PathBuf> {
+    let macos = exe.parent()?;
+    let contents = macos.parent()?;
+    if macos.file_name()?.to_str()? != "MacOS" || contents.file_name()?.to_str()? != "Contents" { return None; }
+    let app_path = contents.parent()?;
+    if app_path.extension()?.to_str() == Some("app") { Some(app_path.to_path_buf()) } else { None }
+}
+
+/// Gatekeeper assessment applied to update candidates in install_macos; reused on
+/// the running install so the pre-download gate predicts the same outcome.
+#[cfg(target_os = "macos")]
+fn gatekeeper_accepts(app_path: &std::path::Path) -> bool {
+    std::process::Command::new("/usr/sbin/spctl")
+        .args(["--assess", "--type", "execute"])
+        .arg(app_path)
+        .output()
+        .map(|output| output.status.success())
+        .unwrap_or(false)
+}
+
 /// Keep the existing app in place unless the signed update also passes macOS trust checks.
 /// No quarantine removal, administrator shell or security-policy changes are performed.
 #[cfg(target_os = "macos")]
 fn install_macos(bytes: &[u8], expected_version: &str) -> Result<(), String> {
     use std::process::Command;
     let exe = std::env::current_exe().map_err(|_| "update_install_failed")?;
-    let app_path = exe.parent().and_then(|p| p.parent()).and_then(|p| p.parent()).ok_or("update_install_failed")?;
-    if app_path.extension().and_then(|e| e.to_str()) != Some("app") { return Err("update_install_failed".into()); }
+    let app_path = app_bundle_of(&exe).ok_or("update_install_failed")?;
     let parent = app_path.parent().ok_or("update_install_failed")?;
     // Same volume makes replacement and rollback atomic; lack of write access leaves the app untouched.
     let staging = tempfile::Builder::new().prefix(".agy-update-").tempdir_in(parent).map_err(|_| "update_install_failed")?;
@@ -144,16 +184,16 @@ fn install_macos(bytes: &[u8], expected_version: &str) -> Result<(), String> {
         || info.get("CFBundleShortVersionString").and_then(plist::Value::as_string) != Some(expected_version) {
         return Err("invalid_release".into());
     }
-    for (program, args) in [("/usr/bin/codesign", vec!["--verify", "--deep", "--strict"]),
-        ("/usr/sbin/spctl", vec!["--assess", "--type", "execute"])] {
+    for (program, args) in [("/usr/bin/codesign", vec!["--verify", "--deep", "--strict"])] {
         if !Command::new(program).args(args).arg(&candidate).output().map_err(|_| "update_install_failed")?.status.success() {
             return Err("update_mac_trust_required".into());
         }
     }
+    if !gatekeeper_accepts(&candidate) { return Err("update_mac_trust_required".into()); }
     let backup = staging.path().join("previous.app");
-    std::fs::rename(app_path, &backup).map_err(|_| "update_install_failed")?;
-    if std::fs::rename(&candidate, app_path).is_err() {
-        if std::fs::rename(&backup, app_path).is_err() {
+    std::fs::rename(&app_path, &backup).map_err(|_| "update_install_failed")?;
+    if std::fs::rename(&candidate, &app_path).is_err() {
+        if std::fs::rename(&backup, &app_path).is_err() {
             // Preserve the recoverable original bundle instead of deleting it with the temporary directory.
             let _ = staging.keep();
             return Err("update_restore_failed".into());
@@ -173,6 +213,25 @@ mod download_tests {
         assert!(trusted_download("4.9.0", &valid));
         for changed in [valid.replace("anglee0323", "attacker"), valid.replace("v4.9.0", "v4.8.1"), format!("{valid}?redirect=evil"), valid.replace("https:", "http:"), "file:///tmp/update".into()] { assert!(!trusted_download("4.9.0", &changed)); }
         assert!(!trusted_download("4.9.0/path", &valid));
+    }
+}
+
+#[cfg(test)]
+mod bundle_tests {
+    use super::*;
+    #[cfg(target_os = "macos")]
+    use std::path::Path;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn app_bundle_resolution_accepts_only_bundled_layouts() {
+        assert_eq!(app_bundle_of(Path::new("/Applications/AntiGravity Switch.app/Contents/MacOS/agy-switch-desktop"))
+            .as_deref(), Some(Path::new("/Applications/AntiGravity Switch.app")));
+        assert_eq!(app_bundle_of(Path::new("/build/target/debug/agy-switch-desktop")), None);
+        assert_eq!(app_bundle_of(Path::new("/Applications/Test.app/Other/MacOS/executable")), None);
+        assert_eq!(app_bundle_of(Path::new("/Applications/Test.app/Contents/Other/executable")), None);
+        assert_eq!(app_bundle_of(Path::new("agy-switch-desktop")), None);
+        assert_eq!(app_bundle_of(Path::new("/tmp/agy-switch.app.dSYM/Contents/Resources")), None);
     }
 }
 

@@ -14,7 +14,7 @@ use std::{cell::{Cell, RefCell}, sync::{Mutex, mpsc, atomic::{AtomicBool, Atomic
 use tauri::Emitter;
 
 const WIDTH: f64 = 380.0;
-const BRAND: &str = "agy-switch";
+const BRAND: &str = "AntiGravity Switch";
 const GITHUB: &str = "https://github.com/anglee0323/agy-switch";
 static OPEN: AtomicBool = AtomicBool::new(false);
 static GENERATION: AtomicU64 = AtomicU64::new(0);

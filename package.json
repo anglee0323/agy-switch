@@ -1,5 +1,5 @@
 {
-  "version": "4.9.0",
+  "version": "4.9.1",
   "name": "agy-switch",
   "description": "Local Antigravity account switching and usage dashboard",
   "type": "module",
@@ -10,7 +10,6 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:debug": "RUST_LOG=debug npm run tauri dev",
-    "deploy:desktop": "node scripts/deploy-desktop.mjs",
     "brand:generate": "node scripts/generate-brand-assets.mjs"
   },
   "dependencies": {

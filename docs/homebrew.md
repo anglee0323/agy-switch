@@ -4,13 +4,11 @@
 
 The Apple Silicon cask at `Casks/agy-switch.rb` installs **AntiGravity Switch 4.9.0** from the public [v4.9.0 release](https://github.com/anglee0323/agy-switch/releases/tag/v4.9.0). It uses this repository as an explicit-URL tap; no separate tap repository is required. The archive contains `agy-switch.app`, and the bundled CLI entry is linked as `agy-switch`.
 
-All seventeen public attachments were downloaded and checked against the source manifest. The three updater signatures passed cryptographic verification. The cask matches the actual Mac ZIP, version and URL; its SHA-256 is `b8799230d6a378a447dbeee654aaf108eff33e696e1378987bd9af243f22b02f`. See [4.9.0 verification](4.9.0-public-acceptance.md).
+All seventeen public attachments were downloaded and checked against the source manifest. The three updater signatures passed cryptographic verification. The cask matches the actual Mac ZIP, version and URL; its SHA-256 is `b8799230d6a378a447dbeee654aaf108eff33e696e1378987bd9af243f22b02f`. See [4.9.0 verification](maintainers/4.9.0-public-acceptance.md).
 
 The Mac package passes strict signature integrity checks but is ad-hoc signed, without Developer ID or notarization. Gatekeeper rejected it with exit 3. Homebrew does not bypass that restriction. A fresh Homebrew recipe load/fetch is checked separately from native installation, launch and upgrade acceptance.
 
 The cask installs the app and management command through Homebrew's documented [`app` and `binary` artifacts](https://docs.brew.sh/Cask-Cookbook#stanza-binary). A separate formula would still carry the current desktop-linked executable, so no lightweight CLI-only formula is claimed. Linux and Intel macOS Homebrew packages are not provided.
-
-Do not install this alongside an old Tools Lite cask: both own the `agy-switch` CLI link and share application data. The old app may still be installed under its original name. Back it up and review conflicts before migration; this guide does not force adoption or overwrite. Historical native Brew installation and launch results remain in [4.8.0 acceptance](4.8.0-public-acceptance.md) and [4.8.1 verification](4.8.1-public-acceptance.md).
 
 ## Release inputs and generation
 
@@ -19,7 +17,7 @@ The macOS release job explicitly builds `aarch64-apple-darwin`, verifies the Mac
 - `agy-switch-VERSION-macos-arm64.zip`
 - `agy-switch.rb`, generated from the exact ZIP with a real SHA-256 checksum
 
-The ZIP and cask are uploaded together by the existing release workflow. Editing this workflow does not itself trigger a release or create a tap. The workflow refuses a tag/version mismatch. Never replace a published ZIP or its checksum; publish a new version and update the cask through a PR.
+The release workflow validates the ZIP and generated cask together. From 4.9.1, the cask stays in CI artifacts and is committed to `Casks/` after the public ZIP is verified. Editing this workflow does not itself trigger a release or create a tap. The workflow refuses a tag/version mismatch. Never replace a published ZIP or its checksum; publish a new version and update the cask through a PR.
 
 For manual generation, set these to a real archive and its intended immutable release URL; no sample release URL is assumed to exist:
 
@@ -81,4 +79,4 @@ brew update
 brew upgrade --cask anglee0323/agy-switch/agy-switch
 ```
 
-Use the [release checklist](release-checklist.md) to keep the source commit, version, assets and installation evidence aligned.
+Use the [release checklist](maintainers/release-checklist.md) to keep the source commit, version, assets and installation evidence aligned.

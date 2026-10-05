@@ -162,7 +162,7 @@ export default function MenuBarDashboard() {
   </nav>;
   return <div className={'menubar-app ' + (appearance?.native_material ? 'native-material' : 'opaque-material') + (appearance?.high_contrast ? ' high-contrast' : '')} data-language={zh ? 'zh' : 'en'} data-platform={appearance?.platform || 'unknown'} data-material={appearance?.material_kind || (appearance?.native_material ? 'vibrancy' : 'opaque')}>
     <header className="mb-header">
-      <div className="mb-brand">{preferences.show_icons && <img src={logo} alt="" width="24" height="24" />}<div><span className="mb-eyebrow">agy-switch</span>{detail && <h1>{zh ? '智能切换' : 'Auto-switch'}</h1>}</div></div>
+      <div className="mb-brand">{preferences.show_icons && <img src={logo} alt="" width="24" height="24" />}<div><span className="mb-eyebrow">AntiGravity Switch</span>{detail && <h1>{zh ? '智能切换' : 'Auto-switch'}</h1>}</div></div>
       <div className="mb-header-actions">{detail && <button aria-label={zh ? '返回总览' : 'Back to overview'} onClick={() => setDetail(null)}><ArrowLeft size={16} /></button>}<button aria-label={zh ? '刷新全部额度' : 'Refresh all quotas'} disabled={busy || loading} onClick={() => void refresh()}><RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} /></button><button aria-label={zh ? '偏好设置' : 'Settings'} onClick={() => openPage('settings')}><Settings size={16} /></button></div>
     </header>
     {!detail && <UsageOverview usage={usage} zh={zh} />}

@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "agy-switch",
-  "version": "4.9.0",
+  "version": "4.9.1",
   "identifier": "com.lbjlaq.antigravity-tools-lite",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -39,6 +39,8 @@
       "icons/icon.ico"
     ],
     "macOS": {
+      "bundleName": "AntiGravity Switch",
+      "infoPlist": "Info.plist",
       "entitlements": "Entitlements.plist"
     }
   },

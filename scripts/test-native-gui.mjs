@@ -245,7 +245,7 @@ try {
         await screenshot('settings-light-760');
         // Same native WebView, now exercise the compact cross-platform dashboard route.
         await execute("history.pushState({}, '', '/menubar'); dispatchEvent(new PopStateEvent('popstate')); return true");
-        await until(() => execute("return document.querySelector('.mb-eyebrow')?.textContent === 'agy-switch' && document.querySelectorAll('.mb-account-row').length === 2"), 'native quick dashboard');
+        await until(() => execute("return document.querySelector('.mb-eyebrow')?.textContent === 'AntiGravity Switch' && document.querySelectorAll('.mb-account-row').length === 2"), 'native quick dashboard');
         rect = await command('POST', '/window/rect', { width: 424, height: 720 });
         for (let i = 0; i < 4; i++) { const width = await execute('return innerWidth'); if (width === 424) break; rect = await command('POST', '/window/rect', { width: Math.round(rect.width + 424 - width), height: 720 }); await delay(200); }
         assert.equal(await execute('return innerWidth'), 424);
