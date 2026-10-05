@@ -421,6 +421,8 @@
     "downloading": "正在下载",
     "installing": "正在安装",
     "install_failed": "更新未完成，请稍后重试。",
+    "mac_manual_required": "当前安装未通过 macOS 应用信任检查，需要手动更新。已在浏览器中打开发布页，当前版本保持不变。",
+    "open_failed": "无法打开下载页。请通过应用菜单中的 GitHub 链接进入 Releases，手动下载更新。",
     "mac_trust_required": "更新包已下载并校验，但未通过 macOS 的应用信任检查。当前版本保持不变；此版本暂时无法自动安装。",
     "restore_failed": "安装未完成，原应用备份已保留，需要恢复后再启动。"
   }

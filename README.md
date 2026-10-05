@@ -153,7 +153,7 @@ Save your work before switching. Tasks already in progress stay with their origi
 
 ### Updates
 
-In the app, check for updates and choose **Download and install** when available. Platform permissions and trust checks still apply. Unattended Mac installation is currently blocked by the signing limitation described above. Homebrew users can update through:
+In the app, check for updates and choose **Download and install** when available. Platform permissions and trust checks still apply. From 4.9.1, a Mac installation that fails system trust checks opens the release page before downloading and requires a manual update. Unattended Mac installation remains blocked by the signing limitation described above. Homebrew users can update through:
 
 ```sh
 brew update
