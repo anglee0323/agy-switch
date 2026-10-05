@@ -180,3 +180,7 @@ npm run tauri dev
 Use `npm run tauri build` on macOS, `./scripts/build-windows.ps1` on Windows, or `./scripts/build-linux-deb.sh --native` / `--docker` on Linux. Native-window, CLI and package validation records are linked above; a successful build alone does not establish every real-account or desktop integration scenario.
 
 Derived from [lbjlaq/Antigravity-Manager](https://github.com/lbjlaq/Antigravity-Manager). Licensed under [CC BY-NC-SA 4.0](LICENSE).
+
+## Community
+
+[LINUX DO](https://linux.do)

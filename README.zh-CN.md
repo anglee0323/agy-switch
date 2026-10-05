@@ -180,3 +180,7 @@ npm run tauri dev
 macOS 使用 `npm run tauri build`，Windows 使用 `./scripts/build-windows.ps1`，Linux 使用 `./scripts/build-linux-deb.sh --native` 或 `--docker`。原生窗口、命令行和安装包的验证记录见上方链接；构建成功不代表所有真实账号操作和桌面集成场景均已验证。
 
 基于 [lbjlaq/Antigravity-Manager](https://github.com/lbjlaq/Antigravity-Manager) 衍生，采用 [CC BY-NC-SA 4.0](LICENSE) 许可。
+
+## 社区
+
+[LINUX DO 社区](https://linux.do)
