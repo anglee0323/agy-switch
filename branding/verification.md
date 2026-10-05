@@ -2,6 +2,8 @@
 
 Source version: **4.9.0**, development branch `codex/cli-policy-workflows`. The repository was renamed to `anglee0323/agy-switch`; its repository ID remained `1371076232`. No release, tag, app installation or production bundle was created for this change.
 
+The subsequent owner-requested local Mac installation is recorded separately in [4.9.0 local preview](../docs/4.9.0-local-preview.md).
+
 Verified on macOS on 2026-10-05:
 
 - `npm run build` passed. Vite still reports its existing chunk-size warning.
