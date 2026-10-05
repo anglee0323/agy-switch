@@ -255,6 +255,11 @@ fn sync_external_config(runtime: &Runtime) -> Result<(), String> {
     sync_external_config_at(runtime, &account::get_data_dir()?)
 }
 fn sync_external_config_at(runtime: &Runtime, root: &std::path::Path) -> Result<(), String> {
+    let _settings = match crate::cli::SwitchLock::acquire(root) {
+        Ok(lock) => lock,
+        Err(e) if e == "another_account_switch_in_progress" => return Ok(()),
+        Err(e) => return Err(e),
+    };
     let mut d = runtime.data.lock().map_err(|_| "Auto-switch state is unavailable.")?;
     if d.commit_started { return Ok(()); }
     let config = read_config_at(root)?;

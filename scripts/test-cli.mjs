@@ -71,6 +71,8 @@ try {
   assert.equal(readFileSync(join(data, 'accounts.json'), 'utf8'), orderedIndex);
   assert.equal(readFileSync(join(data, 'accounts/test-1.json'), 'utf8'), JSON.stringify(noQuota));
   assert.equal(readFileSync(join(data, 'accounts/test-2.json'), 'utf8'), second);
+  writeFileSync(join(data, 'auto_switch.json'), JSON.stringify({ ...policy, candidate_account_ids: ['removed-account'] }));
+  assert.equal(JSON.parse(run(['policy', 'set', '--enabled', 'false', '--json']).stdout).policy.enabled, false);
   writeFileSync(join(data, 'auto_switch.json'), 'corrupt');
   run(['policy', 'set', '--enabled', 'false'], 1);
   assert.equal(readFileSync(join(data, 'auto_switch.json'), 'utf8'), 'corrupt');

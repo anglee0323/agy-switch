@@ -35,7 +35,7 @@ pub(super) fn parse_patch(args: &[&str]) -> Result<PolicyPatch> {
             "--target" => patch.target = Some(match *value { "app" => Target::App, "app-cli" => Target::AppCli, "ide" => Target::Ide, "vscode" => Target::Vscode, _ => return Err(CliError::usage()) }),
             "--reserve" => patch.reserve = Some(value.parse().map_err(|_| CliError::usage())?),
             "--minimum" => patch.minimum = Some(value.parse().map_err(|_| CliError::usage())?),
-            "--model" if !value.is_empty() && value.len() <= 200 && !value.chars().any(char::is_control) => patch.model = Some((*value).into()),
+            "--model" if !value.trim().is_empty() && value.len() <= 200 && !value.chars().any(char::is_control) => patch.model = Some(value.trim().into()),
             _ => return Err(CliError::usage()),
         }
     }
@@ -55,7 +55,7 @@ fn resolve_ids(snapshot: &Snapshot, selectors: &[String]) -> Result<Vec<String>>
 pub(super) fn save_policy(root: &Path, expected: &Config, config: &Config) -> Result<()> {
     config.validate().map_err(|_| CliError { code: 2, message: "Invalid policy: reserve must be 1–98%, minimum must exceed reserve (up to 100%), and enabling requires unique backup accounts." })?;
     let snapshot = Snapshot::read(root)?;
-    if config.candidate_account_ids.iter().any(|id| !snapshot.accounts.iter().any(|a| &a.id == id)) { return Err(CliError::missing()); }
+    if config.enabled && config.candidate_account_ids.iter().any(|id| !snapshot.accounts.iter().any(|a| &a.id == id)) { return Err(CliError::missing()); }
     if config == expected { return Ok(()); }
     std::fs::create_dir_all(root).map_err(|_| CliError::data("Cannot create the settings directory."))?;
     auto_switch::save_config_at(root, expected, config).map_err(|error| match error.as_str() {
@@ -70,10 +70,10 @@ pub(super) fn policy_text(config: &Config, lang: Lang) -> String {
     let enabled = if zh { if config.enabled { "开启" } else { "关闭" } } else if config.enabled { "On" } else { "Off" };
     let mode = match (lang, config.mode) { (Lang::Zh, Mode::Wait) => "等待空闲", (Lang::Zh, Mode::Stop) => "达到阈值时切换", (Lang::En, Mode::Wait) => "Wait for inactivity", (Lang::En, Mode::Stop) => "Switch at threshold" };
     let strategy = match (lang, config.strategy) { (Lang::Zh, Strategy::Priority) => "优先顺序", (Lang::Zh, Strategy::RoundRobin) => "轮询", (Lang::En, Strategy::Priority) => "Priority", (Lang::En, Strategy::RoundRobin) => "Round robin" };
-    let target = match config.target { Target::App => "APP + IDE", Target::AppCli => "APP + agy", Target::Ide => "IDE", Target::Vscode => "VS Code" };
+    let target = match config.target { Target::App => if zh { "全域同步" } else { "Global sync" }, Target::AppCli => "APP + agy", Target::Ide => "IDE", Target::Vscode => "VS Code" };
     let model = match (lang, config.monitored_model.as_str()) { (Lang::Zh, "all") => "全部模型", (Lang::En, "all") => "All models", (_, "gemini") => "Gemini", (Lang::Zh, "claude") => "Claude 和 GPT", (Lang::En, "claude") => "Claude & GPT", (_, value) => value };
-    if zh { format!("智能切换策略: {enabled}\n切换时机: {mode}\n选择策略: {strategy}\n同步目标: {target}\n监控模型: {}\n保留额度: {}%\n候选最低额度: {}%\n候选账号顺序: {}\n后台执行需要运行 Tools Lite App。", terminal_text(model), config.reserve_percentage, config.candidate_min_percentage, config.candidate_account_ids.iter().map(|s| terminal_text(s)).collect::<Vec<_>>().join(" → ")) }
-    else { format!("Smart switching: {enabled}\nSwitch mode: {mode}\nSelection strategy: {strategy}\nSync target: {target}\nMonitored models: {}\nReserve: {}%\nBackup minimum: {}%\nCandidate order: {}\nBackground execution requires the Tools Lite desktop app.", terminal_text(model), config.reserve_percentage, config.candidate_min_percentage, config.candidate_account_ids.iter().map(|s| terminal_text(s)).collect::<Vec<_>>().join(" → ")) }
+    if zh { format!("智能切换策略: {enabled}\n切换时机: {mode}\n账号选择顺序: {strategy}\n同步目标: {target}\n监控模型: {}\n保留额度: {}%\n候选最低额度: {}%\n候选账号顺序: {}\n后台执行需要运行 Tools Lite App。", terminal_text(model), config.reserve_percentage, config.candidate_min_percentage, config.candidate_account_ids.iter().map(|s| terminal_text(s)).collect::<Vec<_>>().join(" → ")) }
+    else { format!("Smart switching: {enabled}\nSwitch timing: {mode}\nAccount selection order: {strategy}\nSync target: {target}\nMonitored models: {}\nReserve: {}%\nBackup minimum: {}%\nCandidate order: {}\nBackground execution requires the Tools Lite desktop app.", terminal_text(model), config.reserve_percentage, config.candidate_min_percentage, config.candidate_account_ids.iter().map(|s| terminal_text(s)).collect::<Vec<_>>().join(" → ")) }
 }
 
 fn policy_output(config: &Config, json: bool, lang: Lang) -> String {
@@ -159,5 +159,13 @@ mod tests {
         assert!(update_output(&info, false, Lang::En).contains("Update available"));
         assert!(update_output(&info, false, Lang::Zh).contains("有新版本"));
         assert_eq!(serde_json::from_str::<serde_json::Value>(&update_output(&info, true, Lang::En)).unwrap()["check_only"], true);
+    }
+    #[test]
+    fn policy_summary_separates_timing_and_order_in_both_languages() {
+        let en = policy_text(&Config::default(), Lang::En);
+        let zh = policy_text(&Config::default(), Lang::Zh);
+        assert!(en.contains("Switch timing:") && en.contains("Account selection order:"));
+        assert!(zh.contains("切换时机:") && zh.contains("账号选择顺序:"));
+        assert!(!en.chars().any(|c| ('\u{3400}'..='\u{9fff}').contains(&c)));
     }
 }

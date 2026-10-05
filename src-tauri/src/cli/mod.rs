@@ -3,6 +3,7 @@ mod output;
 mod picker;
 mod switch_lock;
 mod settings;
+mod workflows;
 
 use output::{AccountView, Snapshot};
 use std::path::{Path, PathBuf};

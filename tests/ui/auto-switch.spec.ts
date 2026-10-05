@@ -68,6 +68,15 @@ test('switch timing and account selection order are separate labelled choices', 
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
+test('policy groups use natural English without Chinese labels', async ({ page }, testInfo) => {
+    await page.getByRole('button', { name: 'ZH', exact: true }).click();
+    await page.getByRole('button', { name: /EN.*English/ }).click();
+    await expect(page.getByRole('group', { name: 'Switch timing', exact: true })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Account selection order', exact: true })).toBeVisible();
+    expect(await page.getByRole('tabpanel').innerText()).not.toMatch(/[\u3400-\u9fff]/);
+    await page.screenshot({ path: testInfo.outputPath('policy-dimensions-en.png'), fullPage: true });
+});
+
 test('default off, explicit configuration, real command contract, cancellation', async ({ page }, testInfo) => {
     await expect(page.getByLabel('启用智能切换策略')).not.toBeChecked();
     await expect(page.getByRole('button', { name: '保存设置', exact: true })).toHaveCount(0);
