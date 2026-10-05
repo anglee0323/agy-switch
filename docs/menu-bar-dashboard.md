@@ -36,7 +36,7 @@ Frontend build, 27 existing quota/presentation checks, 12 scoped-aggregation/col
 
 This round passed the production frontend and Mac arm64 release builds, 121 Rust checks (2 helper cases ignored), 19 menu/Settings browser cases and 14 installed CLI checks. Browser cases cover inert account labels and fixed percentage geometry with hover, always-visible and hidden reset times.
 
-Installed Mac acceptance is recorded separately in the project audit. Login boot and additional displays still require host-specific acceptance. Native Windows/Linux viewport, console and package results are tracked separately in [native acceptance](native-gui-acceptance.md) and the release notes; browser success does not establish them.
+Installed Mac acceptance is recorded separately in the project audit. Login boot and additional displays still require host-specific acceptance. Native Windows/Linux viewport, console and package results are tracked separately in [native acceptance](maintainers/native-gui-acceptance.md) and the release notes; browser success does not establish them.
 
 ## References
 

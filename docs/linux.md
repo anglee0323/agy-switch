@@ -86,4 +86,4 @@ CI runs headless reads, real PTY interaction, deb payload checks, GTK/WebKitGTK 
 ./scripts/test-linux-credentials.sh
 ```
 
-It creates a disposable HOME and independent D-Bus session; never run ignored credential tests directly on your normal desktop bus. Real login, authenticated switching, Wayland/KDE tray behavior and ARM remain separate acceptance tasks. [Native acceptance](native-gui-acceptance.md) · [Historical Linux checks](linux-validation.md)
+It creates a disposable HOME and independent D-Bus session; never run ignored credential tests directly on your normal desktop bus. Real login, authenticated switching, Wayland/KDE tray behavior and ARM remain separate acceptance tasks. [Native acceptance](maintainers/native-gui-acceptance.md)

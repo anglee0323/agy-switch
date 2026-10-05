@@ -21,4 +21,4 @@ Run `npm ci` then `npm run brand:generate` to regenerate the existing app PNG/IC
 
 The 4.9.0 source updates the app, menu bar, CLI, window titles and future package names. User data remains in `~/.antigravity_tools`, and the stable bundle identifier remains unchanged. The internal Rust library name is retained. Published releases and their hashes are immutable; `scripts/release-brand.mjs` distinguishes their historical filenames from future artifacts, without introducing old-name runtime aliases.
 
-The development cask is named `agy-switch`, but still pins the public 4.8.1 archive until a new release is authorized. That archive contains the original app name and artwork. Do not claim that source previews are installed-app or Windows/Linux acceptance evidence.
+The app displays **AntiGravity Switch** in its navigation, menu header, Dock name and tray tooltip. The release ZIP from 4.9.1 contains `AntiGravity Switch.app`; executable and package filenames remain `agy-switch`. Homebrew pins the verified public archive. See [installation](../docs/homebrew.md) and [maintainer procedures](../docs/maintainers/README.md).
