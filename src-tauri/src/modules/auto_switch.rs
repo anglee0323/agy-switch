@@ -75,7 +75,7 @@ impl Default for Config {
     }
 }
 impl Config {
-    fn validate(&self) -> Result<(), String> {
+    pub(crate) fn validate(&self) -> Result<(), String> {
         if !(1..=98).contains(&self.reserve_percentage)
             || self.candidate_min_percentage <= self.reserve_percentage
             || self.candidate_min_percentage > 100
@@ -189,18 +189,26 @@ fn write_pause(source_id: Option<String>, failed: bool) -> Result<(), String> {
     .map_err(|_| "Cannot save switch state.".into())
 }
 fn read_pause() -> Result<PauseRecord, String> {
-    match std::fs::read(account::get_data_dir()?.join("auto_switch_state.json")) {
+    read_pause_at(&account::get_data_dir()?)
+}
+fn read_pause_at(root: &std::path::Path) -> Result<PauseRecord, String> {
+    match std::fs::read(root.join("auto_switch_state.json")) {
         Ok(bytes) => serde_json::from_slice(&bytes).map_err(|_| "Cannot read switch state.".into()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(PauseRecord::default()),
         Err(_) => Err("Cannot read switch state.".into()),
     }
 }
 
+#[cfg(test)]
 fn config_path() -> Result<std::path::PathBuf, String> {
     Ok(account::get_data_dir()?.join(CONFIG_FILE))
 }
 fn read_config() -> Result<Config, String> {
-    match std::fs::read(config_path()?) {
+    read_config_at(&account::get_data_dir()?)
+}
+/// CLI reads must not create the data directory or initialize the desktop runtime.
+pub(crate) fn read_config_at(root: &std::path::Path) -> Result<Config, String> {
+    match std::fs::read(root.join(CONFIG_FILE)) {
         Ok(bytes) => {
             let c: Config = serde_json::from_slice(&bytes)
                 .map_err(|_| "Cannot read auto-switch settings.".to_string())?;
@@ -210,6 +218,54 @@ fn read_config() -> Result<Config, String> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Config::default()),
         Err(_) => Err("Cannot read auto-switch settings.".into()),
     }
+}
+
+/// Compare and replace under the same OS lock as credential commits. A stale editor
+/// must reload instead of silently overwriting settings saved by another client.
+pub(crate) fn save_config_at(root: &std::path::Path, expected: &Config, config: &Config) -> Result<(), String> {
+    config.validate()?;
+    let _switch = crate::cli::SwitchLock::acquire(root)?;
+    if read_config_at(root)? != *expected {
+        return Err("auto_switch_settings_changed".into());
+    }
+    let bytes = serde_json::to_vec_pretty(config).map_err(|_| "Cannot encode settings.")?;
+    crate::utils::fs::write_atomic(root.join(CONFIG_FILE), &bytes)
+        .map_err(|_| "Cannot save auto-switch settings.")?;
+    crate::utils::fs::write_atomic(root.join("auto_switch_state.json"),
+        &serde_json::to_vec(&PauseRecord::default()).map_err(|_| "Cannot encode switch state.")?)
+        .map_err(|_| "Cannot save switch state.".into())
+}
+
+fn apply_config(d: &mut RuntimeData, config: Config) {
+    d.config = config.clone();
+    d.revision += 1;
+    d.pending = None;
+    d.canceled_source = None;
+    d.refresh_after.clear();
+    d.refresh_failed.clear();
+    d.failed = false;
+    d.status = Status {
+        mode: config.mode,
+        phase: if config.enabled { "monitoring" } else { "disabled" }.into(),
+        ..Status::default()
+    };
+}
+
+fn sync_external_config(runtime: &Runtime) -> Result<(), String> {
+    sync_external_config_at(runtime, &account::get_data_dir()?)
+}
+fn sync_external_config_at(runtime: &Runtime, root: &std::path::Path) -> Result<(), String> {
+    let mut d = runtime.data.lock().map_err(|_| "Auto-switch state is unavailable.")?;
+    if d.commit_started { return Ok(()); }
+    let config = read_config_at(root)?;
+    if config != d.config {
+        let pause = read_pause_at(root)?;
+        apply_config(&mut d, config);
+        d.canceled_source = pause.source_id;
+        d.failed = pause.failed;
+        if d.failed { d.status.set("blocked", "switch_failed"); }
+    }
+    Ok(())
 }
 
 /// Known bucket IDs, rather than translated display labels, identify provider pools.
@@ -846,6 +902,7 @@ pub fn start(app: tauri::AppHandle) {
 }
 #[tauri::command]
 pub fn get_auto_switch_config(app: tauri::AppHandle) -> Result<Config, String> {
+    sync_external_config(&app.state::<Runtime>())?;
     Ok(app
         .state::<Runtime>()
         .data
@@ -879,27 +936,8 @@ pub fn set_auto_switch_config(app: tauri::AppHandle, mut config: Config) -> Resu
             return Err("A selected account no longer exists. Refresh the account list.".into());
         }
     }
-    let bytes = serde_json::to_vec_pretty(&config).map_err(|_| "Cannot encode settings.")?;
-    crate::utils::fs::write_atomic(&config_path()?, &bytes)
-        .map_err(|_| "Cannot save auto-switch settings.")?;
-    write_pause(None, false)?;
-    d.config = config.clone();
-    d.revision += 1;
-    d.pending = None;
-    d.canceled_source = None;
-    d.refresh_after.clear();
-    d.refresh_failed.clear();
-    d.failed = false;
-    d.status = Status {
-        mode: config.mode,
-        phase: if config.enabled {
-            "monitoring"
-        } else {
-            "disabled"
-        }
-        .into(),
-        ..Status::default()
-    };
+    save_config_at(&account::get_data_dir()?, &d.config, &config)?;
+    apply_config(&mut d, config.clone());
     Ok(config)
 }
 #[tauri::command]
@@ -1010,6 +1048,7 @@ fn update_status(runtime: &Runtime, revision: u64, status: Status) {
 }
 
 async fn evaluate(app: &tauri::AppHandle, force: bool) -> Result<(), String> {
+    sync_external_config(&app.state::<Runtime>())?;
     if evaluate_core(&app.state::<Runtime>(), NativeEnvironment, force).await? {
         let _ = app.emit("tray://account-switched", ());
         crate::modules::tray::update_tray_menus(app);
@@ -2133,4 +2172,36 @@ mod tests {
         });
     }
 
+}
+
+#[cfg(test)]
+mod config_file_tests {
+    use super::*;
+    #[test]
+    fn external_edits_invalidate_pending_work_and_detect_stale_editors() {
+        let dir = tempfile::tempdir().unwrap();
+        let original = Config::default();
+        let edited = Config { strategy: Strategy::RoundRobin, reserve_percentage: 15, ..original.clone() };
+        save_config_at(dir.path(), &original, &edited).unwrap();
+        assert!(save_config_at(dir.path(), &original, &original).is_err());
+        assert_eq!(read_config_at(dir.path()).unwrap(), edited);
+        let runtime = Runtime::default();
+        { let mut d = runtime.data.lock().unwrap(); d.failed = true; d.canceled_source = Some("fixture".into()); }
+        sync_external_config_at(&runtime, dir.path()).unwrap();
+        let d = runtime.data.lock().unwrap();
+        assert_eq!(d.config, edited); assert_eq!(d.revision, 1);
+        assert!(d.pending.is_none()); assert!(d.canceled_source.is_none()); assert!(!d.failed);
+    }
+    #[test]
+    fn settings_cannot_change_during_a_credential_commit() {
+        let dir = tempfile::tempdir().unwrap();
+        let guard = crate::cli::SwitchLock::acquire(dir.path()).unwrap();
+        let edited = Config { reserve_percentage: 15, ..Config::default() };
+        assert_eq!(save_config_at(dir.path(), &Config::default(), &edited).unwrap_err(), "another_account_switch_in_progress");
+        assert!(!dir.path().join(CONFIG_FILE).exists()); drop(guard);
+        save_config_at(dir.path(), &Config::default(), &edited).unwrap();
+        let runtime = Runtime::default(); runtime.data.lock().unwrap().commit_started = true;
+        sync_external_config_at(&runtime, dir.path()).unwrap();
+        assert_eq!(runtime.data.lock().unwrap().config, Config::default());
+    }
 }

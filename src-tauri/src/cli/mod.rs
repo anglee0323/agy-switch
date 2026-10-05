@@ -2,11 +2,12 @@
 mod output;
 mod picker;
 mod switch_lock;
+mod settings;
 
 use output::{AccountView, Snapshot};
 use std::path::{Path, PathBuf};
 
-const HELP: &str = "agy-switch - Antigravity Tools Lite CLI\n\nUsage:\n  agy-switch                         Interactive dashboard / menu (TUI)\n  agy-switch accounts list [--json]\n  agy-switch current [--json]\n  agy-switch quota [ACCOUNT_ID|EMAIL] [--json]\n  agy-switch switch [ACCOUNT_ID|EMAIL] [--target app|ide] [--json]\n  agy-switch stats [--json]\n  agy-switch refresh [ACCOUNT_ID|EMAIL] [--json]\n  agy-switch --help\n  agy-switch --version\n\nRead commands use local cached data only and never open the GUI or refresh tokens.\n'current' is Tools Lite's recorded account, not a live credential-store check.\n'switch' may refresh tokens, close/restart Antigravity, and update credentials.\nDefault target 'app' synchronizes APP credentials and an initialized agy session.\nThere is no CLI-only target: APP and agy may share the same credential store.\nAccounts can be managed interactively via TUI or through the GUI. ABV_DATA_DIR overrides the data directory.\n";
+const HELP: &str = "agy-switch - Antigravity Tools Lite CLI\n\nUsage:\n  agy-switch                         Interactive dashboard / menu (TUI)\n  agy-switch accounts list [--json]\n  agy-switch current [--json]\n  agy-switch quota [ACCOUNT_ID|EMAIL] [--json]\n  agy-switch switch [ACCOUNT_ID|EMAIL] [--target app|ide] [--json]\n  agy-switch stats [--json]\n  agy-switch refresh [ACCOUNT_ID|EMAIL] [--json]\n  agy-switch policy show [--json]\n  agy-switch policy set [OPTIONS] [--json]\n    --enabled true|false --mode wait|stop --strategy priority|round-robin\n    --reserve 1..98 --minimum 2..100 --model all|gemini|claude|MODEL_ID\n    --target app|app-cli|ide|vscode --candidates ID|EMAIL...\n    --clear-candidates\n  agy-switch policy order [ID|EMAIL...] [--json]\n  agy-switch accounts order [ID|EMAIL...] [--json]\n  agy-switch update check [--json]\n  agy-switch --help\n  agy-switch --version\n\nRead commands use local cached data only and never open the GUI or refresh tokens.\n'current' is Tools Lite's recorded account, not a live credential-store check.\n'switch' may refresh tokens, close/restart Antigravity, and update credentials.\nDefault target 'app' synchronizes APP credentials and an initialized agy session.\nThere is no CLI-only target: APP and agy may share the same credential store.\nPolicy edits configure the desktop scheduler; they do not start a CLI daemon.\nUpdate checks contact GitHub but never download or install.\nOrdering requires every account (or selected candidate) exactly once.\nAccounts can be managed interactively via TUI or through the GUI. ABV_DATA_DIR overrides the data directory.\n";
 
 #[derive(Debug, PartialEq)]
 enum Command {
@@ -20,6 +21,11 @@ enum Command {
     Switch { selector: String, target: String },
     InteractiveSwitch { target: String },
     InteractiveDashboard,
+    PolicyShow,
+    PolicySet(settings::PolicyPatch),
+    PolicyOrder(Vec<String>),
+    AccountOrder(Vec<String>),
+    UpdateCheck,
 }
 
 #[derive(Debug)]
@@ -84,6 +90,11 @@ fn parse(args: &[String], interactive: bool) -> Result<(Command, bool)> {
         ["refresh", selector] if !selector.starts_with('-') => {
             Command::Refresh(Some((*selector).into()))
         }
+        ["policy"] | ["policy", "show"] => Command::PolicyShow,
+        ["policy", "set", rest @ ..] => Command::PolicySet(settings::parse_patch(rest)?),
+        ["policy", "order", rest @ ..] if rest.iter().all(|s| !s.starts_with('-')) => Command::PolicyOrder(rest.iter().map(|s| (*s).into()).collect()),
+        ["order", rest @ ..] if rest.iter().all(|s| !s.starts_with('-')) => Command::AccountOrder(rest.iter().map(|s| (*s).into()).collect()),
+        ["update", "check"] => Command::UpdateCheck,
         ["switch"] if interactive && !json => Command::InteractiveSwitch {
             target: "app".into(),
         },
@@ -200,6 +211,11 @@ fn execute(command: Command, json: bool) -> Result<String> {
                 format!("agy-switch {}", env!("CARGO_PKG_VERSION"))
             })
         }
+        Command::PolicyShow => return settings::show_policy(&data_dir()?, json),
+        Command::PolicySet(patch) => return settings::set_policy(&data_dir()?, patch, json),
+        Command::PolicyOrder(selectors) => return settings::order_policy(&data_dir()?, &selectors, json),
+        Command::AccountOrder(selectors) => return settings::order_accounts(&data_dir()?, &selectors, json),
+        Command::UpdateCheck => return settings::check_update(json, picker::Lang::current(&data_dir()?)),
         _ => {}
     }
     let snapshot = Snapshot::read(&data_dir()?)?;
