@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, unlinkSync
 import { tmpdir } from 'node:os';
 import { join, basename } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { packageNames, validateSource, verifyAssets, writeChecksum, writeManifest } from './release-assets.mjs';
+import { packageNames, validateSource, verifyAssets, writeChecksum, writeManifest, publicAssetNames } from './release-assets.mjs';
 import { writeUpdateFeed } from './update-assets.mjs';
 import { renderCask } from './generate-homebrew.mjs';
 import { publishRelease, releaseNotes } from './publish-release.mjs';
@@ -140,7 +140,7 @@ test('reviewed release notes disclose native acceptance limits and cannot be sil
 
 test('release page links resolve from the reviewed source commit rather than the releases URL', () => {
   const notes = releaseNotes({ ...context, tag: 'v4.8.0' });
-  assert.ok(notes.includes(`https://github.com/${context.repository}/blob/${context.commit}/docs/screenshots/4.8.0/README.md`));
+  assert.ok(notes.includes('https://github.com/anglee0323/agy-switch/blob/v4.8.0/docs/screenshots/4.8.0/README.md'));
   assert.ok(notes.includes('https://github.com/anglee0323/agy-switch/actions/runs/37240883985'));
   assert.doesNotMatch(notes, /\]\(\.\.?\//);
 });
@@ -188,7 +188,7 @@ test('unsigned updater candidates validate for CI but cannot be published', () =
 test('the branded candidate validates the complete new package, cask and updater set', () => {
   const root = mkdtempSync(join(tmpdir(), 'agy-brand-release-test-'));
   try {
-    const version = '4.9.0', brand = desktopBrand(version), directory = join(root, 'assets'), source = join(root, 'source');
+    const version = '4.9.1', brand = desktopBrand(version), directory = join(root, 'assets'), source = join(root, 'source');
     mkdirSync(directory);
     const bin = join(source, `${brand.app}.app/Contents/MacOS`);
     mkdirSync(bin, { recursive: true }); writeFileSync(join(bin, brand.executable), 'synthetic app');
@@ -203,6 +203,22 @@ test('the branded candidate validates the complete new package, cask and updater
     const verified = verifyAssets(directory, { ...context, tag: `v${version}`, candidate: true });
     assert.equal(verified.length, 13);
     assert.ok(verified.every(name => name === 'latest.json' || name.startsWith('agy-switch')));
+    const publicNames = publicAssetNames(version, verified);
+    assert.equal(publicNames.length, 7);
+    assert.ok(publicNames.includes('latest.json'));
+    assert.ok(!publicNames.some(name => /\.(rb|sig|sha256)$/.test(name)));
+    const published = writeManifest(directory, { ...context, tag: `v${version}`, candidate: true });
+    assert.equal(published.length, 8);
+    assert.equal(JSON.parse(readFileSync(join(directory, 'release-manifest.json'))).files.length, 7);
+    assert.deepEqual(publicAssetNames('4.9.0', verified), verified);
     assert.throws(() => verifyAssets(directory, { ...context, tag: `v${version}`, candidate: false }));
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('4.9.1 notes feature the three desktop downloads and manifest without extra sidecar links', () => {
+  const notes = releaseNotes({ ...context, tag: 'v4.9.1' });
+  assert.match(notes, /AntiGravity Switch 4\.9\.1/);
+  assert.match(notes, /Download installer/);
+  assert.match(notes, /release-manifest\.json/);
+  assert.doesNotMatch(notes, /\.sha256\)|\.sig\)|agy-switch\.rb\)/);
 });

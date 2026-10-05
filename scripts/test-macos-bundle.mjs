@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, cpSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, cpSync, renameSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -76,3 +76,17 @@ test('a complete signature carrying App Sandbox or unexpected permissions is rej
     assert.throws(() => verifyMacosBundle(app, '4.7.7'), /Sandbox|Unexpected signed entitlements/);
   });
 });
+
+test('4.9.1 requires both full display names even when the bundle signature is valid', { skip: !mac }, () => fixture(({ app, sign }) => {
+  renameSync(join(app, 'Contents/MacOS/antigravity-tools'), join(app, 'Contents/MacOS/agy-switch-desktop'));
+  const plist = join(app, 'Contents/Info.plist');
+  const xml = readFileSync(plist, 'utf8').replace('<string>antigravity-tools</string>', '<string>agy-switch-desktop</string>')
+    .replace('<string>4.7.7</string>', '<string>4.9.1</string>')
+    .replace('</dict>', '<key>CFBundleName</key><string>AntiGravity Switch</string><key>CFBundleDisplayName</key><string>AntiGravity Switch</string></dict>');
+  writeFileSync(plist, xml); sign();
+  assert.equal(verifyMacosBundle(app, '4.9.1').bundle_signature_integrity, 'verified');
+  for (const key of ['CFBundleName', 'CFBundleDisplayName']) {
+    writeFileSync(plist, xml.replace(`<key>${key}</key><string>AntiGravity Switch</string>`, `<key>${key}</key><string>agy-switch</string>`));
+    sign(); assert.throws(() => verifyMacosBundle(app, '4.9.1'), /display name mismatch/);
+  }
+}));

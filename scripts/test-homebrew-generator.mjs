@@ -42,3 +42,17 @@ test('rejects mismatched versions, insecure/injected URLs and wrong archive cont
   writeFileSync(archive, 'not a ZIP');
   assert.throws(() => renderCask({ archive, url, version, template }));
 }));
+
+test('the 4.9.1 cask installs the full display-name bundle and keeps the management command', () => {
+  const root = mkdtempSync(join(tmpdir(), 'agy-full-name-brew-'));
+  try {
+    const bin = join(root, 'AntiGravity Switch.app/Contents/MacOS');
+    mkdirSync(bin, { recursive: true }); writeFileSync(join(bin, 'agy-switch-desktop'), 'fixture');
+    const archive = join(root, 'agy-switch-4.9.1-macos-arm64.zip');
+    assert.equal(spawnSync('zip', ['-qr', archive, 'AntiGravity Switch.app'], { cwd: root }).status, 0);
+    const cask = renderCask({ archive, version: '4.9.1', url: 'https://example.invalid/agy-switch-4.9.1-macos-arm64.zip', template });
+    assert.ok(cask.includes('app "AntiGravity Switch.app"'));
+    assert.ok(cask.includes('AntiGravity Switch.app/Contents/MacOS/agy-switch-desktop'));
+    assert.ok(cask.includes('target: "agy-switch"'));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

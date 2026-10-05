@@ -2,9 +2,10 @@ import { execFileSync, execSync } from 'node:child_process';
 import { copyFileSync, chmodSync, existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { homedir } from 'node:os';
 import { verifyMacosBundle } from './verify-macos-bundle.mjs';
 
-const DEFAULT_APP_PATH = '/Users/wallanceleon/Desktop/agy-switch (最新打磨版).app';
+const DEFAULT_APP_PATH = join(homedir(), 'Applications', 'AntiGravity Switch.app');
 const BUNDLE_ID = 'com.lbjlaq.antigravity-tools-lite';
 
 function isAppRunning(appPath) {

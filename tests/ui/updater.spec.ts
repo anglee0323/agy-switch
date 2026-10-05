@@ -42,3 +42,36 @@ for (const language of ['zh', 'en']) test(`update prompt and manual check are lo
     expect(await page.locator('main').innerText()).not.toContain('raw backend');
     expect((await page.evaluate(()=>(window as any).__updateFixture.calls)).filter((c:string)=>c==='download_and_install_update')).toHaveLength(1);
 });
+
+for (const enabled of [true, false]) test(`startup check respects the saved preference (${enabled})`, async ({ page }) => {
+    await page.clock.install();
+    const override = (startup: boolean) => {
+        const w = window as any, original = w.__TAURI_INTERNALS__.invoke;
+        w.__startupChecks = 0;
+        w.__TAURI_INTERNALS__.invoke = async (command: string, args: any) => {
+            if (command === 'load_config') return { ...await original(command, args), check_updates_on_startup: startup };
+            if (command === 'check_for_updates') {
+                w.__startupChecks++;
+                return { current_version: '4.9.0', latest_version: 'v4.9.1', has_update: true, release_url: 'https://github.com/anglee0323/agy-switch/releases/tag/v4.9.1' };
+            }
+            return original(command, args);
+        };
+    };
+    await page.addInitScript({ content: `(${setupSettingsFixture.toString()})({language:'en'});(${override.toString()})(${enabled});` });
+    await page.goto('/settings');
+    await expect(page.getByLabel('Check for updates on startup')).toBeVisible();
+    await page.clock.fastForward(4500);
+    if (enabled) {
+        await expect(page.getByRole('dialog')).toContainText('4.9.1');
+        expect(await page.evaluate(() => (window as any).__startupChecks)).toBe(1);
+        await page.getByRole('dialog').getByRole('button', { name: 'Later', exact: true }).click();
+        await page.reload();
+        await expect(page.getByLabel('Check for updates on startup')).toBeVisible();
+        await page.clock.fastForward(4500);
+        await expect.poll(() => page.evaluate(() => (window as any).__startupChecks)).toBe(1);
+        await expect(page.getByRole('dialog')).toHaveCount(0);
+    } else {
+        expect(await page.evaluate(() => (window as any).__startupChecks)).toBe(0);
+        await expect(page.getByRole('dialog')).toHaveCount(0);
+    }
+});
