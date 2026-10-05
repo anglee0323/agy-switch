@@ -500,9 +500,7 @@ fn estimate_cost(models: &[crate::modules::native_token_stats::LocalTokenModel])
 fn period_cost(summary: &crate::modules::native_token_stats::LocalTokenUsageSummary, period: usize, total: u64, lang: Lang) -> String {
     let models = match period { 0 => &summary.by_model_today, 1 => &summary.by_model_yesterday, 2 => &summary.by_model_3_days, 3 => &summary.by_model_7_days, _ => &summary.by_model };
     if models.is_empty() && total > 0 { return format_cost(None, lang); }
-    let (cost, missing) = estimate_cost(models);
-    let value = format_cost(cost, lang);
-    if cost.is_some() && missing > 0 { match lang { Lang::Zh => format!("{}（部分）", value), Lang::En => format!("{} (partial)", value) } } else { value }
+    format_cost(estimate_cost(models).0, lang)
 }
 fn format_cost(usd: Option<f64>, lang: Lang) -> String {
     let Some(usd) = usd else { return match lang { Lang::Zh => "未计价".into(), Lang::En => "Unpriced".into() }; };
