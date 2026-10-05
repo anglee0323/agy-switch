@@ -19,7 +19,7 @@ cargo build --locked --manifest-path src-tauri/Cargo.toml --bin agy-switch
 
 Use ↑/↓ to select, Enter/→ to enter and Esc/← to return. Number shortcuts, j/k and q remain supported. Terminal input is restored on exit. Secret entry refuses to proceed if the terminal cannot disable echo. In a pipe, bare `agy-switch` prints help. Launching the original desktop executable without arguments preserves GUI startup.
 
-Policy editing, ordering and update checks described below are **current-source additions, not included in the published v4.8.1 binaries**. Build from source to try them; no new package or release has been produced for this change.
+Policy editing, ordering and update checks described below are available from **4.9.0**. Older v4.8.1 binaries do not include them. Check `agy-switch --version` before using these commands.
 
 ## Commands
 

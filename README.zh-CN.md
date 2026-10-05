@@ -1,4 +1,4 @@
-# agy-switch
+# AntiGravity Switch
 
 <img src="branding/app-icon.svg" width="88" height="88" alt="agy-switch 应用图标">
 
@@ -18,7 +18,7 @@
 
 ## 安装
 
-**品牌更新开发中：** 4.9.0 源码已使用新名称和图标，尚未打包或发布。公开最新版仍为 4.8.1，应用和压缩包保留原来的 Tools Lite 名称。下方安装名称对应下一版；[历史下载](https://github.com/anglee0323/agy-switch/releases/tag/v4.8.1)及校验值保持原样。
+**4.9.0 发布候选版：** 应用全名为 AntiGravity Switch，仓库、安装包和命令使用 `agy-switch`，采用选定的双波图标。这一版补齐命令行策略设置、账号排序和更新检查。三端验收后发布安装包并同步 Homebrew，请在 Releases 页面确认可下载版本。历史下载的名称和校验值保持原样。
 
 从 **[GitHub Releases](https://github.com/anglee0323/agy-switch/releases/latest)** 下载对应平台的文件。桌面和命令行下载包附有 SHA-256 校验文件，更新专用包附有签名；`release-manifest.json` 记录全部附件及对应源码提交。
 

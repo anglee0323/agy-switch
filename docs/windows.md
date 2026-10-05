@@ -4,7 +4,7 @@ agy-switch ships a per-user x64 desktop installer and a separate console downloa
 
 ## Install and run
 
-The unreleased 4.9.0 source names the app `agy-switch` and the GUI executable `agy-switch-desktop.exe`. Public 4.8.1 downloads retain their original app/installer names.
+From 4.9.0, the packages name the app `agy-switch` and the GUI executable `agy-switch-desktop.exe`. Public 4.8.1 downloads retain their original app/installer names.
 
 Use the NSIS `windows-x64-setup.exe` from the release page. Choose English or Simplified Chinese in the installer. It installs the desktop executable and `agy-switch.exe` into the selected directory. The CLI can also be extracted from `agy-switch-<version>-windows-x64.zip` without installing the app.
 

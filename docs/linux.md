@@ -4,7 +4,7 @@ Linux has two entry points: a desktop app for account management and a terminal 
 
 ## Desktop installation
 
-These names apply to the unreleased 4.9.0 source. Public 4.8.1 desktop packages keep their original names and executable paths.
+These names apply from version 4.9.0. Public 4.8.1 desktop packages keep their original names and executable paths.
 
 ```sh
 sudo apt install ./agy-switch-<version>-linux-amd64.deb

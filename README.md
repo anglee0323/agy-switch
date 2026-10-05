@@ -1,4 +1,4 @@
-# agy-switch
+# AntiGravity Switch
 
 <img src="branding/app-icon.svg" width="88" height="88" alt="agy-switch app icon">
 
@@ -18,7 +18,7 @@ The desktop app and CLI share the same accounts. Linux supports desktop use as w
 
 ## Install
 
-**Brand update in development:** source version 4.9.0 uses the new name and artwork. It has not been packaged or released. The public latest release remains 4.8.1, with the original Tools Lite app and archive names. The installation names below describe the next release; [historical downloads](https://github.com/anglee0323/agy-switch/releases/tag/v4.8.1) and their checksums are unchanged.
+**4.9.0 release candidate:** AntiGravity Switch uses the `agy-switch` repository, package and command names, with the selected twin-wave icon. This version adds CLI policy editing, account ordering and update checks. Release publication and the matching Homebrew recipe follow platform acceptance; use the Releases page to confirm availability. Historical downloads retain their original names and checksums.
 
 Download the package for your platform from **[GitHub Releases](https://github.com/anglee0323/agy-switch/releases/latest)**. Desktop and CLI downloads include SHA-256 checksum files. Updater packages have cryptographic signatures, and `release-manifest.json` records every asset and its source commit.
 
@@ -93,7 +93,7 @@ agy-switch current --json         # agy-switch’s saved selection
 
 Use ↑/↓ to select, Enter/→ to enter, and Esc/← to return. Number shortcuts remain available. Interactive account management includes remarks, enable/disable, confirmed deletion and account addition. Script commands support JSON and documented exit codes. Read commands use cached local data and do not start the desktop app.
 
-Current source also adds policy configuration, account/candidate ordering and update checks to the CLI; these additions have not been packaged into a new release. Desktop preferences, update installation and background policy execution remain desktop features. [Commands, safety and exit codes](docs/cli.md)
+Version 4.9.0 adds policy configuration, account/candidate ordering and update checks to the CLI. Desktop preferences, update installation and background policy execution remain desktop features. [Commands, safety and exit codes](docs/cli.md)
 
 ## Screenshots and validation
 
