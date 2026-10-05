@@ -421,6 +421,7 @@
     "downloading": "Downloading",
     "installing": "Installing",
     "install_failed": "The update did not complete. Try again later.",
+    "mac_manual_required": "This Mac installation is not Developer ID signed, so the update cannot install automatically. The release page has opened in your browser; your current version is unchanged.",
     "mac_trust_required": "The update was downloaded and verified, but did not pass macOS app trust checks. Your current version is unchanged. This release cannot be installed automatically yet.",
     "restore_failed": "Installation did not complete. The previous app backup was preserved and must be restored before restarting."
   }

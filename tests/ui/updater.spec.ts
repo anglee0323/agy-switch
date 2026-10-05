@@ -75,3 +75,32 @@ for (const enabled of [true, false]) test(`startup check respects the saved pref
         await expect(page.getByRole('dialog')).toHaveCount(0);
     }
 });
+
+for (const language of ['zh', 'en']) test(`manual-required Mac installs explain the browser redirect without downloading (${language})`, async ({ page }) => {
+    const override = () => {
+        const w = window as any, original = w.__TAURI_INTERNALS__.invoke;
+        w.__updateFixture = { calls: [], progressEvents: 0 };
+        w.__TAURI_INTERNALS__.invoke = async (command: string, args: any) => {
+            w.__updateFixture.calls.push(command);
+            if (command === 'check_for_updates')
+                return { current_version: '4.9.0', latest_version: 'v4.9.1', has_update: true, release_url: 'https://github.com/anglee0323/agy-switch/releases/tag/v4.9.1' };
+            if (command === 'get_running_version') return '4.9.0';
+            if (command === 'download_and_install_update') {
+                // The Rust pre-download gate fails before any progress is reported.
+                throw 'update_mac_manual_required';
+            }
+            return original(command, args);
+        };
+    };
+    await page.addInitScript({ content: `(${setupSettingsFixture.toString()})(${JSON.stringify({ language })});(${override.toString()})();` });
+    await page.goto('/settings');
+    await page.getByRole('button', { name: language === 'zh' ? '检查更新' : 'Check for updates', exact: true }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: language === 'zh' ? '下载并安装' : 'Download and install' }).click();
+    await expect(dialog.getByRole('alert')).toContainText(language === 'zh' ? '已为你打开浏览器' : 'opened in your browser');
+    await expect(dialog.getByRole('status')).toHaveCount(0);
+    expect(await dialog.innerText()).not.toContain('update_mac');
+    await page.keyboard.press('Escape');
+    await expect(dialog).toHaveCount(0);
+});

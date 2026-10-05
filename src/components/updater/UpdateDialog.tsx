@@ -16,7 +16,7 @@ export default function UpdateDialog() {
         if (installing.current) return;
         installing.current = true; setBusy(true); setError(null); setProgress(null);
         try { await downloadAndInstallUpdate(updateInfo!.latest_version, setProgress); }
-        catch (failure) { setProgress(null); setError(String(failure).includes('update_mac_trust_required') ? 'updater.mac_trust_required' : String(failure).includes('update_restore_failed') ? 'updater.restore_failed' : 'updater.install_failed'); }
+        catch (failure) { setProgress(null); setError(String(failure).includes('update_mac_manual_required') ? 'updater.mac_manual_required' : String(failure).includes('update_mac_trust_required') ? 'updater.mac_trust_required' : String(failure).includes('update_restore_failed') ? 'updater.restore_failed' : 'updater.install_failed'); }
         finally { installing.current = false; setBusy(false); }
     };
     useEffect(() => { if (!isDialogOpen) return; const previous = document.activeElement as HTMLElement; setError(null); close.current?.focus(); return () => previous?.focus(); }, [isDialogOpen]);

@@ -421,6 +421,7 @@
     "downloading": "正在下载",
     "installing": "正在安装",
     "install_failed": "更新未完成，请稍后重试。",
+    "mac_manual_required": "当前 Mac 安装未做 Apple 开发者签名，无法自动安装更新。已为你打开浏览器中的发布页；当前版本保持不变。",
     "mac_trust_required": "更新包已下载并校验，但未通过 macOS 的应用信任检查。当前版本保持不变；此版本暂时无法自动安装。",
     "restore_failed": "安装未完成，原应用备份已保留，需要恢复后再启动。"
   }
