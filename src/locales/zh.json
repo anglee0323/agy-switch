@@ -349,7 +349,7 @@
       "unsupported_client": "当前客户端版本暂不支持此安全换号方式",
       "state_unavailable": "无法读取或保存换号状态，暂不换号"
     },
-    "strategy_title": "候选策略",
+    "strategy_title": "账号选择顺序",
     "strategy_round_robin": "循环轮换",
     "strategy_round_robin_desc": "从当前账号的下一位开始，依次寻找可用账号。",
     "strategy_priority": "优先顺序",

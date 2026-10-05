@@ -54,6 +54,20 @@ async function enable(page: any, stop = false) {
     await expect(page.getByText('客户端运行中，等待关闭').first()).toBeVisible();
 }
 
+test('switch timing and account selection order are separate labelled choices', async ({ page }, testInfo) => {
+    const timing = page.getByRole('group', { name: '切换时机', exact: true });
+    const order = page.getByRole('group', { name: '账号选择顺序', exact: true });
+    await expect(timing).toBeVisible(); await expect(order).toBeVisible();
+    await expect(timing.getByRole('radio')).toHaveCount(2);
+    await expect(order.getByRole('radio')).toHaveCount(2);
+    await order.getByRole('radio').nth(1).check();
+    await expect(timing.getByRole('radio').first()).toBeChecked();
+    await expect(order.getByRole('radio').nth(1)).toBeChecked();
+    await page.screenshot({ path: testInfo.outputPath('policy-dimensions.png'), fullPage: true });
+    await page.setViewportSize({ width: 760, height: 1000 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
 test('default off, explicit configuration, real command contract, cancellation', async ({ page }, testInfo) => {
     await expect(page.getByLabel('启用智能切换策略')).not.toBeChecked();
     await expect(page.getByRole('button', { name: '保存设置', exact: true })).toHaveCount(0);

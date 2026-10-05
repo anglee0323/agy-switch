@@ -269,36 +269,42 @@ export function AutoSwitchSettings() {
                             {t('auto_switch.enable')}
                         </label>
 
-                        <div className="grid gap-3 md:grid-cols-2" role="group" aria-label={t('auto_switch.mode')}>
-                            {(['wait', 'stop'] as const).map(mode => (
-                                <label
-                                    key={mode}
-                                    className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${draft.mode === mode ? 'border-blue-400 bg-blue-50/60 dark:border-blue-500/40 dark:bg-blue-500/10' : 'border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600'}`}
-                                >
-                                    <input
-                                        type="radio"
-                                        name="auto-switch-mode"
-                                        checked={draft.mode === mode}
-                                        disabled={busy}
-                                        onChange={() => patchAndSave({ mode })}
-                                        className="mt-0.5 h-4 w-4 shrink-0 accent-blue-600"
-                                    />
-                                    <span>
-                                        <span className="block text-sm font-medium text-slate-900 dark:text-slate-100">{t(`auto_switch.mode_${mode}`)}</span>
-                                        <span className="mt-1 block text-xs leading-relaxed text-slate-500 dark:text-slate-400">{t(`auto_switch.${mode}_instructions`)}</span>
-                                    </span>
-                                </label>
-                            ))}
-                        </div>
+                        <fieldset>
+                            <legend className="mb-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200">{t('auto_switch.mode')}</legend>
+                            <div className="grid gap-3 md:grid-cols-2">
+                                {(['wait', 'stop'] as const).map(mode => (
+                                    <label
+                                        key={mode}
+                                        className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${draft.mode === mode ? 'border-blue-400 bg-blue-50/60 dark:border-blue-500/40 dark:bg-blue-500/10' : 'border-slate-200 hover:border-slate-300 dark:border-slate-700 dark:hover:border-slate-600'}`}
+                                    >
+                                        <input
+                                            type="radio"
+                                            name="auto-switch-mode"
+                                            checked={draft.mode === mode}
+                                            disabled={busy}
+                                            onChange={() => patchAndSave({ mode })}
+                                            className="mt-0.5 h-4 w-4 shrink-0 accent-blue-600"
+                                        />
+                                        <span>
+                                            <span className="block text-sm font-medium text-slate-900 dark:text-slate-100">{t(`auto_switch.mode_${mode}`)}</span>
+                                            <span className="mt-1 block text-xs leading-relaxed text-slate-500 dark:text-slate-400">{t(`auto_switch.${mode}_instructions`)}</span>
+                                        </span>
+                                    </label>
+                                ))}
+                            </div>
+                        </fieldset>
 
-                        <div className="my-5 grid gap-3 md:grid-cols-2" role="group" aria-label={t('auto_switch.strategy_title')}>
-                            {(['priority', 'round_robin'] as const).map(strategy => (
-                                <label key={strategy} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors ${(draft.strategy || 'priority') === strategy ? 'border-blue-400 bg-blue-50/60 dark:bg-blue-500/10' : 'border-slate-200 dark:border-slate-700'}`}>
-                                    <input type="radio" name="auto-switch-strategy" checked={(draft.strategy || 'priority') === strategy} disabled={busy} onChange={() => patchAndSave({ strategy })} className="mt-0.5 h-4 w-4 accent-blue-600" />
-                                    <span><span className="block text-sm font-medium">{t(`auto_switch.strategy_${strategy}`)}</span><span className="mt-1 block text-xs leading-relaxed text-slate-500 dark:text-slate-400">{t(`auto_switch.strategy_${strategy}_desc`)}</span></span>
-                                </label>
-                            ))}
-                        </div>
+                        <fieldset className="mt-5">
+                            <legend className="mb-2.5 text-sm font-semibold text-slate-700 dark:text-slate-200">{t('auto_switch.strategy_title')}</legend>
+                            <div className="grid gap-1 rounded-xl bg-slate-100/70 p-1.5 md:grid-cols-2 dark:bg-slate-800/60">
+                                {(['priority', 'round_robin'] as const).map(strategy => (
+                                    <label key={strategy} className={`flex cursor-pointer items-start gap-3 rounded-lg p-3 transition-colors ${(draft.strategy || 'priority') === strategy ? 'bg-white shadow-xs dark:bg-slate-700/70' : 'hover:bg-white/50 dark:hover:bg-slate-700/30'}`}>
+                                        <input type="radio" name="auto-switch-strategy" checked={(draft.strategy || 'priority') === strategy} disabled={busy} onChange={() => patchAndSave({ strategy })} className="mt-0.5 h-4 w-4 accent-blue-600" />
+                                        <span><span className="block text-sm font-medium">{t(`auto_switch.strategy_${strategy}`)}</span><span className="mt-1 block text-xs leading-relaxed text-slate-500 dark:text-slate-400">{t(`auto_switch.strategy_${strategy}_desc`)}</span></span>
+                                    </label>
+                                ))}
+                            </div>
+                        </fieldset>
                         <div className="my-5 grid gap-4 sm:grid-cols-2">
                             <div className="space-y-1.5">
                                 <label htmlFor="auto-switch-target" className="block text-xs font-semibold text-gray-700 dark:text-gray-300">
