@@ -1,9 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, BarChart3, CalendarDays, Cpu, Database, DollarSign, LayoutDashboard, MessageSquare, PieChart, RefreshCw } from 'lucide-react';
+import { Fragment, type ReactElement, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Activity, BarChart3, CalendarDays, Cpu, Database, DollarSign, Gauge, Layers3, LayoutDashboard, MessageSquare, PieChart, RefreshCw, Timer, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { request as invoke } from '../utils/request';
 import { showToast } from '../components/common/ToastContainer';
 import { estimateApiCost, findModelPricing } from '../utils/modelPricing';
+import { useConfigStore } from '../stores/useConfigStore';
+import { dashboardCards, dashboardGridClass, DEFAULT_MENU_BAR_PREFERENCES, type DashboardCardId } from '../types/config';
+import { dashboardOverview } from '../utils/dashboardOverview';
+import { averageRequestInput } from '../utils/dashboardUsage';
+import { quotaDisplay, quotaTone } from '../utils/menuBarOverview';
+import { useDashboardOverview } from '../hooks/useDashboardOverview';
 
 interface LocalTokenTotals {
     input_tokens: number;
@@ -26,6 +32,14 @@ interface LocalTokenModel extends LocalTokenTotals {
 }
 
 interface LocalTokenUsageSummary {
+    recent_performance?: {
+        model_count: number;
+        source_count: number;
+        sample_count: number;
+        first_text_seconds: number;
+        body_tokens_per_second: number;
+        last_activity: number;
+    } | null;
     today: LocalTokenTotals;
     yesterday: LocalTokenTotals;
     last_3_days: LocalTokenTotals;
@@ -242,48 +256,67 @@ function ModelCostDonut({
 }
 
 function TokenCard({
+    cardId,
     label,
     value,
     color,
     icon: Icon,
     displayValue,
+    unit,
     detail,
+    hint,
     locale,
+    children,
 }: {
+    cardId: DashboardCardId;
     label: string;
     value: number;
     color: string;
     icon: typeof Cpu;
     displayValue?: string;
-    detail?: string;
+    unit?: string;
+    detail?: string | null;
+    hint?: string;
     locale: string;
+    children?: ReactNode;
 }) {
     return (
-        <div className="relative group rounded-2xl border border-gray-100 bg-white p-3 shadow-sm transition-all hover:border-gray-200 hover:shadow-md dark:border-base-200 dark:bg-base-100 hover:z-30">
+        <div data-dashboard-card={cardId} title={detail === null ? hint : undefined} className="relative min-w-0 rounded-2xl border border-gray-100 bg-white p-3 shadow-sm transition-all hover:border-gray-200 hover:shadow-md dark:border-base-200 dark:bg-base-100">
             <div className="mb-2 flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                    <span className={`rounded-lg p-1.5 ${color}`}>
+                <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium leading-4 text-gray-600 dark:text-gray-300">
+                    <span className={`shrink-0 rounded-lg p-1.5 ${color}`}>
                         <Icon className="h-3.5 w-3.5" />
                     </span>
                     {label}
                 </div>
             </div>
-            <div className="text-xl font-bold tracking-tight text-gray-900 dark:text-base-content" title={displayValue || formatTokens(value, locale)}>
+            {children ?? <div className="break-words text-xl font-bold tracking-tight text-gray-900 dark:text-base-content" title={`${displayValue || formatTokens(value, locale)}${unit ? ` ${unit}` : ''}`}>
                 {displayValue || compactTokens(value, locale)}
-            </div>
-            <div
-                className="mt-0.5 truncate text-[10px] text-gray-400 dark:text-gray-500"
-                title={detail || `${formatTokens(value, locale)} Token`}
+                {unit && <> <span className="inline-block text-sm font-medium text-gray-500 dark:text-gray-400">{unit}</span></>}
+            </div>}
+            {detail !== null && <div
+                data-card-detail
+                className="mt-1 break-words text-xs leading-5 text-gray-500 dark:text-gray-400"
+                title={hint || detail || `${formatTokens(value, locale)} Token`}
             >
                 {detail || `${formatTokens(value, locale)} Token`}
-            </div>
+            </div>}
         </div>
     );
 }
 
 function Dashboard() {
+    const config = useConfigStore(state => state.config);
+    const visibleCards = dashboardCards(config?.dashboard?.cards);
+    const accountData = useDashboardOverview(Boolean(config) && visibleCards.some(id => ['account_status', 'aggregate_quota'].includes(id)));
     const { t, i18n } = useTranslation();
     const locale = i18n.resolvedLanguage === 'zh' ? 'zh-CN' : 'en-US';
+    const quotaPreferences = useMemo(() => ({ ...DEFAULT_MENU_BAR_PREFERENCES, ...config?.menu_bar }), [config?.menu_bar]);
+    const overview = useMemo(() => accountData.snapshot ? dashboardOverview(accountData.snapshot, quotaPreferences, accountData.now,
+        config?.refresh_interval, accountData.reserve ?? config?.quota_protection.threshold_percentage ?? 10) : null,
+    [accountData.snapshot, accountData.now, accountData.reserve, quotaPreferences, config?.refresh_interval, config?.quota_protection.threshold_percentage]);
+    const quotaScope = t(`local_dashboard.quota_scope_${quotaPreferences.quota_scope}`);
+    const overviewUnavailable = t(accountData.failed ? 'local_dashboard.overview_failed' : accountData.loading ? 'local_dashboard.overview_loading' : 'local_dashboard.overview_unknown');
     const rangeLabels: Record<RangeKey, string> = {
         today: t('local_dashboard.today'),
         yesterday: t('local_dashboard.yesterday'),
@@ -414,6 +447,7 @@ function Dashboard() {
         const denominator = totals.input_tokens + totals.cached_tokens;
         return denominator > 0 ? (totals.cached_tokens / denominator) * 100 : 0;
     }, [totals]);
+    const averageInput = averageRequestInput(totals);
 
     const apiCost = useMemo(() => estimateApiCost(modelsForRange, pricing), [modelsForRange, pricing]);
 
@@ -480,6 +514,16 @@ function Dashboard() {
             : t('local_dashboard.pricing_google')
         : t('local_dashboard.pricing_fallback');
 
+    const performance = usage?.recent_performance;
+    const performanceDetail = performance
+        ? t('local_dashboard.recent_performance', {
+            count: performance.sample_count,
+        })
+        : t('local_dashboard.performance_empty');
+    const performanceScope = performance ? t('local_dashboard.performance_scope', {
+        models: performance.model_count, sources: performance.source_count,
+    }) : '';
+
     // Scan freshness is intentionally not rendered inline: the toolbar row only fits next to
     // the page title when this string stays out of the layout. It is exposed on the refresh button.
     const scanStatus = loading
@@ -488,8 +532,114 @@ function Dashboard() {
             ? `${t('local_dashboard.scanned_at', { time: formatTime(lastUpdatedAt, locale) })}${usage?.last_activity ? t('local_dashboard.data_through', { time: formatTime(usage.last_activity * 1000, locale) }) : ''}`
             : t('local_dashboard.waiting_scan');
 
+    const cards: Record<DashboardCardId, ReactElement> = {
+        total_tokens: (<TokenCard cardId="total_tokens" label={t('local_dashboard.total_tokens', { range: rangeLabels[range] })} value={totals.total_tokens} hint={t('local_dashboard.total_tokens_hint')} color="bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-300" icon={BarChart3} locale={locale} />),
+        input_tokens: (<TokenCard cardId="input_tokens" label={t('local_dashboard.input_tokens')} value={totals.input_tokens} hint={t('local_dashboard.input_tokens_hint')} color="bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-300" icon={MessageSquare} locale={locale} />),
+        output_tokens: (<TokenCard cardId="output_tokens" label={t('local_dashboard.output_tokens')} value={totals.output_tokens} hint={t('local_dashboard.output_tokens_hint')} color="bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-300" icon={Cpu} locale={locale} />),
+        cache_hit_rate: (<TokenCard cardId="cache_hit_rate"
+            label={t('local_dashboard.cache_hit_rate')}
+            value={cacheHitRate}
+            displayValue={`${cacheHitRate.toFixed(1)}%`}
+            detail={t('local_dashboard.cache_hit_rate_detail')}
+            hint={t('local_dashboard.cache_hit_rate_hint')}
+            color="bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-300"
+            icon={Database}
+            locale={locale}
+        />),
+        api_cost: (<TokenCard cardId="api_cost"
+            label={t('local_dashboard.api_cost')}
+            value={apiCost.usd}
+            displayValue={apiCost.unpricedModels && !apiCost.pricedModels ? t('local_dashboard.unpriced') : formatUsd(apiCost.usd)}
+            detail={t('local_dashboard.api_requests', {
+                requestCount: formatTokens(totals.request_count, locale),
+                pricing: pricingLabel,
+                unpriced: apiCost.unpricedModels ? t('local_dashboard.pricing_unavailable') : '',
+            })}
+            hint={t('local_dashboard.api_cost_hint')}
+            color="bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-300"
+            icon={DollarSign}
+            locale={locale}
+        />),
+        first_text_latency: (<TokenCard cardId="first_text_latency"
+            label={t('local_dashboard.first_text_latency')}
+            value={performance?.first_text_seconds ?? 0}
+            displayValue={performance ? t('local_dashboard.seconds_value', { value: performance.first_text_seconds.toLocaleString(locale, { maximumFractionDigits: 2 }) }) : '—'}
+            detail={performanceDetail}
+            hint={`${performanceDetail}\n${performanceScope}\n${t('local_dashboard.first_text_hint')}`}
+            color="bg-cyan-50 text-cyan-600 dark:bg-cyan-900/20 dark:text-cyan-300"
+            icon={Timer}
+            locale={locale}
+        />),
+        body_speed: (<TokenCard cardId="body_speed"
+            label={t('local_dashboard.body_speed')}
+            value={performance?.body_tokens_per_second ?? 0}
+            displayValue={performance ? performance.body_tokens_per_second.toLocaleString(locale, { maximumFractionDigits: 1 }) : '—'}
+            unit={performance ? 'token/s' : undefined}
+            detail={performanceDetail}
+            hint={`${performanceDetail}\n${performanceScope}\n${t('local_dashboard.body_speed_hint')}`}
+            color="bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-300"
+            icon={Gauge}
+            locale={locale}
+        />),
+        account_status: (<TokenCard cardId="account_status"
+            label={t('local_dashboard.account_status')}
+            value={overview?.accounts.total ?? 0}
+            displayValue={overview ? formatTokens(overview.accounts.total, locale) : '—'}
+            unit={overview ? t('local_dashboard.accounts_unit') : undefined}
+            detail={overview ? t('local_dashboard.account_status_detail', overview.accounts) : overviewUnavailable}
+            hint={t('local_dashboard.account_status_hint', { scope: quotaScope, threshold: overview?.threshold ?? 10 })}
+            color="bg-teal-50 text-teal-600 dark:bg-teal-900/20 dark:text-teal-300"
+            icon={Users}
+            locale={locale}
+        />),
+        aggregate_quota: (<TokenCard cardId="aggregate_quota"
+            label={t('local_dashboard.aggregate_quota')}
+            value={0}
+            detail={null}
+            hint={`${t('local_dashboard.quota_scope_hint', { scope: quotaScope })}\n${t('local_dashboard.quota_used_hint')}\n${overview ? t('local_dashboard.quota_coverage', {
+                session: overview.windows['5h'].covered, weekly: overview.windows.weekly.covered, total: overview.windows['5h'].total,
+            }) : overviewUnavailable}`}
+            color="bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-300"
+            icon={PieChart}
+            locale={locale}
+        >
+            <div className="space-y-1">
+                {(['5h', 'weekly'] as const).map(window => {
+                    const used = overview?.windows[window].used ?? null;
+                    const label = t(`local_dashboard.quota_used_${window}`);
+                    const tone = quotaTone(used === null ? null : 100 - used, quotaPreferences);
+                    const fill = { healthy: 'bg-emerald-500', warning: 'bg-amber-500', critical: 'bg-red-500', unknown: '' }[tone];
+                    return <div key={window} data-quota-window={window}>
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+                            <span className="text-xs leading-4 text-gray-600 dark:text-gray-300">{label}</span>
+                            <span className="text-sm font-semibold leading-4 tabular-nums text-gray-900 dark:text-base-content">{quotaDisplay(used)}</span>
+                        </div>
+                        <div className="mt-1 h-1 overflow-hidden rounded-full bg-gray-100 text-gray-400 dark:bg-base-300 dark:text-gray-500"
+                            role={used === null ? 'img' : 'meter'} aria-label={used === null ? `${label}: ${overviewUnavailable}` : label}
+                            aria-valuemin={used === null ? undefined : 0} aria-valuemax={used === null ? undefined : 100}
+                            aria-valuenow={used ?? undefined} aria-valuetext={used === null ? undefined : quotaDisplay(used)}>
+                            {used === null ? <span className="block h-full opacity-30" style={{ backgroundImage: 'repeating-linear-gradient(135deg, transparent 0px, transparent 3px, currentColor 3px, currentColor 4px)' }} />
+                                : <span className={`block h-full rounded-full ${fill}`} style={{ width: `${used}%` }} />}
+                        </div>
+                    </div>;
+                })}
+            </div>
+        </TokenCard>),
+        average_input: (<TokenCard cardId="average_input"
+            label={t('local_dashboard.average_input')}
+            value={averageInput ?? 0}
+            displayValue={averageInput === null ? '—' : undefined}
+            unit={averageInput === null ? undefined : 'Token'}
+            detail={averageInput === null ? t('local_dashboard.average_input_empty') : t('local_dashboard.average_input_detail', { requestCount: formatTokens(totals.request_count, locale) })}
+            hint={t('local_dashboard.average_input_hint')}
+            color="bg-violet-50 text-violet-600 dark:bg-violet-900/20 dark:text-violet-300"
+            icon={Layers3}
+            locale={locale}
+        />),
+    };
+
     return (
-        <div className="h-full w-full overflow-y-auto lg:overflow-hidden">
+        <div className="h-full w-full overflow-y-auto">
             <div className="mx-auto flex min-h-full max-w-7xl flex-col gap-2 p-3 lg:h-full lg:min-h-0 lg:p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="min-w-0">
@@ -521,7 +671,7 @@ function Dashboard() {
                             ))}
                         </div>
                         <button
-                            onClick={() => fetchUsage(true)}
+                            onClick={() => { void fetchUsage(true); void accountData.refresh(); }}
                             disabled={loading}
                             title={scanStatus}
                             className="flex items-center gap-1.5 rounded-xl bg-blue-500 px-2.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
@@ -544,33 +694,9 @@ function Dashboard() {
                     </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
-                    <TokenCard label={t('local_dashboard.total_tokens', { range: rangeLabels[range] })} value={totals.total_tokens} color="bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-300" icon={BarChart3} locale={locale} />
-                    <TokenCard label={t('local_dashboard.input_tokens')} value={totals.input_tokens} color="bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-300" icon={MessageSquare} locale={locale} />
-                    <TokenCard label={t('local_dashboard.output_tokens')} value={totals.output_tokens} color="bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-300" icon={Cpu} locale={locale} />
-                    <TokenCard
-                        label={t('local_dashboard.cache_hit_rate')}
-                        value={cacheHitRate}
-                        displayValue={`${cacheHitRate.toFixed(1)}%`}
-                        detail={t('local_dashboard.cache_hit_rate_detail')}
-                        color="bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-300"
-                        icon={Database}
-                        locale={locale}
-                    />
-                    <TokenCard
-                        label={t('local_dashboard.api_cost')}
-                        value={apiCost.usd}
-                        displayValue={apiCost.unpricedModels && !apiCost.pricedModels ? t('local_dashboard.unpriced') : formatUsd(apiCost.usd)}
-                        detail={t('local_dashboard.api_requests', {
-                            requestCount: formatTokens(totals.request_count, locale),
-                            pricing: pricingLabel,
-                            unpriced: apiCost.unpricedModels ? t('local_dashboard.pricing_unavailable') : '',
-                        })}
-                        color="bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-300"
-                        icon={DollarSign}
-                        locale={locale}
-                    />
-                </div>
+                {visibleCards.length > 0 && <div className={`grid auto-rows-fr shrink-0 gap-2 ${dashboardGridClass(visibleCards.length)}`} data-dashboard-cards>
+                    {visibleCards.map(id => <Fragment key={id}>{cards[id]}</Fragment>)}
+                </div>}
 
                 <div className="grid shrink-0 gap-2 lg:h-[176px] lg:grid-cols-[1.35fr_1fr]">
                     <section className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm dark:border-base-200 dark:bg-base-100 lg:flex lg:min-h-0 lg:flex-col">
@@ -759,7 +885,7 @@ function Dashboard() {
                     </section>
                 </div>
 
-                <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-base-200 dark:bg-base-100 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+                <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-base-200 dark:bg-base-100 lg:flex lg:min-h-[160px] lg:flex-1 lg:flex-col">
                     <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-2 dark:border-base-200">
                         <div>
                             <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-base-content">

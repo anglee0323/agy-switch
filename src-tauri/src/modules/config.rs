@@ -8,7 +8,7 @@ use crate::models::AppConfig;
 
 const CONFIG_FILE: &str = "gui_config.json";
 // All in-process configuration reads and writes share one lock. In particular,
-// stale whole-settings snapshots preserve OS-backed desktop preferences.
+// stale whole-settings snapshots preserve separately managed preferences.
 static CONFIG_LOCK: Mutex<()> = Mutex::new(());
 
 fn lock_config() -> Result<MutexGuard<'static, ()>, String> {
@@ -26,7 +26,10 @@ fn read_config_unlocked(path: &Path) -> Result<Option<AppConfig>, String> {
         Err(error) => return Err(format!("failed_to_read_config_file: {error}")),
     };
     serde_json::from_str(&content)
-        .map(Some)
+        .map(|mut config: AppConfig| {
+            config.dashboard.normalize();
+            Some(config)
+        })
         .map_err(|error| format!("failed_to_parse_config_file: {error}"))
 }
 
@@ -51,11 +54,12 @@ fn load_config_at(path: &Path) -> Result<AppConfig, String> {
 fn save_config_at(path: &Path, config: &AppConfig) -> Result<(), String> {
     let _guard = lock_config()?;
     let mut next = config.clone();
-    // Only the dedicated setter may change desktop preferences. Ordinary
+    // Dedicated setters manage desktop, menu and dashboard preferences. Ordinary
     // settings saves preserve current disk values if their UI snapshot is stale.
     let current = read_config_unlocked(path)?.unwrap_or_default();
     next.desktop = current.desktop;
     next.menu_bar = current.menu_bar;
+    next.dashboard = current.dashboard;
     write_config_unlocked(path, &next)
 }
 
@@ -72,7 +76,7 @@ pub fn load_app_config() -> Result<AppConfig, String> {
 }
 
 /// Save ordinary application settings atomically, preserving the separately
-/// managed desktop preferences from current disk configuration.
+/// managed desktop, menu and dashboard preferences from disk configuration.
 pub fn save_app_config(config: &AppConfig) -> Result<(), String> {
     save_config_at(&get_data_dir()?.join(CONFIG_FILE), config)
 }
@@ -97,6 +101,21 @@ fn set_menu_bar_preferences_at(
 ) -> Result<crate::models::config::MenuBarPreferences, String> {
     patch_menu_bar_preferences_at(path, crate::models::config::MenuBarPreferencesPatch { quota_scope: Some(scope), ..Default::default() })
 }
+
+pub fn set_dashboard_cards(cards: Vec<String>, order: Option<Vec<String>>) -> Result<crate::models::config::DashboardPreferences, String> {
+    set_dashboard_cards_at(&get_data_dir()?.join(CONFIG_FILE), cards, order)
+}
+
+fn set_dashboard_cards_at(path: &Path, cards: Vec<String>, order: Option<Vec<String>>) -> Result<crate::models::config::DashboardPreferences, String> {
+    let _guard = lock_config()?;
+    let mut config = read_config_unlocked(path)?.unwrap_or_default();
+    config.dashboard.cards = cards;
+    // Calls without full order retain the legacy cards-as-display-order contract.
+    config.dashboard.order = order.unwrap_or_default();
+    config.dashboard.normalize();
+    write_config_unlocked(path, &config)?;
+    Ok(config.dashboard)
+}
 fn patch_menu_bar_preferences_at(path: &Path, patch: crate::models::config::MenuBarPreferencesPatch) -> Result<crate::models::config::MenuBarPreferences, String> {
     let _guard = lock_config()?;
     let mut config = read_config_unlocked(path)?.unwrap_or_default();
@@ -108,6 +127,70 @@ fn patch_menu_bar_preferences_at(path: &Path, patch: crate::models::config::Menu
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn hidden_card_positions_survive_toggle_reload_and_stale_general_save() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join(CONFIG_FILE);
+        let mut stale = load_config_at(&path).unwrap();
+        let order = vec!["body_speed".into(), "api_cost".into(), "total_tokens".into(), "quota_reset".into(), "unknown".into(), "body_speed".into()];
+        let result = set_dashboard_cards_at(&path, vec!["total_tokens".into(), "body_speed".into()], Some(order)).unwrap();
+        assert_eq!(result.cards, ["body_speed", "total_tokens"]);
+        assert_eq!(result.order.len(), 10);
+        assert_eq!(&result.order[..4], ["body_speed", "api_cost", "total_tokens", "average_input"]);
+        stale.theme = "dark".into();
+        save_config_at(&path, &stale).unwrap();
+        assert_eq!(load_config_at(&path).unwrap().dashboard.order, result.order);
+        let enabled = set_dashboard_cards_at(&path, vec!["total_tokens".into(), "api_cost".into(), "body_speed".into()], Some(result.order.clone())).unwrap();
+        assert_eq!(enabled.cards, ["body_speed", "api_cost", "total_tokens"]);
+        assert_eq!(enabled.order, result.order);
+        let empty = set_dashboard_cards_at(&path, Vec::new(), Some(result.order.clone())).unwrap();
+        assert!(empty.cards.is_empty());
+        assert_eq!(load_config_at(&path).unwrap().dashboard.order, result.order);
+    }
+    #[test]
+    fn dashboard_selection_order_and_empty_choice_survive_stale_settings_saves() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join(CONFIG_FILE);
+        let mut stale = load_config_at(&path).unwrap();
+        let desktop = DesktopPreferences { launch_at_login: true, ..Default::default() };
+        set_desktop_preferences_at(&path, &desktop).unwrap();
+        let selected = vec!["average_input".into(), "account_status".into(), "aggregate_quota".into(), "body_speed".into(), "total_tokens".into(), "first_text_latency".into()];
+        set_dashboard_cards_at(&path, selected.clone(), None).unwrap();
+        stale.language = "en".into();
+        save_config_at(&path, &stale).unwrap();
+        let actual = load_config_at(&path).unwrap();
+        assert_eq!(actual.dashboard.cards, selected);
+        assert_eq!(actual.language, "en");
+        assert!(actual.desktop.launch_at_login);
+        set_dashboard_cards_at(&path, Vec::new(), None).unwrap();
+        save_config_at(&path, &stale).unwrap();
+        assert!(load_config_at(&path).unwrap().dashboard.cards.is_empty());
+    }
+
+    #[test]
+    fn dashboard_replaces_legacy_reset_in_place_without_adding_hidden_cards() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join(CONFIG_FILE);
+        fs::write(&path, r#"{"dashboard":{"cards":["api_cost","quota_reset","account_status","average_input"]}}"#).unwrap();
+        let migrated = load_config_at(&path).unwrap();
+        assert_eq!(migrated.dashboard.cards, ["api_cost", "average_input", "account_status"]);
+        save_config_at(&path, &migrated).unwrap();
+        assert_eq!(load_config_at(&path).unwrap().dashboard.cards, migrated.dashboard.cards);
+        set_dashboard_cards_at(&path, vec!["body_speed".into(), "api_cost".into()], None).unwrap();
+        assert_eq!(load_config_at(&path).unwrap().dashboard.cards, ["body_speed", "api_cost"]);
+    }
+
+    #[test]
+    fn dashboard_normalizes_unknown_duplicates_and_preserves_malformed_files() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join(CONFIG_FILE);
+        fs::write(&path, r#"{"dashboard":{"cards":["body_speed","unknown","body_speed","api_cost"]}}"#).unwrap();
+        assert_eq!(load_config_at(&path).unwrap().dashboard.cards, ["body_speed", "api_cost"]);
+        fs::write(&path, b"{broken configuration").unwrap();
+        let original = fs::read(&path).unwrap();
+        assert!(set_dashboard_cards_at(&path, Vec::new(), None).is_err());
+        assert_eq!(fs::read(&path).unwrap(), original);
+    }
     #[test]
     fn menu_patches_preserve_other_preferences_and_survive_stale_general_saves() {
         use crate::models::config::{MenuBarPreferencesPatch, MenuBarQuotaScope, MenuBarResetTimeDisplay};

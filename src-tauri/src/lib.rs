@@ -297,6 +297,7 @@ pub fn run() {
             commands::get_account_dashboard_snapshot,
             commands::get_menu_bar_snapshot,
             commands::set_menu_bar_preferences,
+            commands::set_dashboard_cards,
             commands::add_account,
             commands::delete_account,
             commands::delete_accounts,

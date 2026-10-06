@@ -438,7 +438,7 @@ fn web_dashboard(app: &tauri::AppHandle) -> Result<tauri::WebviewWindow, String>
         None => {
             let builder =
                 WebviewWindowBuilder::new(app, DASHBOARD_LABEL, WebviewUrl::App("menubar".into()))
-                    .title("Antigravity · Quick Dashboard")
+                    .title("Antigravity Quick Dashboard")
                     .inner_size(424.0, 680.0)
                     .resizable(false)
                     .decorations(false)

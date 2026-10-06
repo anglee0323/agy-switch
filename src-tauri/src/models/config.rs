@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppConfig {
+    pub dashboard: DashboardPreferences,
     pub desktop: DesktopPreferences,
     pub menu_bar: MenuBarPreferences,
     pub language: String,
@@ -18,6 +19,44 @@ pub struct AppConfig {
     pub antigravity_args: Option<Vec<String>>,
     pub quota_protection: QuotaProtectionConfig,
     pub pinned_quota_models: PinnedQuotaModelsConfig,
+}
+
+/// Stable card identifiers used by the homepage and settings editor.
+const DEFAULT_DASHBOARD_CARDS: [&str; 10] = [
+    "total_tokens", "input_tokens", "output_tokens", "cache_hit_rate", "api_cost",
+    "first_text_latency", "body_speed", "account_status", "aggregate_quota", "average_input",
+];
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DashboardPreferences {
+    /// Selected cards in display order. An explicit empty list hides all cards.
+    pub cards: Vec<String>,
+    /// Full option order, including hidden cards. Missing legacy order uses cards.
+    #[serde(default)]
+    pub order: Vec<String>,
+}
+impl Default for DashboardPreferences {
+    fn default() -> Self {
+        let cards: Vec<String> = DEFAULT_DASHBOARD_CARDS.iter().map(|id| (*id).to_string()).collect();
+        Self { order: cards.clone(), cards }
+    }
+}
+impl DashboardPreferences {
+    pub fn normalize(&mut self) {
+        for ids in [&mut self.cards, &mut self.order] {
+            for id in ids.iter_mut() {
+                if id == "quota_reset" { *id = "average_input".to_string(); }
+            }
+            let mut seen = std::collections::HashSet::new();
+            ids.retain(|id| DEFAULT_DASHBOARD_CARDS.contains(&id.as_str()) && seen.insert(id.clone()));
+        }
+        if self.order.is_empty() { self.order = self.cards.clone(); }
+        for id in DEFAULT_DASHBOARD_CARDS {
+            if !self.order.iter().any(|saved| saved == id) { self.order.push(id.to_string()); }
+        }
+        self.cards = self.order.iter().filter(|id| self.cards.contains(id)).cloned().collect();
+    }
 }
 
 /// Preferences are opt-in and migrate safely from older config files.
@@ -169,6 +208,7 @@ impl Default for PinnedQuotaModelsConfig {
 impl AppConfig {
     pub fn new() -> Self {
         Self {
+            dashboard: DashboardPreferences::default(),
             desktop: DesktopPreferences::default(),
             menu_bar: MenuBarPreferences::default(),
             language: crate::modules::i18n::default_language(),
@@ -196,6 +236,28 @@ impl Default for AppConfig {
 #[cfg(test)]
 mod tests {
     use super::AppConfig;
+
+    #[test]
+    fn legacy_dashboard_defaults_to_all_cards_without_overriding_empty_selection() {
+        let old: AppConfig = serde_json::from_str(r#"{"language":"zh"}"#).unwrap();
+        assert_eq!(old.dashboard.cards.len(), 10);
+        let empty: AppConfig = serde_json::from_str(r#"{"dashboard":{"cards":[]}}"#).unwrap();
+        assert!(empty.dashboard.cards.is_empty());
+        let restored: AppConfig = serde_json::from_str(&serde_json::to_string(&empty).unwrap()).unwrap();
+        assert!(restored.dashboard.cards.is_empty());
+    }
+
+    #[test]
+    fn dashboard_expansion_preserves_explicit_selection_and_new_card_order() {
+        let mut config: AppConfig = serde_json::from_str(r#"{"dashboard":{"cards":["total_tokens","cache_hit_rate","first_text_latency","body_speed","api_cost"]}}"#).unwrap();
+        config.dashboard.normalize();
+        assert_eq!(config.dashboard.cards, ["total_tokens", "cache_hit_rate", "first_text_latency", "body_speed", "api_cost"]);
+        config.dashboard.cards = ["quota_reset", "account_status", "aggregate_quota", "average_input", "unknown"].map(String::from).to_vec();
+        config.dashboard.order.clear();
+        config.dashboard.normalize();
+        assert_eq!(config.dashboard.cards, ["average_input", "account_status", "aggregate_quota"]);
+        assert_eq!(config.dashboard.order.len(), 10);
+    }
 
     #[test]
     fn desktop_preferences_are_opt_in_for_new_and_legacy_configs() {

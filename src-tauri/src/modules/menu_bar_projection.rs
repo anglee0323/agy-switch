@@ -1,6 +1,6 @@
 //! Credential-free native menu projection. Percentages are relative headroom,
 //! never token capacity; keep independent families/windows and fail closed.
-use super::account_dashboard::DashboardEntry;
+use super::account_dashboard::{DashboardEntry, DashboardSnapshot};
 use crate::models::config::MenuBarQuotaScope;
 use std::collections::HashMap;
 use crate::models::config::{MenuBarPreferences, MenuBarLabelStyle};
@@ -70,6 +70,14 @@ pub fn account_windows(account: &DashboardEntry, now: i64, freshness_minutes: i3
         }
     }
     result
+}
+
+/// Keep the tracked menu's row order fixed while applying newer local observations.
+/// A failed read, removed row or newly hidden account must not retain usable quota.
+pub fn open_menu_windows(snapshot: Option<&DashboardSnapshot>, ids: &[&str], preferences: &MenuBarPreferences, now: i64, freshness_minutes: i32) -> Vec<[[Option<f64>; 2]; 2]> {
+    ids.iter().map(|id| snapshot.and_then(|snapshot| snapshot.accounts.iter().find(|account| account.id == *id))
+        .filter(|account| visible_account(account, preferences, now))
+        .map(|account| account_windows(account, now, freshness_minutes)).unwrap_or([[None; 2]; 2])).collect()
 }
 
 pub fn aggregate(windows: &[[[Option<f64>; 2]; 2]], scope: MenuBarQuotaScope, period: usize, reserve: u8) -> (Option<f64>, usize, usize) {
@@ -213,5 +221,50 @@ mod tests {
         assert_eq!(aggregate(&windows, MenuBarQuotaScope::Gemini, 1, 10), (Some(50.0), 1, 2));
         assert_eq!(aggregate(&windows, MenuBarQuotaScope::Other, 0, 10), (Some(50.0), 2, 2));
         assert_eq!(percent(Some(0.02)), "0%"); assert_eq!(percent(Some(99.6)), "100%"); assert_eq!(percent(None), "—");
+    }
+    #[test] fn open_menu_recovers_from_stale_cache_without_reopening_or_reordering() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("accounts")).unwrap();
+        let now = 1_790_000_000;
+        let preferences = MenuBarPreferences::default();
+        let ids = ["current", "backup"];
+        // Disk order differs from the open menu; credentials are not needed by this reader.
+        std::fs::write(dir.path().join("accounts.json"), serde_json::json!({
+            "version":"2.0", "current_account_id":"current", "accounts": ids.iter().rev().map(|id|
+                serde_json::json!({"id":id,"email":format!("{id}@example.invalid"),"created_at":1,"last_used":1})).collect::<Vec<_>>()
+        }).to_string()).unwrap();
+        let save = |id: &str, updated: i64, fraction: f64| {
+            std::fs::write(dir.path().join(format!("accounts/{id}.json")), serde_json::json!({
+                "id":id,"email":format!("{id}@example.invalid"),"quota":{"models":[],"last_updated":updated,
+                    "quota_groups":(["Gemini","Claude / GPT"].iter().enumerate().map(|(family, name)| serde_json::json!({
+                        "display_name":name,"buckets":(["5h","weekly"].iter().map(|window| serde_json::json!({
+                            "bucket_id":format!("pool-{family}"),"window":window,"remaining_fraction":fraction,
+                            "remaining_fraction_known":true,"reset_time":"2030-01-01T00:00:00Z"
+                        })).collect::<Vec<_>>())
+                    })).collect::<Vec<_>>())}
+            }).to_string()).unwrap();
+        };
+        save("current", now, 0.8); save("backup", now - 1800, 0.4);
+        let snapshot = super::super::account_dashboard::snapshot_in_dir(dir.path()).unwrap();
+        let before = open_menu_windows(Some(&snapshot), &ids, &preferences, now, 5);
+        assert_eq!(before, vec![[[Some(80.0); 2]; 2], [[None; 2]; 2]]);
+        assert_eq!(aggregate(&before, MenuBarQuotaScope::All, 0, 10), (Some(80.0), 1, 1));
+        save("backup", now, 0.4);
+        let snapshot = super::super::account_dashboard::snapshot_in_dir(dir.path()).unwrap();
+        let after = open_menu_windows(Some(&snapshot), &ids, &preferences, now, 5);
+        assert_eq!(after, vec![[[Some(80.0); 2]; 2], [[Some(40.0); 2]; 2]]);
+        for period in 0..2 { assert_eq!(aggregate(&after, MenuBarQuotaScope::All, period, 10), (Some(60.0), 2, 2)); }
+        assert_eq!(open_menu_windows(Some(&snapshot), &ids, &preferences, now + 301, 5), vec![[[None; 2]; 2]; 2]);
+    }
+    #[test] fn open_menu_clears_failed_removed_and_newly_unavailable_observations() {
+        let mut snapshot = DashboardSnapshot { indexed_total: 1, loaded_count: 1, failed_count: 0,
+            current_account_id: None, current_identity_source: "tools_record", accounts: vec![account()] };
+        let ids = ["synthetic", "removed"];
+        let preferences = MenuBarPreferences::default();
+        assert_eq!(open_menu_windows(None, &ids, &preferences, 1_790_000_000, 15), vec![[[None; 2]; 2]; 2]);
+        snapshot.accounts[0].disabled = true;
+        let windows = open_menu_windows(Some(&snapshot), &ids, &preferences, 1_790_000_000, 15);
+        assert_eq!(windows, vec![[[None; 2]; 2]; 2]);
+        assert_eq!(aggregate(&windows, MenuBarQuotaScope::All, 0, 10), (None, 0, 0));
     }
 }

@@ -120,7 +120,7 @@ export default function DesktopSettings() {
           <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
             {t.desktopTitle}
           </h3>
-          <p className="mt-0.5 text-xs leading-relaxed text-gray-500 dark:text-gray-400">
+          <p className="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400">
             {t.desktopHint}
           </p>
         </div>
@@ -134,13 +134,13 @@ export default function DesktopSettings() {
             <div>
               <label
                 htmlFor={`desktop-${row.key}`}
-                className="text-xs font-semibold text-gray-800 dark:text-gray-200"
+                className="text-sm font-semibold text-gray-800 dark:text-gray-200"
               >
                 {row.title}
               </label>
               <p
                 id={`desktop-${row.key}-hint`}
-                className="mt-0.5 text-xs leading-relaxed text-gray-500 dark:text-gray-400"
+                className="mt-1 text-sm leading-6 text-gray-500 dark:text-gray-400"
               >
                 {row.note || row.hint}
               </p>

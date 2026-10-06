@@ -23,7 +23,7 @@ export interface AccountQuotaView {
   switchable: boolean;
   windows: Record<QuotaWindow, Record<QuotaFamily, FamilyQuota>>;
 }
-const familyOf = (name: string): QuotaFamily | null =>
+export const familyOf = (name: string): QuotaFamily | null =>
   /gemini/i.test(name) ? 'gemini' : /claude|gpt/i.test(name) ? 'other' : null;
 const unknown = (reason: QuotaReason): FamilyQuota => ({ remaining: null, reason, resets: [], pools: 0 });
 const validReset = (value: string, now: number) => Number.isFinite(Date.parse(value)) && Date.parse(value) > now;

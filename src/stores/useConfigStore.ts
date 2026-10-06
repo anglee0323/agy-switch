@@ -36,7 +36,9 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         if (!silent) set({ loading: true, error: null });
         try {
             await configService.saveConfig(config);
-            set({ config, loading: false });
+            // Card preferences have a dedicated writer; a delayed appearance
+            // save must retain the latest card selection already in the store.
+            set(state => ({ config: { ...config, dashboard: state.config?.dashboard ?? config.dashboard }, loading: false }));
             const { isTauri } = await import('../utils/env');
             if (isTauri()) {
                 const { invoke } = await import('@tauri-apps/api/core');
