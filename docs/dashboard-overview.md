@@ -8,8 +8,9 @@ unchanged. The full ten-option order is saved separately from the visible select
 hidden cards can also be reordered and reappear at their saved position. Legacy
 configs initialize full order from their visible card order, followed by hidden
 options. Existing selections remain unchanged;
-new cards can be enabled individually. Eight or ten selected cards use two rows
-on wide screens; nine use three rows. All cards share equal widths and heights
+new cards can be enabled individually. Desktop windows at least 1024 pixels wide
+show at most five cards per row, so six through ten selected cards use two rows.
+All cards share equal widths and heights
 within the grid, including across rows. The former quota-reset card maps to mean
 request input in its saved position; hidden and empty selections stay hidden.
 Narrow and short windows wrap and scroll.

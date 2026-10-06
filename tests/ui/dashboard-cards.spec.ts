@@ -73,7 +73,7 @@ for (const count of [2, 3, 4, 6]) {
         await expect.poll(() => savedCards(page)).toEqual(ids.slice(0, count));
         await page.locator('a[href="/"]').first().click();
         await expectCards(page, ids.slice(0, count));
-        expect(await page.locator('[data-dashboard-cards]').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length)).toBe(count);
+        expect(await page.locator('[data-dashboard-cards]').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length)).toBe(Math.min(count, 5));
         await page.locator('a[href="/settings"]').first().click();
         await expect(section.getByRole('checkbox', { checked: true })).toHaveCount(count);
     });

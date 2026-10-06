@@ -35,7 +35,7 @@ test('ten-card catalog retains explicit five-card order, empty selection and ded
     assert.deepEqual(dashboardCards(saved), saved); assert.deepEqual(dashboardCards([]), []);
     assert.deepEqual(dashboardCards(['quota_reset', 'average_input', 'bad', 'aggregate_quota', 'account_status']), ['average_input', 'aggregate_quota', 'account_status']);
     assert.equal(dashboardCards(undefined).length, 10);
-    assert.match(dashboardGridClass(10), /xl:grid-cols-5/); assert.match(dashboardGridClass(8), /lg:grid-cols-4/);
+    for (const count of [5, 6, 7, 8, 9, 10]) assert.match(dashboardGridClass(count), /lg:grid-cols-5/);
 });
 test('account status covers known usable, disabled, exhausted and unknown accounts', () => {
     const result = project(makeDashboardSnapshot(now));

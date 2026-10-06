@@ -34,6 +34,13 @@ for (const language of ['zh', 'en']) for (const count of [5, 8, 10]) test(`model
     await expect(cell).toBeVisible();
     for (const width of [1440, 1046, 760, 420]) {
         await page.setViewportSize({ width, height: 520 });
+        if (width >= 1024) {
+            const grid = page.locator('[data-dashboard-cards]');
+            expect(await grid.evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length)).toBe(5);
+            const rows = await grid.locator('[data-dashboard-card]').evaluateAll(cards => cards.map(card => Math.round(card.getBoundingClientRect().top)));
+            expect(new Set(rows).size).toBe(Math.ceil(count / 5));
+            expect(rows.filter(y => y === rows[0])).toHaveLength(5);
+        }
         await cell.scrollIntoViewIfNeeded(); await expect(cell).toBeInViewport({ ratio: 1 });
         const geometry = await cell.evaluate(el => {
             const section = el.closest('section')!;
@@ -64,7 +71,7 @@ for (const language of ['zh', 'en']) test(`ten selectable cards remain readable 
         await page.setViewportSize({ width, height: 520 });
         await expect(page.locator('[data-dashboard-card]')).toHaveCount(10);
         const columns = await page.locator('[data-dashboard-cards]').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length);
-        expect(columns).toBe(width >= 1280 ? 5 : width >= 768 ? 3 : 2);
+        expect(columns).toBe(width >= 1024 ? 5 : width >= 768 ? 3 : 2);
         expect(await page.locator('[data-dashboard-card]').evaluateAll(cards => cards.every(card => {
             const detail = card.querySelector('[data-card-detail]');
             return card.scrollWidth <= card.clientWidth + 1 && (!detail || (detail.scrollHeight <= detail.clientHeight + 1 && getComputedStyle(detail).textOverflow !== 'ellipsis'));
@@ -87,7 +94,7 @@ for (const language of ['zh', 'en']) test(`eight cards have equal dimensions wit
     await expect(quota.locator('[data-quota-window]')).toHaveCount(2);
     await expect(quota.locator('[data-card-detail]')).toHaveCount(0);
     await expect(quota).not.toContainText('Gemini');
-    expect(await quota.getAttribute('title')).toContain('Gemini');
+    await expect(quota).toHaveAttribute('title', /Gemini/);
     for (const width of [1440, 1046, 760, 420]) {
         await page.setViewportSize({ width, height: 520 });
         const sizes = await page.locator('[data-dashboard-card]').evaluateAll(cards => cards.map(card => ({
