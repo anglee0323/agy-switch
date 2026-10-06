@@ -100,6 +100,9 @@ jobs:
       - name: Test read-only account dashboard contract
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib account_dashboard::tests
 
+      - name: Test menu-bar quota snapshots
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib menu_bar_projection::tests
+
       - name: Test App identity and metadata guards
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib app_
 
