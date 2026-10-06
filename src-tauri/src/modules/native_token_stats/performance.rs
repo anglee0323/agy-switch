@@ -6,8 +6,8 @@ const MAX_AGE_SECONDS: i64 = 7 * 24 * 60 * 60;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RecentPerformance {
-    pub model: String,
-    pub source: String,
+    pub model_count: usize,
+    pub source_count: usize,
     pub sample_count: usize,
     pub first_text_seconds: f64,
     pub body_tokens_per_second: f64,
@@ -75,14 +75,10 @@ pub(super) fn summarize(mut samples: Vec<Sample>, now: i64) -> Option<RecentPerf
             .then_with(|| left.model.cmp(&right.model))
     });
     let latest = samples.first()?;
-    let model = latest.model.clone();
-    let source = latest.source.clone();
     let last_activity = latest.timestamp;
-    let recent: Vec<_> = samples
-        .iter()
-        .filter(|sample| sample.model == model && sample.source == source)
-        .take(SAMPLE_LIMIT)
-        .collect();
+    // Summarize recent user experience across all models and local stores.
+    // Each eligible generation has equal weight; no model gets its own window.
+    let recent: Vec<_> = samples.iter().take(SAMPLE_LIMIT).collect();
     let median = |mut values: Vec<f64>| {
         values.sort_by(f64::total_cmp);
         let middle = values.len() / 2;
@@ -93,8 +89,16 @@ pub(super) fn summarize(mut samples: Vec<Sample>, now: i64) -> Option<RecentPerf
         }
     };
     Some(RecentPerformance {
-        model,
-        source,
+        model_count: recent
+            .iter()
+            .map(|sample| &sample.model)
+            .collect::<std::collections::HashSet<_>>()
+            .len(),
+        source_count: recent
+            .iter()
+            .map(|sample| &sample.source)
+            .collect::<std::collections::HashSet<_>>()
+            .len(),
         last_activity,
         sample_count: recent.len(),
         first_text_seconds: median(
@@ -204,7 +208,7 @@ mod tests {
     }
 
     #[test]
-    fn recent_median_limits_samples_and_never_mixes_models_or_sources() {
+    fn recent_median_limits_age_and_sample_count_across_models_and_sources() {
         let now = 1_800_000_000;
         let mut samples: Vec<_> = (0..12)
             .map(|i| Sample {
@@ -231,12 +235,42 @@ mod tests {
         }
         let result = summarize(samples, now).unwrap();
         assert_eq!(result.sample_count, 10);
-        assert_eq!(result.model, "gemini-test");
-        assert_eq!(result.source, "antigravity");
+        assert_eq!(result.model_count, 2);
+        assert_eq!(result.source_count, 2);
         assert_eq!(result.first_text_seconds, 5.5);
         assert_eq!(result.body_tokens_per_second, 104.5);
         assert_eq!(result.last_activity, now);
         assert!(summarize(Vec::new(), now).is_none());
+    }
+
+    #[test]
+    fn five_gemini_and_five_claude_responses_contribute_to_one_summary() {
+        let now = 1_800_000_000;
+        let samples = (0..10)
+            .map(|i| Sample {
+                model: if i % 2 == 0 {
+                    "gemini-test"
+                } else {
+                    "claude-test"
+                }
+                .into(),
+                source: if i % 2 == 0 {
+                    "antigravity"
+                } else {
+                    "antigravity-cli"
+                }
+                .into(),
+                timestamp: now - i,
+                first_text_seconds: if i % 2 == 0 { 2.0 } else { 8.0 },
+                body_tokens_per_second: if i % 2 == 0 { 100.0 } else { 40.0 },
+            })
+            .collect();
+        let summary = summarize(samples, now).unwrap();
+        assert_eq!(summary.sample_count, 10);
+        assert_eq!(summary.model_count, 2);
+        assert_eq!(summary.source_count, 2);
+        assert_eq!(summary.first_text_seconds, 5.0);
+        assert_eq!(summary.body_tokens_per_second, 70.0);
     }
 
     #[test]
@@ -272,7 +306,8 @@ mod tests {
         assert!(result.events.is_empty());
         let summary = summarize(result.performance_samples, timestamp as i64).unwrap();
         assert_eq!(summary.sample_count, 1);
-        assert_eq!(summary.source, "antigravity");
+        assert_eq!(summary.model_count, 1);
+        assert_eq!(summary.source_count, 1);
         assert_eq!(summary.body_tokens_per_second, 160.0);
     }
 }

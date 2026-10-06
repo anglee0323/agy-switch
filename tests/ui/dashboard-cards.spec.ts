@@ -60,7 +60,7 @@ test('pointer and keyboard dragging save order without selecting hidden cards', 
     await expect.poll(() => savedCards(page)).toEqual(['body_speed', 'first_text_latency', 'total_tokens']);
     await expect(speed).toBeEnabled(); await speed.focus(); await page.keyboard.press('Space');
     await expect(speed).toHaveAttribute('aria-pressed', 'true');
-    await page.keyboard.press('ArrowDown');
+    await page.keyboard.press('ArrowRight');
     await expect(page.getByRole('status').filter({ hasText: '移动到首字延迟的位置' })).toBeVisible();
     await page.keyboard.press('Space');
     await expect.poll(() => savedCards(page)).toEqual(['first_text_latency', 'body_speed', 'total_tokens']);
@@ -111,4 +111,25 @@ for (const language of ['zh', 'en']) test(`empty selection keeps charts and sett
     await page.locator('a[href="/"]').first().click(); await expectCards(page, []);
     await expect(page.locator('[data-dashboard-cards]')).toHaveCount(0);
     await expect(page.getByRole('heading', { name: language === 'zh' ? '模型分布' : 'Model breakdown', exact: true })).toBeVisible();
+});
+
+for (const language of ['zh', 'en']) test(`compact card options and readable menu settings adapt to window width (${language})`, async ({ page }) => {
+    await setup(page, ids, language);
+    const cards = page.getByRole('region', { name: language === 'zh' ? '首页卡片' : 'Dashboard cards', exact: true });
+    const menu = page.getByRole('region', { name: language === 'zh' ? '菜单栏显示' : 'Menu bar display', exact: true });
+    for (const width of [1046, 420]) {
+        await page.setViewportSize({ width, height: 700 });
+        await cards.scrollIntoViewIfNeeded();
+        const rows = cards.locator('[data-card-option]');
+        const first = (await rows.nth(0).boundingBox())!, second = (await rows.nth(1).boundingBox())!;
+        if (width > 600) { expect(Math.abs(first.y - second.y)).toBeLessThan(2); expect(first.height).toBeLessThan(52); }
+        else expect(second.y).toBeGreaterThan(first.y + first.height);
+        expect(await cards.locator('label span').first().evaluate(el => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(14);
+        await page.screenshot({ path: `test-results/auto-switch/cards-compact-${language}-${width}.png` });
+        await menu.scrollIntoViewIfNeeded();
+        expect(await menu.locator('select').evaluateAll(fields => fields.every(el => el.getBoundingClientRect().height >= 40 && parseFloat(getComputedStyle(el).fontSize) >= 14))).toBe(true);
+        expect(await menu.locator('p').evaluateAll(fields => fields.every(el => parseFloat(getComputedStyle(el).fontSize) >= 14))).toBe(true);
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        await page.screenshot({ path: `test-results/auto-switch/menu-settings-readable-${language}-${width}.png` });
+    }
 });

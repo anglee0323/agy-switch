@@ -6,15 +6,19 @@ credentials, switch accounts or contact an inference endpoint. They update with
 the existing usage scan (on opening, every 60 seconds, and manual refresh).
 
 The cards use the median of up to 10 eligible text generations from the last
-seven days for the latest eligible model and store. Different models and desktop /
-CLI stores are not mixed. Both cards use the same samples. The model, source and
-actual sample count appear in the card detail; these cards are independent of the
+seven days across all models and local desktop / CLI stores. Each eligible
+generation contributes equally, so five Gemini and five Claude responses produce
+one ten-response summary. Both cards use the same samples. The actual sample count
+appears in the card detail; model and source counts are available in its tooltip.
+This is a summary of recent user experience, not a comparison of individual
+model speeds. These cards are independent of the
 usage date-range selector. One available sample can be shown; no eligible samples
 produce an unknown value (`—`), never a zero-speed claim.
 
 In **Settings > General > Dashboard cards**, select any of the seven summary
-cards and drag their handles to set the display order, using the same interaction
-as smart-switch candidates. Keyboard users can press Space, move with the arrow
+cards and drag their handles to set the display order. The compact two-column
+list shows order numbers and becomes a single column in narrow windows.
+Keyboard users can press Space, move with the arrow
 keys and confirm with Space. Changes save automatically and persist across app
 restarts. The dashboard adapts its columns to the selection; an empty selection
 hides the summary cards while retaining charts. Existing configurations default
@@ -40,8 +44,9 @@ cards; timing can still be read from matching live rows without double-counting
 their archived token usage.
 
 Verification uses synthetic SQLite fixtures for parsing, exclusions, median / age
-selection, source separation and archive deduplication, plus mocked dashboard UI
-checks for both locales, unknown data and narrower windows:
+selection, mixed model / source coverage and archive deduplication, plus mocked
+dashboard UI checks for both locales, unknown data and unclipped descriptions in
+narrower windows:
 
 ```sh
 cargo test --locked --manifest-path src-tauri/Cargo.toml --lib native_token_stats::

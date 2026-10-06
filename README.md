@@ -109,7 +109,7 @@ For terminal use only, download the **Linux AMD64 console tarball**. Desktop tra
 | To… | Go to… |
 | --- | --- |
 | Check recent usage or model costs | Dashboard; choose a date range and Token usage or Estimated cost |
-| Check recent first-text latency and body output speed | Dashboard; medians from up to 10 local text generations, with model and sample count ([details](docs/response-performance.md)) |
+| Check recent first-text latency and body output speed | Dashboard; medians from up to 10 local text responses across models and desktop/CLI, with sample count ([details](docs/response-performance.md)) |
 | Choose and reorder homepage summary cards | Settings > General > Dashboard cards; selections and drag order save automatically |
 | Compare five-hour and weekly quotas | Accounts; choose the quota window and list or card view |
 | Set account remarks or change account order | Accounts; edit a remark or drag an account into position |

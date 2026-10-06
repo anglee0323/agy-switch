@@ -29,8 +29,8 @@ interface LocalTokenModel extends LocalTokenTotals {
 
 interface LocalTokenUsageSummary {
     recent_performance?: {
-        model: string;
-        source: string;
+        model_count: number;
+        source_count: number;
         sample_count: number;
         first_text_seconds: number;
         body_tokens_per_second: number;
@@ -258,6 +258,7 @@ function TokenCard({
     color,
     icon: Icon,
     displayValue,
+    unit,
     detail,
     hint,
     locale,
@@ -268,25 +269,28 @@ function TokenCard({
     color: string;
     icon: typeof Cpu;
     displayValue?: string;
+    unit?: string;
     detail?: string;
     hint?: string;
     locale: string;
 }) {
     return (
-        <div data-dashboard-card={cardId} className="relative group rounded-2xl border border-gray-100 bg-white p-3 shadow-sm transition-all hover:border-gray-200 hover:shadow-md dark:border-base-200 dark:bg-base-100 hover:z-30">
+        <div data-dashboard-card={cardId} className="relative min-w-0 rounded-2xl border border-gray-100 bg-white p-3 shadow-sm transition-all hover:border-gray-200 hover:shadow-md dark:border-base-200 dark:bg-base-100">
             <div className="mb-2 flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
-                    <span className={`rounded-lg p-1.5 ${color}`}>
+                <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium leading-4 text-gray-600 dark:text-gray-300">
+                    <span className={`shrink-0 rounded-lg p-1.5 ${color}`}>
                         <Icon className="h-3.5 w-3.5" />
                     </span>
                     {label}
                 </div>
             </div>
-            <div className="text-xl font-bold tracking-tight text-gray-900 dark:text-base-content" title={displayValue || formatTokens(value, locale)}>
+            <div className="break-words text-xl font-bold tracking-tight text-gray-900 dark:text-base-content" title={`${displayValue || formatTokens(value, locale)}${unit ? ` ${unit}` : ''}`}>
                 {displayValue || compactTokens(value, locale)}
+                {unit && <> <span className="inline-block text-sm font-medium text-gray-500 dark:text-gray-400">{unit}</span></>}
             </div>
             <div
-                className="mt-0.5 truncate text-[10px] text-gray-400 dark:text-gray-500"
+                data-card-detail
+                className="mt-1 break-words text-xs leading-5 text-gray-500 dark:text-gray-400"
                 title={hint || detail || `${formatTokens(value, locale)} Token`}
             >
                 {detail || `${formatTokens(value, locale)} Token`}
@@ -500,10 +504,11 @@ function Dashboard() {
     const performanceDetail = performance
         ? t('local_dashboard.recent_performance', {
             count: performance.sample_count,
-            model: performance.model,
-            source: t(performance.source.includes('cli') ? 'local_dashboard.source_cli' : 'local_dashboard.source_desktop'),
         })
         : t('local_dashboard.performance_empty');
+    const performanceScope = performance ? t('local_dashboard.performance_scope', {
+        models: performance.model_count, sources: performance.source_count,
+    }) : '';
 
     // Scan freshness is intentionally not rendered inline: the toolbar row only fits next to
     // the page title when this string stays out of the layout. It is exposed on the refresh button.
@@ -514,14 +519,15 @@ function Dashboard() {
             : t('local_dashboard.waiting_scan');
 
     const cards: Record<DashboardCardId, ReactElement> = {
-        total_tokens: (<TokenCard cardId="total_tokens" label={t('local_dashboard.total_tokens', { range: rangeLabels[range] })} value={totals.total_tokens} color="bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-300" icon={BarChart3} locale={locale} />),
-        input_tokens: (<TokenCard cardId="input_tokens" label={t('local_dashboard.input_tokens')} value={totals.input_tokens} color="bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-300" icon={MessageSquare} locale={locale} />),
-        output_tokens: (<TokenCard cardId="output_tokens" label={t('local_dashboard.output_tokens')} value={totals.output_tokens} color="bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-300" icon={Cpu} locale={locale} />),
+        total_tokens: (<TokenCard cardId="total_tokens" label={t('local_dashboard.total_tokens', { range: rangeLabels[range] })} value={totals.total_tokens} hint={t('local_dashboard.total_tokens_hint')} color="bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-300" icon={BarChart3} locale={locale} />),
+        input_tokens: (<TokenCard cardId="input_tokens" label={t('local_dashboard.input_tokens')} value={totals.input_tokens} hint={t('local_dashboard.input_tokens_hint')} color="bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-300" icon={MessageSquare} locale={locale} />),
+        output_tokens: (<TokenCard cardId="output_tokens" label={t('local_dashboard.output_tokens')} value={totals.output_tokens} hint={t('local_dashboard.output_tokens_hint')} color="bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-300" icon={Cpu} locale={locale} />),
         cache_hit_rate: (<TokenCard cardId="cache_hit_rate"
             label={t('local_dashboard.cache_hit_rate')}
             value={cacheHitRate}
             displayValue={`${cacheHitRate.toFixed(1)}%`}
             detail={t('local_dashboard.cache_hit_rate_detail')}
+            hint={t('local_dashboard.cache_hit_rate_hint')}
             color="bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-300"
             icon={Database}
             locale={locale}
@@ -535,6 +541,7 @@ function Dashboard() {
                 pricing: pricingLabel,
                 unpriced: apiCost.unpricedModels ? t('local_dashboard.pricing_unavailable') : '',
             })}
+            hint={t('local_dashboard.api_cost_hint')}
             color="bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-300"
             icon={DollarSign}
             locale={locale}
@@ -544,7 +551,7 @@ function Dashboard() {
             value={performance?.first_text_seconds ?? 0}
             displayValue={performance ? t('local_dashboard.seconds_value', { value: performance.first_text_seconds.toLocaleString(locale, { maximumFractionDigits: 2 }) }) : '—'}
             detail={performanceDetail}
-            hint={`${performanceDetail}\n${t('local_dashboard.first_text_hint')}`}
+            hint={`${performanceDetail}\n${performanceScope}\n${t('local_dashboard.first_text_hint')}`}
             color="bg-cyan-50 text-cyan-600 dark:bg-cyan-900/20 dark:text-cyan-300"
             icon={Timer}
             locale={locale}
@@ -552,9 +559,10 @@ function Dashboard() {
         body_speed: (<TokenCard cardId="body_speed"
             label={t('local_dashboard.body_speed')}
             value={performance?.body_tokens_per_second ?? 0}
-            displayValue={performance ? `${performance.body_tokens_per_second.toLocaleString(locale, { maximumFractionDigits: 1 })} token/s` : '—'}
+            displayValue={performance ? performance.body_tokens_per_second.toLocaleString(locale, { maximumFractionDigits: 1 }) : '—'}
+            unit={performance ? 'token/s' : undefined}
             detail={performanceDetail}
-            hint={`${performanceDetail}\n${t('local_dashboard.body_speed_hint')}`}
+            hint={`${performanceDetail}\n${performanceScope}\n${t('local_dashboard.body_speed_hint')}`}
             color="bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-300"
             icon={Gauge}
             locale={locale}
@@ -562,7 +570,7 @@ function Dashboard() {
     };
 
     return (
-        <div className="h-full w-full overflow-y-auto lg:overflow-hidden">
+        <div className="h-full w-full overflow-y-auto">
             <div className="mx-auto flex min-h-full max-w-7xl flex-col gap-2 p-3 lg:h-full lg:min-h-0 lg:p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="min-w-0">
@@ -617,7 +625,7 @@ function Dashboard() {
                     </div>
                 )}
 
-                {visibleCards.length > 0 && <div className={`grid gap-2 ${dashboardGridClass(visibleCards.length)}`} data-dashboard-cards>
+                {visibleCards.length > 0 && <div className={`grid shrink-0 gap-2 ${dashboardGridClass(visibleCards.length)}`} data-dashboard-cards>
                     {visibleCards.map(id => <Fragment key={id}>{cards[id]}</Fragment>)}
                 </div>}
 
