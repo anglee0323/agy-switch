@@ -3,7 +3,11 @@
 The Dashboard offers ten optional cards: total, input and output tokens, cache
 hit rate, estimated API cost, first-text latency, body output speed, account
 status, aggregate quota and mean request input. Settings uses the same saved selection
-and drag/keyboard ordering for all ten. Existing selections remain unchanged;
+and drag/keyboard ordering for all ten. Checkbox changes leave all option positions
+unchanged. The full ten-option order is saved separately from the visible selection;
+hidden cards can also be reordered and reappear at their saved position. Legacy
+configs initialize full order from their visible card order, followed by hidden
+options. Existing selections remain unchanged;
 new cards can be enabled individually. Eight or ten selected cards use two rows
 on wide screens; nine use three rows. All cards share equal widths and heights
 within the grid, including across rows. The former quota-reset card maps to mean

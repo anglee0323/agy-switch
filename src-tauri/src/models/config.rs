@@ -32,19 +32,30 @@ const DEFAULT_DASHBOARD_CARDS: [&str; 10] = [
 pub struct DashboardPreferences {
     /// Selected cards in display order. An explicit empty list hides all cards.
     pub cards: Vec<String>,
+    /// Full option order, including hidden cards. Missing legacy order uses cards.
+    #[serde(default)]
+    pub order: Vec<String>,
 }
 impl Default for DashboardPreferences {
     fn default() -> Self {
-        Self { cards: DEFAULT_DASHBOARD_CARDS.iter().map(|id| (*id).to_string()).collect() }
+        let cards: Vec<String> = DEFAULT_DASHBOARD_CARDS.iter().map(|id| (*id).to_string()).collect();
+        Self { order: cards.clone(), cards }
     }
 }
 impl DashboardPreferences {
     pub fn normalize(&mut self) {
-        for id in &mut self.cards {
-            if id == "quota_reset" { *id = "average_input".to_string(); }
+        for ids in [&mut self.cards, &mut self.order] {
+            for id in ids.iter_mut() {
+                if id == "quota_reset" { *id = "average_input".to_string(); }
+            }
+            let mut seen = std::collections::HashSet::new();
+            ids.retain(|id| DEFAULT_DASHBOARD_CARDS.contains(&id.as_str()) && seen.insert(id.clone()));
         }
-        let mut seen = std::collections::HashSet::new();
-        self.cards.retain(|id| DEFAULT_DASHBOARD_CARDS.contains(&id.as_str()) && seen.insert(id.clone()));
+        if self.order.is_empty() { self.order = self.cards.clone(); }
+        for id in DEFAULT_DASHBOARD_CARDS {
+            if !self.order.iter().any(|saved| saved == id) { self.order.push(id.to_string()); }
+        }
+        self.cards = self.order.iter().filter(|id| self.cards.contains(id)).cloned().collect();
     }
 }
 
@@ -242,8 +253,10 @@ mod tests {
         config.dashboard.normalize();
         assert_eq!(config.dashboard.cards, ["total_tokens", "cache_hit_rate", "first_text_latency", "body_speed", "api_cost"]);
         config.dashboard.cards = ["quota_reset", "account_status", "aggregate_quota", "average_input", "unknown"].map(String::from).to_vec();
+        config.dashboard.order.clear();
         config.dashboard.normalize();
         assert_eq!(config.dashboard.cards, ["average_input", "account_status", "aggregate_quota"]);
+        assert_eq!(config.dashboard.order.len(), 10);
     }
 
     #[test]

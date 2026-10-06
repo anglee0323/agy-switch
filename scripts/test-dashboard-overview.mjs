@@ -11,12 +11,24 @@ const menu = url(compile('../src/utils/menuBarOverview.ts').replaceAll("'./accou
 const { dashboardOverview } = await import(url(compile('../src/utils/dashboardOverview.ts')
     .replaceAll("'./menuBarOverview'", JSON.stringify(menu)).replaceAll("'../types/config'", JSON.stringify(config))));
 const { makeDashboardSnapshot } = await import(url(compile('../tests/ui/dashboard-overview-fixture.ts')));
-const { DASHBOARD_CARD_IDS, dashboardCards, dashboardGridClass } = await import(config);
+const { DASHBOARD_CARD_IDS, dashboardCards, dashboardCardOrder, dashboardGridClass } = await import(config);
 const { averageRequestInput } = await import(url(compile('../src/utils/dashboardUsage.ts')));
 const now = Date.parse('2026-10-06T00:00:00Z');
 const project = (snapshot, patch = {}, time = now, reserve = 10) => dashboardOverview(snapshot, { quota_scope: 'all', ...patch }, time, 15, reserve);
 let passed = 0;
 const test = (name, fn) => { fn(); console.log(`PASS ${name}`); passed++; };
+test('full option order preserves hidden positions and migrates legacy selection once', () => {
+    const selected = ['body_speed', 'total_tokens'];
+    const migrated = dashboardCardOrder(selected);
+    assert.deepEqual(migrated.slice(0, 2), selected);
+    assert.equal(migrated.length, 10);
+    assert.deepEqual(dashboardCardOrder([], migrated), migrated);
+    assert.deepEqual(dashboardCardOrder(['api_cost'], migrated), migrated);
+    assert.deepEqual(dashboardCardOrder(selected, ['unknown']), migrated);
+    const aliases = dashboardCardOrder([], ['quota_reset', 'average_input', 'unknown', 'api_cost']);
+    assert.deepEqual(aliases.slice(0, 2), ['average_input', 'api_cost']);
+    assert.equal(aliases.length, 10);
+});
 test('ten-card catalog retains explicit five-card order, empty selection and deduplication', () => {
     assert.equal(DASHBOARD_CARD_IDS.length, 10);
     const saved = ['body_speed', 'api_cost', 'total_tokens', 'first_text_latency', 'cache_hit_rate'];

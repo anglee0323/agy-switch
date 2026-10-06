@@ -464,7 +464,7 @@
   },
   "dashboard_settings": {
     "title": "首页卡片",
-    "description": "配置首页指标及显示顺序。勾选显示内容，拖动手柄排序，设置自动保存。",
+    "description": "勾选仅控制显示或隐藏，选项位置保持不变。拖动手柄调整顺序，设置自动保存。",
     "selected_count": "已选择 {{count}} 张卡片",
     "saving": "正在保存…",
     "save_failed": "保存失败：{{error}}。请重试。",

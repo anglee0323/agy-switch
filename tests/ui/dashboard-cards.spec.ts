@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { setupSettingsFixture } from './settings-fixture';
 
 const ids = ['total_tokens', 'input_tokens', 'output_tokens', 'cache_hit_rate', 'api_cost', 'first_text_latency', 'body_speed'];
+const catalog = [...ids, 'account_status', 'aggregate_quota', 'average_input'];
 
 async function setup(page: Page, cards = ids, language = 'zh') {
     const usage = () => {
@@ -29,6 +30,37 @@ async function expectCards(page: Page, cards: string[]) {
     await expect.poll(() => page.locator('[data-dashboard-card]').evaluateAll(rows => rows.map(row => row.getAttribute('data-dashboard-card')))).toEqual(cards);
 }
 
+for (const language of ['zh', 'en']) test(`checkboxes keep all ten options in place and restore their display position (${language})`, async ({ page }) => {
+    await setup(page, catalog, language);
+    const section = page.getByRole('region', { name: language === 'zh' ? '首页卡片' : 'Dashboard cards', exact: true });
+    const rows = section.locator('[data-card-option]');
+    const order = () => rows.evaluateAll(nodes => nodes.map(node => node.getAttribute('data-card-option')));
+    for (const width of [1046, 420]) {
+        await page.setViewportSize({ width, height: 800 });
+        const checkbox = section.locator('[data-card-option="api_cost"] input');
+        await checkbox.scrollIntoViewIfNeeded();
+        const geometry = () => rows.evaluateAll(nodes => nodes.map(node => {
+            const rect = node.getBoundingClientRect(), parent = node.closest('section')!.getBoundingClientRect();
+            return { x: rect.x - parent.x, y: rect.y - parent.y };
+        }));
+        const before = await geometry();
+        await checkbox.uncheck(); await expect(checkbox).toBeEnabled();
+        expect(await order()).toEqual(catalog);
+        const after = await geometry();
+        for (let i = 0; i < before.length; i++) {
+            expect(Math.abs(before[i].x - after[i].x)).toBeLessThan(1);
+            expect(Math.abs(before[i].y - after[i].y)).toBeLessThan(1);
+        }
+        await expect(checkbox).toBeFocused();
+        await page.keyboard.press('Space'); await expect(checkbox).toBeChecked(); await expect(checkbox).toBeEnabled();
+        expect(await order()).toEqual(catalog);
+        await expect.poll(() => savedCards(page)).toEqual(catalog);
+        await page.setViewportSize({ width: 1046, height: 800 });
+        await page.locator('a[href="/"]').first().click(); await expectCards(page, catalog);
+        await page.locator('a[href="/settings"]').first().click(); await expect.poll(order).toEqual(catalog);
+    }
+});
+
 for (const count of [2, 3, 4, 6]) {
     test(`${count} selected cards persist and fill the available row`, async ({ page }) => {
         await setup(page);
@@ -50,7 +82,7 @@ for (const count of [2, 3, 4, 6]) {
 test('pointer and keyboard dragging save order without selecting hidden cards', async ({ page }) => {
     await setup(page, ['first_text_latency', 'body_speed', 'total_tokens']);
     const section = page.getByRole('region', { name: '首页卡片', exact: true });
-    await expect(section.locator('[data-card-option="input_tokens"] button')).toBeDisabled();
+    await expect(section.locator('[data-card-option="input_tokens"] button')).toBeEnabled();
     const speed = section.locator('[data-card-option="body_speed"] button');
     const latency = section.locator('[data-card-option="first_text_latency"] button');
     await latency.scrollIntoViewIfNeeded();
@@ -60,6 +92,7 @@ test('pointer and keyboard dragging save order without selecting hidden cards', 
     await expect.poll(() => savedCards(page)).toEqual(['body_speed', 'first_text_latency', 'total_tokens']);
     await expect(speed).toBeEnabled(); await speed.focus(); await page.keyboard.press('Space');
     await expect(speed).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('status').filter({ hasText: '移动到正文速度的位置' })).toBeVisible();
     await page.keyboard.press('ArrowRight');
     await expect(page.getByRole('status').filter({ hasText: '移动到首字延迟的位置' })).toBeVisible();
     await page.keyboard.press('Space');
@@ -85,6 +118,31 @@ test('failed saves roll back and retry without overlapping writes', async ({ pag
     await page.evaluate(() => (window as any).__settingsFixture.resolveDashboardSave());
     await expect(checkbox).toBeEnabled(); await expect(section.getByRole('alert')).toHaveCount(0);
     await expect.poll(() => savedCards(page)).toEqual(ids.slice(0, -1));
+});
+
+test('hidden cards keep their stored position across navigation and can be reordered without enabling them', async ({ page }) => {
+    await setup(page, ['first_text_latency', 'body_speed', 'total_tokens']);
+    const section = page.getByRole('region', { name: '首页卡片', exact: true });
+    const input = section.locator('[data-card-option="input_tokens"] input');
+    const handle = section.locator('[data-card-option="input_tokens"] button');
+    await handle.scrollIntoViewIfNeeded(); await handle.focus(); await page.keyboard.press('Space');
+    await expect(page.getByRole('status').filter({ hasText: '移动到输入 Token的位置' })).toBeVisible();
+    await page.keyboard.press('ArrowUp');
+    await expect(page.getByRole('status').filter({ hasText: '移动到正文速度的位置' })).toBeVisible();
+    await page.keyboard.press('Space'); await expect(handle).toBeEnabled();
+    expect(await savedCards(page)).toEqual(['first_text_latency', 'body_speed', 'total_tokens']);
+    await expect(input).not.toBeChecked();
+    const order = () => section.locator('[data-card-option]').evaluateAll(rows => rows.map(row => row.getAttribute('data-card-option')));
+    await expect.poll(async () => (await order()).slice(0, 4)).toEqual(['first_text_latency', 'input_tokens', 'body_speed', 'total_tokens']);
+    await input.check(); await expect(input).toBeEnabled();
+    expect(await savedCards(page)).toEqual(['first_text_latency', 'input_tokens', 'body_speed', 'total_tokens']);
+    await input.uncheck(); await expect(input).toBeEnabled();
+    await page.locator('a[href="/"]').first().click();
+    await expectCards(page, ['first_text_latency', 'body_speed', 'total_tokens']);
+    await page.locator('a[href="/settings"]').first().click();
+    await expect.poll(async () => (await order()).slice(0, 4)).toEqual(['first_text_latency', 'input_tokens', 'body_speed', 'total_tokens']);
+    await input.check(); await expect(input).toBeEnabled();
+    expect(await savedCards(page)).toEqual(['first_text_latency', 'input_tokens', 'body_speed', 'total_tokens']);
 });
 
 test('a delayed appearance save cannot restore old cards', async ({ page }) => {

@@ -102,14 +102,16 @@ fn set_menu_bar_preferences_at(
     patch_menu_bar_preferences_at(path, crate::models::config::MenuBarPreferencesPatch { quota_scope: Some(scope), ..Default::default() })
 }
 
-pub fn set_dashboard_cards(cards: Vec<String>) -> Result<crate::models::config::DashboardPreferences, String> {
-    set_dashboard_cards_at(&get_data_dir()?.join(CONFIG_FILE), cards)
+pub fn set_dashboard_cards(cards: Vec<String>, order: Option<Vec<String>>) -> Result<crate::models::config::DashboardPreferences, String> {
+    set_dashboard_cards_at(&get_data_dir()?.join(CONFIG_FILE), cards, order)
 }
 
-fn set_dashboard_cards_at(path: &Path, cards: Vec<String>) -> Result<crate::models::config::DashboardPreferences, String> {
+fn set_dashboard_cards_at(path: &Path, cards: Vec<String>, order: Option<Vec<String>>) -> Result<crate::models::config::DashboardPreferences, String> {
     let _guard = lock_config()?;
     let mut config = read_config_unlocked(path)?.unwrap_or_default();
     config.dashboard.cards = cards;
+    // Calls without full order retain the legacy cards-as-display-order contract.
+    config.dashboard.order = order.unwrap_or_default();
     config.dashboard.normalize();
     write_config_unlocked(path, &config)?;
     Ok(config.dashboard)
@@ -126,6 +128,26 @@ fn patch_menu_bar_preferences_at(path: &Path, patch: crate::models::config::Menu
 mod tests {
     use super::*;
     #[test]
+    fn hidden_card_positions_survive_toggle_reload_and_stale_general_save() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join(CONFIG_FILE);
+        let mut stale = load_config_at(&path).unwrap();
+        let order = vec!["body_speed".into(), "api_cost".into(), "total_tokens".into(), "quota_reset".into(), "unknown".into(), "body_speed".into()];
+        let result = set_dashboard_cards_at(&path, vec!["total_tokens".into(), "body_speed".into()], Some(order)).unwrap();
+        assert_eq!(result.cards, ["body_speed", "total_tokens"]);
+        assert_eq!(result.order.len(), 10);
+        assert_eq!(&result.order[..4], ["body_speed", "api_cost", "total_tokens", "average_input"]);
+        stale.theme = "dark".into();
+        save_config_at(&path, &stale).unwrap();
+        assert_eq!(load_config_at(&path).unwrap().dashboard.order, result.order);
+        let enabled = set_dashboard_cards_at(&path, vec!["total_tokens".into(), "api_cost".into(), "body_speed".into()], Some(result.order.clone())).unwrap();
+        assert_eq!(enabled.cards, ["body_speed", "api_cost", "total_tokens"]);
+        assert_eq!(enabled.order, result.order);
+        let empty = set_dashboard_cards_at(&path, Vec::new(), Some(result.order.clone())).unwrap();
+        assert!(empty.cards.is_empty());
+        assert_eq!(load_config_at(&path).unwrap().dashboard.order, result.order);
+    }
+    #[test]
     fn dashboard_selection_order_and_empty_choice_survive_stale_settings_saves() {
         let root = tempfile::tempdir().unwrap();
         let path = root.path().join(CONFIG_FILE);
@@ -133,14 +155,14 @@ mod tests {
         let desktop = DesktopPreferences { launch_at_login: true, ..Default::default() };
         set_desktop_preferences_at(&path, &desktop).unwrap();
         let selected = vec!["average_input".into(), "account_status".into(), "aggregate_quota".into(), "body_speed".into(), "total_tokens".into(), "first_text_latency".into()];
-        set_dashboard_cards_at(&path, selected.clone()).unwrap();
+        set_dashboard_cards_at(&path, selected.clone(), None).unwrap();
         stale.language = "en".into();
         save_config_at(&path, &stale).unwrap();
         let actual = load_config_at(&path).unwrap();
         assert_eq!(actual.dashboard.cards, selected);
         assert_eq!(actual.language, "en");
         assert!(actual.desktop.launch_at_login);
-        set_dashboard_cards_at(&path, Vec::new()).unwrap();
+        set_dashboard_cards_at(&path, Vec::new(), None).unwrap();
         save_config_at(&path, &stale).unwrap();
         assert!(load_config_at(&path).unwrap().dashboard.cards.is_empty());
     }
@@ -154,7 +176,7 @@ mod tests {
         assert_eq!(migrated.dashboard.cards, ["api_cost", "average_input", "account_status"]);
         save_config_at(&path, &migrated).unwrap();
         assert_eq!(load_config_at(&path).unwrap().dashboard.cards, migrated.dashboard.cards);
-        set_dashboard_cards_at(&path, vec!["body_speed".into(), "api_cost".into()]).unwrap();
+        set_dashboard_cards_at(&path, vec!["body_speed".into(), "api_cost".into()], None).unwrap();
         assert_eq!(load_config_at(&path).unwrap().dashboard.cards, ["body_speed", "api_cost"]);
     }
 
@@ -166,7 +188,7 @@ mod tests {
         assert_eq!(load_config_at(&path).unwrap().dashboard.cards, ["body_speed", "api_cost"]);
         fs::write(&path, b"{broken configuration").unwrap();
         let original = fs::read(&path).unwrap();
-        assert!(set_dashboard_cards_at(&path, Vec::new()).is_err());
+        assert!(set_dashboard_cards_at(&path, Vec::new(), None).is_err());
         assert_eq!(fs::read(&path).unwrap(), original);
     }
     #[test]

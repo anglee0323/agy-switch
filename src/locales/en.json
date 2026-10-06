@@ -464,7 +464,7 @@
   },
   "dashboard_settings": {
     "title": "Dashboard cards",
-    "description": "Configure dashboard metrics and display order. Select cards and drag their handles to reorder. Changes save automatically.",
+    "description": "Checkboxes only show or hide cards without moving options. Drag handles to change the order. Changes save automatically.",
     "selected_count": "Selected cards: {{count}}",
     "saving": "Saving…",
     "save_failed": "Could not save: {{error}}. Please retry.",

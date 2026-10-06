@@ -53,8 +53,8 @@ pub async fn set_menu_bar_preferences(
 
 /// Save dashboard card selection and order without overwriting other settings.
 #[tauri::command]
-pub async fn set_dashboard_cards(cards: Vec<String>) -> Result<crate::models::config::DashboardPreferences, String> {
-    tokio::task::spawn_blocking(move || modules::config::set_dashboard_cards(cards))
+pub async fn set_dashboard_cards(cards: Vec<String>, order: Option<Vec<String>>) -> Result<crate::models::config::DashboardPreferences, String> {
+    tokio::task::spawn_blocking(move || modules::config::set_dashboard_cards(cards, order))
         .await.map_err(|error| error.to_string())?
 }
 
