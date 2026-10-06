@@ -260,6 +260,7 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             modules::desktop::install_dashboard_shortcut(app.handle())?;
             modules::auto_switch::start(app.handle().clone());
+            modules::quota_refresh::start(app.handle().clone());
             if tray_enabled {
                 match modules::tray::create_tray(app.handle()) {
                     Ok(()) => {

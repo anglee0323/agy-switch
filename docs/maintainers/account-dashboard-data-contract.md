@@ -24,6 +24,29 @@ Group buckets are authoritative observations. Models associated by the existing 
 
 Authentication (`disabled`, `verification_required`, `not_verified`, `unknown`), quota (`reported`, `exhausted`, `partial`, `unknown`, `forbidden`) and freshness are independent observations. A successful saved read/old quota response does not authenticate the account now. `reported` does not imply switchability; consumers must also check fresh data, reset expiry, local protection and authentication restrictions. Local token statistics have no account attribution and are absent from this contract.
 
+## Background quota freshness
+
+Automatic full-account quota refresh runs on the native Rust runtime, independently
+of main-window visibility or WebView timers. Hidden WebKit pages can throttle or
+suspend JavaScript work ([WebKit power behavior](https://webkit.org/blog/8970/how-web-content-can-affect-power-usage/));
+the frontend only saves refresh preferences and observes the existing refresh event.
+The native loop reads saved settings every five seconds. Enabling refresh or changing
+its interval starts a new round; disabling it or setting a nonpositive interval stops
+new rounds. A started request may finish after the preference changes.
+
+Each period reserves 10% of the configured interval, capped at 30 seconds, for API
+latency before the presentation freshness cutoff. Resume from sleep starts at most
+one round, never a catch-up burst. Overlapping automatic/manual full-account requests
+join the same in-flight batch; a completed result is not reused for a later request.
+Partial/network failures retain their original observation timestamps and remain
+unknown when stale. Display and account-switch policy freshness rules are unchanged;
+menu opening reads local observations without triggering credential refresh.
+
+Synthetic regression checks cover one hour of native refresh with all five account
+rows and aggregate coverage, preference changes/opt-out/resume, overlapping manual
+and automatic requests, retry after failure, and absence of frontend quota timers.
+These checks perform no real account authorization, switching or quota requests.
+
 ## Validation boundaries
 
 Synthetic fixtures cover missing/null values versus real zero, legacy cache provenance, shared pool mappings, conflicting duplicates, partial group coverage, separate status axes, missing/corrupt account files, an unreadable recorded-current entry and a missing/corrupt index. Fixtures never load the user's saved accounts. Rust tests also verify that trailing JSON and indexes remain byte-identical, and serialized responses contain no token fields. GUI and real-account refresh acceptance belong to later batches.

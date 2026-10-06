@@ -5,10 +5,10 @@ export async function settleKeyboardDrag(page: import('@playwright/test').Page) 
 
 // Installs an in-memory IPC double before importing the app. No native bridge,
 // filesystem, accounts, system preference or external quota request is involved.
-export function setupSettingsFixture(options: { theme?: string; language?: string; failLoad?: boolean; failLowQuotaLoad?: boolean; dashboardCards?: string[]; quotaScope?: string } = {}) {
+export function setupSettingsFixture(options: { theme?: string; language?: string; failLoad?: boolean; failLowQuotaLoad?: boolean; dashboardCards?: string[]; quotaScope?: string; autoRefresh?: boolean } = {}) {
     const w = window as any;
     const callbacks: Record<number, Function> = {}; let callback = 1;
-    let general = { language: options.language || 'zh', theme: options.theme || 'light', auto_refresh: false, refresh_interval: 15, auto_sync: false, sync_interval: 5,
+    let general = { language: options.language || 'zh', theme: options.theme || 'light', auto_refresh: options.autoRefresh ?? false, refresh_interval: 15, auto_sync: false, sync_interval: 5,
         dashboard: { cards: options.dashboardCards ?? ['total_tokens', 'input_tokens', 'output_tokens', 'cache_hit_rate', 'api_cost', 'first_text_latency', 'body_speed'], order: [] as string[] },
         desktop: { launch_at_login: false, hide_dock_icon: false, start_minimized: false }, menu_bar: { quota_scope: options.quotaScope || 'all' },
         quota_protection: { enabled: false, threshold_percentage: 10, monitored_models: [] }, pinned_quota_models: { models: [] } };
