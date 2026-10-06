@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { setupSettingsFixture } from './settings-fixture';
+import { settleKeyboardDrag, setupSettingsFixture } from './settings-fixture';
 
 const ids = ['total_tokens', 'input_tokens', 'output_tokens', 'cache_hit_rate', 'api_cost', 'first_text_latency', 'body_speed'];
 const catalog = [...ids, 'account_status', 'aggregate_quota', 'average_input'];
@@ -93,6 +93,7 @@ test('pointer and keyboard dragging save order without selecting hidden cards', 
     await expect(speed).toBeEnabled(); await speed.focus(); await page.keyboard.press('Space');
     await expect(speed).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('status').filter({ hasText: '移动到正文速度的位置' })).toBeVisible();
+    await settleKeyboardDrag(page);
     await page.keyboard.press('ArrowRight');
     await expect(page.getByRole('status').filter({ hasText: '移动到首字延迟的位置' })).toBeVisible();
     await page.keyboard.press('Space');
@@ -127,6 +128,7 @@ test('hidden cards keep their stored position across navigation and can be reord
     const handle = section.locator('[data-card-option="input_tokens"] button');
     await handle.scrollIntoViewIfNeeded(); await handle.focus(); await page.keyboard.press('Space');
     await expect(page.getByRole('status').filter({ hasText: '移动到输入 Token的位置' })).toBeVisible();
+    await settleKeyboardDrag(page);
     await page.keyboard.press('ArrowUp');
     await expect(page.getByRole('status').filter({ hasText: '移动到正文速度的位置' })).toBeVisible();
     await page.keyboard.press('Space'); await expect(handle).toBeEnabled();

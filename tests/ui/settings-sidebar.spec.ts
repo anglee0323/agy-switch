@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { setupSettingsFixture } from './settings-fixture';
+import { settleKeyboardDrag, setupSettingsFixture } from './settings-fixture';
 test.beforeEach(async ({ page }, info) => {
   const failure = info.annotations.find(a => a.type === 'fixture-failure')?.description;
   await page.addInitScript(setupSettingsFixture, { failLoad: failure === 'general', failLowQuotaLoad: failure === 'low-quota' });
@@ -130,6 +130,7 @@ test('candidate order supports keyboard dragging and survives saved navigation',
   await handle.focus(); await page.keyboard.press('Space'); await expect(handle).toHaveAttribute('aria-pressed', 'true');
   // The initial collision announcement confirms measured rows and an active sensor.
   await expect(page.locator('[role="status"]').filter({ hasText: '目标位置：primary@example.invalid' })).toBeVisible();
+  await settleKeyboardDrag(page);
   await page.keyboard.press('ArrowDown'); await expect(page.locator('[role="status"]').filter({ hasText: '目标位置：backup@example.invalid' })).toBeVisible(); await page.keyboard.press('Space');
   await expect.poll(() => page.evaluate(() => (window as any).__settingsFixture.lowQuota())).toMatchObject({ strategy: 'round_robin', candidate_account_ids: ['fixture-1', 'fixture-0', 'fixture-2'] });
   await page.locator('#settings-tab-general').click(); await page.locator('#settings-tab-autoSwitch').click();
