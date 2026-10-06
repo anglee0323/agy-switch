@@ -48,7 +48,7 @@ jobs:
         run: npm run build
 
       - name: Test menu-bar quota presentation
-        run: node scripts/test-menubar-logic.mjs && node scripts/test-menubar-overview.mjs && node scripts/test-account-dashboard.mjs && node scripts/test-model-pricing.mjs
+        run: node scripts/test-menubar-logic.mjs && node scripts/test-menubar-overview.mjs && node scripts/test-account-dashboard.mjs && node scripts/test-dashboard-overview.mjs && node scripts/test-model-pricing.mjs
 
       - name: Test brand metadata and release names
         run: node --test scripts/test-branding.mjs
