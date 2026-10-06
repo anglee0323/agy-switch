@@ -36,7 +36,7 @@
     "quota_scope_other": "Claude/GPT 系列",
     "quota_used_5h": "5 小时已用",
     "quota_used_weekly": "周额度已用",
-    "quota_average_detail": "{{scope}}平均使用率",
+    "quota_scope_hint": "统计范围：{{scope}}。",
     "quota_used_hint": "与菜单栏使用相同的系列范围及账号显示设置。使用率为 100% 减去有效账号额度的平均剩余比例，不叠加额度容量。过期或缺失观测不参与平均；真实零额度参与统计。周额度按账号报告的重置窗口计算，独立于用量统计日期。",
     "quota_coverage": "有效观测：5 小时 {{session}}/{{total}}，周额度 {{weekly}}/{{total}}。",
     "quota_reset": "额度重置",

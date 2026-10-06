@@ -5,7 +5,8 @@ hit rate, estimated API cost, first-text latency, body output speed, account
 status, aggregate quota and quota reset. Settings uses the same saved selection
 and drag/keyboard ordering for all ten. Existing selections remain unchanged;
 new cards can be enabled individually. Eight or ten selected cards use two rows
-on wide screens; nine use three rows. Narrow and short windows wrap and scroll.
+on wide screens; nine use three rows. All cards share equal widths and heights
+within the grid, including across rows. Narrow and short windows wrap and scroll.
 The model-detail section retains enough height for its table instead of
 collapsing when the card grid occupies additional rows.
 
@@ -27,8 +28,9 @@ unavailability. These are quota readiness counts, not live login verification.
 visibility preference, freshness interval and equal-weight account/family mean.
 Each window shows used percentage as 100 minus mean remaining quota. Missing or
 stale observations are excluded, while known zero quota is included. Coverage
-counts are in the tooltip. The percentages never add up account allowances or
-estimate token capacity. Weekly refers to the server-reported reset window, not
+counts and family scope are in the tooltip; the card contains only the two quota
+windows, without an additional scope footer. The percentages never add up account
+allowances or estimate token capacity. Weekly refers to the server-reported reset window, not
 a calendar-week token total. No eligible observations produce `—`.
 
 **Quota reset** finds the earliest future reset among valid, partially or fully

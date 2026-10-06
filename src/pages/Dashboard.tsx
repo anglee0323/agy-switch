@@ -274,13 +274,13 @@ function TokenCard({
     icon: typeof Cpu;
     displayValue?: string;
     unit?: string;
-    detail?: string;
+    detail?: string | null;
     hint?: string;
     locale: string;
     children?: ReactNode;
 }) {
     return (
-        <div data-dashboard-card={cardId} className="relative min-w-0 rounded-2xl border border-gray-100 bg-white p-3 shadow-sm transition-all hover:border-gray-200 hover:shadow-md dark:border-base-200 dark:bg-base-100">
+        <div data-dashboard-card={cardId} title={detail === null ? hint : undefined} className="relative min-w-0 rounded-2xl border border-gray-100 bg-white p-3 shadow-sm transition-all hover:border-gray-200 hover:shadow-md dark:border-base-200 dark:bg-base-100">
             <div className="mb-2 flex items-center justify-between">
                 <div className="flex min-w-0 items-center gap-1.5 text-xs font-medium leading-4 text-gray-600 dark:text-gray-300">
                     <span className={`shrink-0 rounded-lg p-1.5 ${color}`}>
@@ -293,13 +293,13 @@ function TokenCard({
                 {displayValue || compactTokens(value, locale)}
                 {unit && <> <span className="inline-block text-sm font-medium text-gray-500 dark:text-gray-400">{unit}</span></>}
             </div>}
-            <div
+            {detail !== null && <div
                 data-card-detail
                 className="mt-1 break-words text-xs leading-5 text-gray-500 dark:text-gray-400"
                 title={hint || detail || `${formatTokens(value, locale)} Token`}
             >
                 {detail || `${formatTokens(value, locale)} Token`}
-            </div>
+            </div>}
         </div>
     );
 }
@@ -595,8 +595,8 @@ function Dashboard() {
         aggregate_quota: (<TokenCard cardId="aggregate_quota"
             label={t('local_dashboard.aggregate_quota')}
             value={0}
-            detail={overview ? t('local_dashboard.quota_average_detail', { scope: quotaScope }) : overviewUnavailable}
-            hint={`${t('local_dashboard.quota_used_hint')}\n${overview ? t('local_dashboard.quota_coverage', {
+            detail={null}
+            hint={`${t('local_dashboard.quota_scope_hint', { scope: quotaScope })}\n${t('local_dashboard.quota_used_hint')}\n${overview ? t('local_dashboard.quota_coverage', {
                 session: overview.windows['5h'].covered, weekly: overview.windows.weekly.covered, total: overview.windows['5h'].total,
             }) : overviewUnavailable}`}
             color="bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-300"
@@ -606,7 +606,7 @@ function Dashboard() {
             <div className="space-y-1">
                 {(['5h', 'weekly'] as const).map(window => <div key={window} data-quota-window={window} className="flex flex-wrap items-baseline justify-between gap-x-2">
                     <span className="text-xs leading-5 text-gray-600 dark:text-gray-300">{t(`local_dashboard.quota_used_${window}`)}</span>
-                    <span className="text-lg font-bold tabular-nums tracking-tight text-gray-900 dark:text-base-content">{quotaDisplay(overview?.windows[window].used ?? null)}</span>
+                    <span className="text-lg font-bold leading-6 tabular-nums tracking-tight text-gray-900 dark:text-base-content">{quotaDisplay(overview?.windows[window].used ?? null)}</span>
                 </div>)}
             </div>
         </TokenCard>),
@@ -679,7 +679,7 @@ function Dashboard() {
                     </div>
                 )}
 
-                {visibleCards.length > 0 && <div className={`grid shrink-0 gap-2 ${dashboardGridClass(visibleCards.length)}`} data-dashboard-cards>
+                {visibleCards.length > 0 && <div className={`grid auto-rows-fr shrink-0 gap-2 ${dashboardGridClass(visibleCards.length)}`} data-dashboard-cards>
                     {visibleCards.map(id => <Fragment key={id}>{cards[id]}</Fragment>)}
                 </div>}
 

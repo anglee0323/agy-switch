@@ -36,7 +36,7 @@
     "quota_scope_other": "Claude/GPT",
     "quota_used_5h": "5-hour used",
     "quota_used_weekly": "Weekly used",
-    "quota_average_detail": "{{scope}} mean usage",
+    "quota_scope_hint": "Scope: {{scope}}.",
     "quota_used_hint": "Uses the menu's family scope and account visibility settings. Usage is 100% minus the mean remaining quota of valid accounts, not summed capacity. Missing or stale observations are excluded; known zero quota is included. Weekly quota follows the account's reported reset window, independently of the usage date range.",
     "quota_coverage": "Valid observations: 5-hour {{session}}/{{total}}, weekly {{weekly}}/{{total}}.",
     "quota_reset": "Quota reset",

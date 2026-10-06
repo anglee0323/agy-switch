@@ -5,7 +5,7 @@ import { makeDashboardSnapshot } from './dashboard-overview-fixture';
 const originalCards = ['total_tokens', 'input_tokens', 'output_tokens', 'cache_hit_rate', 'api_cost', 'first_text_latency', 'body_speed'];
 const newCards = ['account_status', 'aggregate_quota', 'quota_reset'];
 const allCards = [...originalCards, ...newCards];
-async function setup(page: Page, cards = allCards, language = 'zh', withModels = false) {
+async function setup(page: Page, cards = allCards, language = 'zh', withModels = false, quotaScope = 'all') {
     const install = (snapshot: ReturnType<typeof makeDashboardSnapshot>, withModels: boolean) => {
         const w = window as any, original = w.__TAURI_INTERNALS__.invoke;
         w.__overviewFixture = { snapshot, fail: false, hold: false, resolve: null };
@@ -24,7 +24,7 @@ async function setup(page: Page, cards = allCards, language = 'zh', withModels =
             return original(command, args);
         };
     };
-    await page.addInitScript({ content: `(${setupSettingsFixture.toString()})(${JSON.stringify({ language, dashboardCards: cards })});(${install.toString()})((${makeDashboardSnapshot.toString()})(Date.now()),${withModels});` });
+    await page.addInitScript({ content: `(${setupSettingsFixture.toString()})(${JSON.stringify({ language, dashboardCards: cards, quotaScope })});(${install.toString()})((${makeDashboardSnapshot.toString()})(Date.now()),${withModels});` });
     await page.goto('/');
 }
 
@@ -56,7 +56,7 @@ for (const language of ['zh', 'en']) test(`ten selectable cards remain readable 
     await expect(quota.locator('[data-quota-window="weekly"]')).toContainText('67%');
     await expect(reset).toContainText(language === 'zh' ? '3 小时 0 分' : '3h 0m');
     await expect(reset).toContainText(language === 'zh' ? '5 小时额度，3 个账号' : '5-hour quota, 3 account(s)');
-    expect(await quota.locator('[data-card-detail]').getAttribute('title')).toContain('3/4');
+    expect(await quota.getAttribute('title')).toContain('3/4');
     const range = page.getByRole('button', { name: language === 'zh' ? '近 30 天' : 'Last 30 days', exact: true });
     await range.click(); await expect(quota.locator('[data-quota-window="5h"]')).toContainText('53%');
     for (const width of [1440, 1046, 760, 420]) {
@@ -65,9 +65,11 @@ for (const language of ['zh', 'en']) test(`ten selectable cards remain readable 
         const columns = await page.locator('[data-dashboard-cards]').evaluate(el => getComputedStyle(el).gridTemplateColumns.split(' ').length);
         expect(columns).toBe(width >= 1280 ? 5 : width >= 768 ? 3 : 2);
         expect(await page.locator('[data-dashboard-card]').evaluateAll(cards => cards.every(card => {
-            const detail = card.querySelector('[data-card-detail]')!;
-            return card.scrollWidth <= card.clientWidth + 1 && detail.scrollHeight <= detail.clientHeight + 1 && getComputedStyle(detail).textOverflow !== 'ellipsis';
+            const detail = card.querySelector('[data-card-detail]');
+            return card.scrollWidth <= card.clientWidth + 1 && (!detail || (detail.scrollHeight <= detail.clientHeight + 1 && getComputedStyle(detail).textOverflow !== 'ellipsis'));
         }))).toBe(true);
+        const heights = await page.locator('[data-dashboard-card]').evaluateAll(cards => cards.map(card => card.getBoundingClientRect().height));
+        expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
         await reset.scrollIntoViewIfNeeded(); await expect(reset).toBeVisible();
         await page.screenshot({ path: `test-results/auto-switch/dashboard-ten-${language}-${width}.png`, fullPage: true });
@@ -75,6 +77,30 @@ for (const language of ['zh', 'en']) test(`ten selectable cards remain readable 
     expect(await page.locator('[data-dashboard-cards]').innerText()).not.toMatch(/[·•]/);
     if (language === 'en') expect(await page.locator('[data-dashboard-cards]').innerText()).not.toMatch(/[\u3400-\u9fff]/);
     expect(await page.evaluate(() => (window as any).__settingsFixture.calls.map((call: any) => call.command))).not.toContain('refresh_all_quotas');
+});
+
+for (const language of ['zh', 'en']) test(`eight cards have equal dimensions without a quota scope footer (${language})`, async ({ page }) => {
+    const saved = ['total_tokens', 'cache_hit_rate', 'first_text_latency', 'body_speed', 'api_cost', 'account_status', 'quota_reset', 'aggregate_quota'];
+    await setup(page, saved, language, false, 'gemini');
+    const quota = page.locator('[data-dashboard-card="aggregate_quota"]');
+    await expect(quota.locator('[data-quota-window]')).toHaveCount(2);
+    await expect(quota.locator('[data-card-detail]')).toHaveCount(0);
+    await expect(quota).not.toContainText('Gemini');
+    expect(await quota.getAttribute('title')).toContain('Gemini');
+    for (const width of [1440, 1046, 760, 420]) {
+        await page.setViewportSize({ width, height: 520 });
+        const sizes = await page.locator('[data-dashboard-card]').evaluateAll(cards => cards.map(card => ({
+            width: card.getBoundingClientRect().width, height: card.getBoundingClientRect().height,
+        })));
+        expect(sizes).toHaveLength(8);
+        for (const dimension of ['width', 'height'] as const) {
+            const values = sizes.map(size => size[dimension]);
+            expect(Math.max(...values) - Math.min(...values)).toBeLessThanOrEqual(1);
+        }
+        await quota.scrollIntoViewIfNeeded(); await expect(quota).toBeInViewport({ ratio: 1 });
+        await page.screenshot({ path: `test-results/auto-switch/dashboard-uniform-eight-${language}-${width}.png`, fullPage: true });
+    }
+    expect(await page.locator('[data-dashboard-card]').evaluateAll(cards => cards.map(card => card.getAttribute('data-dashboard-card')))).toEqual(saved);
 });
 
 test('existing five-card selection survives expansion; new choices and keyboard order persist', async ({ page }) => {
