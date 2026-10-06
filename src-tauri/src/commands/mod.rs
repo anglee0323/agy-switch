@@ -51,6 +51,13 @@ pub async fn set_menu_bar_preferences(
     Ok(preferences)
 }
 
+/// Save dashboard card selection and order without overwriting other settings.
+#[tauri::command]
+pub async fn set_dashboard_cards(cards: Vec<String>) -> Result<crate::models::config::DashboardPreferences, String> {
+    tokio::task::spawn_blocking(move || modules::config::set_dashboard_cards(cards))
+        .await.map_err(|error| error.to_string())?
+}
+
 /// 添加账号
 #[tauri::command]
 pub async fn add_account(

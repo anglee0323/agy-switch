@@ -45,6 +45,7 @@ const Settings = compile('../src/pages/Settings.tsx', {
     '../components/common/ToastContainer': { showToast() {} }, '@tauri-apps/plugin-dialog': { open: async () => null },
     '../components/settings/UpdateSettings': { default: 'UpdateSettings' },
     '../components/settings/DesktopSettings': { default: 'DesktopSettings' },
+    '../components/settings/DashboardSettings': { default: 'DashboardSettings' },
     '../components/settings/ModelDisplaySettings': { default: 'ModelDisplaySettings' },
     '../components/autoSwitch/AutoSwitch': { AutoSwitchSettings: 'AutoSwitchSettings' },
     '../components/settings/SettingsNavigation': { ...nav, default: 'SettingsNavigation' },
@@ -85,7 +86,7 @@ test('all category panels remain rendered while only one is visible', () => {
 });
 test('data, startup and background controls remain present', () => {
     const tree = renderSettings();
-    for (const type of ['DesktopSettings', 'ModelDisplaySettings']) assert.equal(walk(tree, n => n.type === type).length, 1);
+    for (const type of ['DesktopSettings', 'DashboardSettings', 'ModelDisplaySettings']) assert.equal(walk(tree, n => n.type === type).length, 1);
     for (const id of ['refresh-interval', 'sync-interval']) assert.equal(walk(tree, n => n.props?.id === id).length, 1);
 });
 test('category scroll reset clears both scrollers without invoking config writes', () => {

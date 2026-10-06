@@ -8,6 +8,7 @@ import { showToast } from '../components/common/ToastContainer';
 import { open } from '@tauri-apps/plugin-dialog';
 import UpdateSettings from '../components/settings/UpdateSettings';
 import DesktopSettings from '../components/settings/DesktopSettings';
+import DashboardSettings from '../components/settings/DashboardSettings';
 import ModelDisplaySettings from '../components/settings/ModelDisplaySettings';
 import { AutoSwitchSettings } from '../components/autoSwitch/AutoSwitch';
 import SettingsNavigation, { SETTINGS_SECTIONS, SettingsSection } from '../components/settings/SettingsNavigation';
@@ -175,6 +176,7 @@ function Settings() {
                 </section>
 
                 {/* 2. 桌面与系统窗口 */}
+                <DashboardSettings />
                 <UpdateSettings />
                 <DesktopSettings />
 
@@ -329,7 +331,7 @@ function Settings() {
                                     <Database className="h-4 w-4 text-emerald-500" />
                                     <span>{t('local_settings.auto_sync')}</span>
                                     <span className="px-2 py-0.5 rounded-md text-xs font-medium bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-gray-300">
-                                        {t('local_settings.auto_sync_badge', '可选 · 默认关闭')}
+                                        {t('local_settings.auto_sync_badge', '可选，默认关闭')}
                                     </span>
                                 </div>
                                 <p className="mt-1 text-xs leading-relaxed text-gray-500 dark:text-gray-400">

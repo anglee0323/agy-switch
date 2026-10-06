@@ -12,6 +12,14 @@ actual sample count appear in the card detail; these cards are independent of th
 usage date-range selector. One available sample can be shown; no eligible samples
 produce an unknown value (`—`), never a zero-speed claim.
 
+In **Settings > General > Dashboard cards**, select any of the seven summary
+cards and drag their handles to set the display order, using the same interaction
+as smart-switch candidates. Keyboard users can press Space, move with the arrow
+keys and confirm with Space. Changes save automatically and persist across app
+restarts. The dashboard adapts its columns to the selection; an empty selection
+hides the summary cards while retaining charts. Existing configurations default
+to all seven cards. Appearance changes cannot overwrite a newer card selection.
+
 Native `ChatModelMetadata` supplies `time_to_first_token` (field 11),
 `streaming_duration` (12), and usage `response_output_tokens` (10).
 `thinking_output_tokens` (9) is excluded from body speed. The estimate is response
@@ -39,4 +47,5 @@ checks for both locales, unknown data and narrower windows:
 cargo test --locked --manifest-path src-tauri/Cargo.toml --lib native_token_stats::
 npm run build
 npx playwright test tests/ui/dashboard-performance.spec.ts tests/ui/dashboard-cost.spec.ts
+npx playwright test tests/ui/dashboard-cards.spec.ts
 ```

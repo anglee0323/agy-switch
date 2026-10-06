@@ -5,6 +5,20 @@ export interface DesktopPreferences {
 }
 
 export type MenuBarQuotaScope = 'all' | 'gemini' | 'other';
+export const DASHBOARD_CARD_IDS = ['total_tokens', 'input_tokens', 'output_tokens', 'cache_hit_rate', 'api_cost', 'first_text_latency', 'body_speed'] as const;
+export type DashboardCardId = typeof DASHBOARD_CARD_IDS[number];
+export interface DashboardPreferences { cards: DashboardCardId[]; }
+export function dashboardCards(cards: unknown): DashboardCardId[] {
+    if (!Array.isArray(cards)) return [...DASHBOARD_CARD_IDS];
+    return [...new Set(cards.filter((id): id is DashboardCardId => DASHBOARD_CARD_IDS.includes(id)))];
+}
+export function dashboardGridClass(count: number): string {
+    return [
+        '', 'grid-cols-1', 'grid-cols-2', 'grid-cols-2 sm:grid-cols-3',
+        'grid-cols-2 lg:grid-cols-4', 'grid-cols-2 lg:grid-cols-5',
+        'grid-cols-2 md:grid-cols-3 xl:grid-cols-6', 'grid-cols-2 lg:grid-cols-4 xl:grid-cols-7',
+    ][count] || 'grid-cols-2';
+}
 export type MenuBarResetTimeDisplay = 'hidden' | 'hover' | 'always';
 export interface MenuBarPreferences {
     quota_scope: MenuBarQuotaScope;
@@ -37,6 +51,7 @@ export interface PinnedQuotaModelsConfig {
 }
 
 export interface AppConfig {
+    dashboard?: DashboardPreferences;
     desktop?: DesktopPreferences;
     menu_bar?: MenuBarPreferences;
     language: string;

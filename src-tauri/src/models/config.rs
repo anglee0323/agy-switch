@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct AppConfig {
+    pub dashboard: DashboardPreferences,
     pub desktop: DesktopPreferences,
     pub menu_bar: MenuBarPreferences,
     pub language: String,
@@ -18,6 +19,30 @@ pub struct AppConfig {
     pub antigravity_args: Option<Vec<String>>,
     pub quota_protection: QuotaProtectionConfig,
     pub pinned_quota_models: PinnedQuotaModelsConfig,
+}
+
+/// Stable card identifiers used by the homepage and settings editor.
+const DEFAULT_DASHBOARD_CARDS: [&str; 7] = [
+    "total_tokens", "input_tokens", "output_tokens", "cache_hit_rate", "api_cost",
+    "first_text_latency", "body_speed",
+];
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct DashboardPreferences {
+    /// Selected cards in display order. An explicit empty list hides all cards.
+    pub cards: Vec<String>,
+}
+impl Default for DashboardPreferences {
+    fn default() -> Self {
+        Self { cards: DEFAULT_DASHBOARD_CARDS.iter().map(|id| (*id).to_string()).collect() }
+    }
+}
+impl DashboardPreferences {
+    pub fn normalize(&mut self) {
+        let mut seen = std::collections::HashSet::new();
+        self.cards.retain(|id| DEFAULT_DASHBOARD_CARDS.contains(&id.as_str()) && seen.insert(id.clone()));
+    }
 }
 
 /// Preferences are opt-in and migrate safely from older config files.
@@ -169,6 +194,7 @@ impl Default for PinnedQuotaModelsConfig {
 impl AppConfig {
     pub fn new() -> Self {
         Self {
+            dashboard: DashboardPreferences::default(),
             desktop: DesktopPreferences::default(),
             menu_bar: MenuBarPreferences::default(),
             language: crate::modules::i18n::default_language(),
@@ -196,6 +222,16 @@ impl Default for AppConfig {
 #[cfg(test)]
 mod tests {
     use super::AppConfig;
+
+    #[test]
+    fn legacy_dashboard_defaults_to_all_cards_without_overriding_empty_selection() {
+        let old: AppConfig = serde_json::from_str(r#"{"language":"zh"}"#).unwrap();
+        assert_eq!(old.dashboard.cards.len(), 7);
+        let empty: AppConfig = serde_json::from_str(r#"{"dashboard":{"cards":[]}}"#).unwrap();
+        assert!(empty.dashboard.cards.is_empty());
+        let restored: AppConfig = serde_json::from_str(&serde_json::to_string(&empty).unwrap()).unwrap();
+        assert!(restored.dashboard.cards.is_empty());
+    }
 
     #[test]
     fn desktop_preferences_are_opt_in_for_new_and_legacy_configs() {

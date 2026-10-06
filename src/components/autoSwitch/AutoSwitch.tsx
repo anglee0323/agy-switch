@@ -49,7 +49,7 @@ function StatusBody({ status, compact = false }: { status: AutoSwitchStatus; com
             <div className="min-w-0 space-y-1">
                 <p className="text-sm font-medium text-slate-800 dark:text-slate-100" role="status">
                     {status.remaining_percentage !== null && ['pending', 'switching'].includes(status.phase)
-                        ? t('auto_switch.remaining', { percent: Math.floor(status.remaining_percentage) }) + ' · ' : ''}
+                        ? t('auto_switch.remaining', { percent: Math.floor(status.remaining_percentage) }) + t('auto_switch.status_separator') : ''}
                     {t(`auto_switch.reasons.${reason}`, { defaultValue: t('auto_switch.reasons.switch_failed') })}
                 </p>
                 {status.target_email && <p className="break-all text-xs text-slate-500 dark:text-slate-400">{t('auto_switch.next_account', { email: status.target_email })}</p>}

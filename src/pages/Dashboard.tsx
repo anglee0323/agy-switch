@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, BarChart3, CalendarDays, Cpu, Database, DollarSign, Gauge, LayoutDashboard, MessageSquare, PieChart, RefreshCw, Timer } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { request as invoke } from '../utils/request';
 import { showToast } from '../components/common/ToastContainer';
 import { estimateApiCost, findModelPricing } from '../utils/modelPricing';
+import { useConfigStore } from '../stores/useConfigStore';
+import { dashboardCards, dashboardGridClass, type DashboardCardId } from '../types/config';
 
 interface LocalTokenTotals {
     input_tokens: number;
@@ -250,6 +252,7 @@ function ModelCostDonut({
 }
 
 function TokenCard({
+    cardId,
     label,
     value,
     color,
@@ -259,6 +262,7 @@ function TokenCard({
     hint,
     locale,
 }: {
+    cardId: DashboardCardId;
     label: string;
     value: number;
     color: string;
@@ -269,7 +273,7 @@ function TokenCard({
     locale: string;
 }) {
     return (
-        <div className="relative group rounded-2xl border border-gray-100 bg-white p-3 shadow-sm transition-all hover:border-gray-200 hover:shadow-md dark:border-base-200 dark:bg-base-100 hover:z-30">
+        <div data-dashboard-card={cardId} className="relative group rounded-2xl border border-gray-100 bg-white p-3 shadow-sm transition-all hover:border-gray-200 hover:shadow-md dark:border-base-200 dark:bg-base-100 hover:z-30">
             <div className="mb-2 flex items-center justify-between">
                 <div className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
                     <span className={`rounded-lg p-1.5 ${color}`}>
@@ -292,6 +296,8 @@ function TokenCard({
 }
 
 function Dashboard() {
+    const config = useConfigStore(state => state.config);
+    const visibleCards = dashboardCards(config?.dashboard?.cards);
     const { t, i18n } = useTranslation();
     const locale = i18n.resolvedLanguage === 'zh' ? 'zh-CN' : 'en-US';
     const rangeLabels: Record<RangeKey, string> = {
@@ -507,6 +513,54 @@ function Dashboard() {
             ? `${t('local_dashboard.scanned_at', { time: formatTime(lastUpdatedAt, locale) })}${usage?.last_activity ? t('local_dashboard.data_through', { time: formatTime(usage.last_activity * 1000, locale) }) : ''}`
             : t('local_dashboard.waiting_scan');
 
+    const cards: Record<DashboardCardId, ReactElement> = {
+        total_tokens: (<TokenCard cardId="total_tokens" label={t('local_dashboard.total_tokens', { range: rangeLabels[range] })} value={totals.total_tokens} color="bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-300" icon={BarChart3} locale={locale} />),
+        input_tokens: (<TokenCard cardId="input_tokens" label={t('local_dashboard.input_tokens')} value={totals.input_tokens} color="bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-300" icon={MessageSquare} locale={locale} />),
+        output_tokens: (<TokenCard cardId="output_tokens" label={t('local_dashboard.output_tokens')} value={totals.output_tokens} color="bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-300" icon={Cpu} locale={locale} />),
+        cache_hit_rate: (<TokenCard cardId="cache_hit_rate"
+            label={t('local_dashboard.cache_hit_rate')}
+            value={cacheHitRate}
+            displayValue={`${cacheHitRate.toFixed(1)}%`}
+            detail={t('local_dashboard.cache_hit_rate_detail')}
+            color="bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-300"
+            icon={Database}
+            locale={locale}
+        />),
+        api_cost: (<TokenCard cardId="api_cost"
+            label={t('local_dashboard.api_cost')}
+            value={apiCost.usd}
+            displayValue={apiCost.unpricedModels && !apiCost.pricedModels ? t('local_dashboard.unpriced') : formatUsd(apiCost.usd)}
+            detail={t('local_dashboard.api_requests', {
+                requestCount: formatTokens(totals.request_count, locale),
+                pricing: pricingLabel,
+                unpriced: apiCost.unpricedModels ? t('local_dashboard.pricing_unavailable') : '',
+            })}
+            color="bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-300"
+            icon={DollarSign}
+            locale={locale}
+        />),
+        first_text_latency: (<TokenCard cardId="first_text_latency"
+            label={t('local_dashboard.first_text_latency')}
+            value={performance?.first_text_seconds ?? 0}
+            displayValue={performance ? t('local_dashboard.seconds_value', { value: performance.first_text_seconds.toLocaleString(locale, { maximumFractionDigits: 2 }) }) : '—'}
+            detail={performanceDetail}
+            hint={`${performanceDetail}\n${t('local_dashboard.first_text_hint')}`}
+            color="bg-cyan-50 text-cyan-600 dark:bg-cyan-900/20 dark:text-cyan-300"
+            icon={Timer}
+            locale={locale}
+        />),
+        body_speed: (<TokenCard cardId="body_speed"
+            label={t('local_dashboard.body_speed')}
+            value={performance?.body_tokens_per_second ?? 0}
+            displayValue={performance ? `${performance.body_tokens_per_second.toLocaleString(locale, { maximumFractionDigits: 1 })} token/s` : '—'}
+            detail={performanceDetail}
+            hint={`${performanceDetail}\n${t('local_dashboard.body_speed_hint')}`}
+            color="bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-300"
+            icon={Gauge}
+            locale={locale}
+        />),
+    };
+
     return (
         <div className="h-full w-full overflow-y-auto lg:overflow-hidden">
             <div className="mx-auto flex min-h-full max-w-7xl flex-col gap-2 p-3 lg:h-full lg:min-h-0 lg:p-4">
@@ -563,53 +617,9 @@ function Dashboard() {
                     </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-2 lg:grid-cols-4 xl:grid-cols-7">
-                    <TokenCard label={t('local_dashboard.total_tokens', { range: rangeLabels[range] })} value={totals.total_tokens} color="bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-300" icon={BarChart3} locale={locale} />
-                    <TokenCard label={t('local_dashboard.input_tokens')} value={totals.input_tokens} color="bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-300" icon={MessageSquare} locale={locale} />
-                    <TokenCard label={t('local_dashboard.output_tokens')} value={totals.output_tokens} color="bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-300" icon={Cpu} locale={locale} />
-                    <TokenCard
-                        label={t('local_dashboard.cache_hit_rate')}
-                        value={cacheHitRate}
-                        displayValue={`${cacheHitRate.toFixed(1)}%`}
-                        detail={t('local_dashboard.cache_hit_rate_detail')}
-                        color="bg-emerald-50 text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-300"
-                        icon={Database}
-                        locale={locale}
-                    />
-                    <TokenCard
-                        label={t('local_dashboard.api_cost')}
-                        value={apiCost.usd}
-                        displayValue={apiCost.unpricedModels && !apiCost.pricedModels ? t('local_dashboard.unpriced') : formatUsd(apiCost.usd)}
-                        detail={t('local_dashboard.api_requests', {
-                            requestCount: formatTokens(totals.request_count, locale),
-                            pricing: pricingLabel,
-                            unpriced: apiCost.unpricedModels ? t('local_dashboard.pricing_unavailable') : '',
-                        })}
-                        color="bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-300"
-                        icon={DollarSign}
-                        locale={locale}
-                    />
-                    <TokenCard
-                        label={t('local_dashboard.first_text_latency')}
-                        value={performance?.first_text_seconds ?? 0}
-                        displayValue={performance ? t('local_dashboard.seconds_value', { value: performance.first_text_seconds.toLocaleString(locale, { maximumFractionDigits: 2 }) }) : '—'}
-                        detail={performanceDetail}
-                        hint={`${performanceDetail}\n${t('local_dashboard.first_text_hint')}`}
-                        color="bg-cyan-50 text-cyan-600 dark:bg-cyan-900/20 dark:text-cyan-300"
-                        icon={Timer}
-                        locale={locale}
-                    />
-                    <TokenCard
-                        label={t('local_dashboard.body_speed')}
-                        value={performance?.body_tokens_per_second ?? 0}
-                        displayValue={performance ? `${performance.body_tokens_per_second.toLocaleString(locale, { maximumFractionDigits: 1 })} token/s` : '—'}
-                        detail={performanceDetail}
-                        hint={`${performanceDetail}\n${t('local_dashboard.body_speed_hint')}`}
-                        color="bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-300"
-                        icon={Gauge}
-                        locale={locale}
-                    />
-                </div>
+                {visibleCards.length > 0 && <div className={`grid gap-2 ${dashboardGridClass(visibleCards.length)}`} data-dashboard-cards>
+                    {visibleCards.map(id => <Fragment key={id}>{cards[id]}</Fragment>)}
+                </div>}
 
                 <div className="grid shrink-0 gap-2 lg:h-[176px] lg:grid-cols-[1.35fr_1fr]">
                     <section className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm dark:border-base-200 dark:bg-base-100 lg:flex lg:min-h-0 lg:flex-col">

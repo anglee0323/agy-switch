@@ -1206,11 +1206,11 @@ pub fn run_interactive_dashboard(root: &Path) -> Result<(), CliError> {
         print!("\x1b[2J\x1b[H");
         match lang {
             Lang::Zh => println!(
-                "\x1b[1magy-switch 账号管理\x1b[0m · \x1b[36magy-switch v{}\x1b[0m",
+                "\x1b[1magy-switch 账号管理\x1b[0m: \x1b[36magy-switch v{}\x1b[0m",
                 env!("CARGO_PKG_VERSION")
             ),
             Lang::En => println!(
-                "\x1b[1magy-switch\x1b[0m · \x1b[36mv{}\x1b[0m",
+                "\x1b[1magy-switch\x1b[0m: \x1b[36mv{}\x1b[0m",
                 env!("CARGO_PKG_VERSION")
             ),
         }
@@ -1550,8 +1550,8 @@ fn show_accounts_and_quotas_hub(root: &Path, lang: Lang) {
                 let target_acc = &snapshot.accounts[idx];
                 print!("\x1b[2J\x1b[H");
                 let edit_header = match lang {
-                    Lang::Zh => format!("修改账号备注 · \x1b[1;36m{}\x1b[0m\n", target_acc.email),
-                    Lang::En => format!("Edit Account Label · \x1b[1;36m{}\x1b[0m\n", target_acc.email),
+                    Lang::Zh => format!("修改账号备注: \x1b[1;36m{}\x1b[0m\n", target_acc.email),
+                    Lang::En => format!("Edit Account Label: \x1b[1;36m{}\x1b[0m\n", target_acc.email),
                 };
                 println!("{}", edit_header);
 
@@ -1617,8 +1617,8 @@ fn show_accounts_and_quotas_hub(root: &Path, lang: Lang) {
                 let target_acc = &snapshot.accounts[idx];
                 print!("\x1b[2J\x1b[H");
                 let del_header = match lang {
-                    Lang::Zh => format!("删除账号 · \x1b[1;31m{}\x1b[0m\n", target_acc.email),
-                    Lang::En => format!("Delete Account · \x1b[1;31m{}\x1b[0m\n", target_acc.email),
+                    Lang::Zh => format!("删除账号: \x1b[1;31m{}\x1b[0m\n", target_acc.email),
+                    Lang::En => format!("Delete Account: \x1b[1;31m{}\x1b[0m\n", target_acc.email),
                 };
                 println!("{}", del_header);
 
@@ -1668,8 +1668,8 @@ fn show_accounts_and_quotas_hub(root: &Path, lang: Lang) {
 fn show_single_account_quota(acc: &AccountView, lang: Lang) {
     print!("\x1b[2J\x1b[H");
     let title = match lang {
-        Lang::Zh => format!("账号配额详情 · {}", acc.email),
-        Lang::En => format!("Quota Details · {}", acc.email),
+        Lang::Zh => format!("账号配额详情: {}", acc.email),
+        Lang::En => format!("Quota Details: {}", acc.email),
     };
     println!("\x1b[1m{}\x1b[0m\n", title);
 
@@ -2316,8 +2316,8 @@ fn show_add_account(_root: &Path, lang: Lang) {
             Some(0) => {
             print!("\x1b[2J\x1b[H");
             let sub_title = match lang {
-                Lang::Zh => "浏览器一键授权 · Google OAuth",
-                Lang::En => "Browser Authorization · Google OAuth",
+                Lang::Zh => "浏览器一键授权: Google OAuth",
+                Lang::En => "Browser Authorization: Google OAuth",
             };
             println!("\x1b[1m{}\x1b[0m\n", sub_title);
 
@@ -2428,8 +2428,8 @@ fn show_add_account(_root: &Path, lang: Lang) {
         Some(1) => {
             print!("\x1b[2J\x1b[H");
             let sub_title = match lang {
-                Lang::Zh => "手动导入凭据 · Refresh Token",
-                Lang::En => "Manual Import · Refresh Token",
+                Lang::Zh => "手动导入凭据: Refresh Token",
+                Lang::En => "Manual Import: Refresh Token",
             };
             println!("\x1b[1m{}\x1b[0m\n", sub_title);
 
