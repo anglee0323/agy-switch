@@ -1732,7 +1732,7 @@ pub async fn fetch_quota_with_retry(account: &mut Account) -> crate::error::AppR
     }
 }
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub struct RefreshStats {
     pub total: usize,
     pub success: usize,
@@ -1742,6 +1742,11 @@ pub struct RefreshStats {
 
 /// Core logic to batch refresh all account quotas (decoupled from Tauri status)
 pub async fn refresh_all_quotas_logic() -> Result<RefreshStats, String> {
+    static REFRESH: super::quota_refresh::SingleFlight<RefreshStats> = super::quota_refresh::SingleFlight::new();
+    REFRESH.run(refresh_all_quotas_once).await
+}
+
+async fn refresh_all_quotas_once() -> Result<RefreshStats, String> {
     use futures::future::join_all;
     use std::sync::Arc;
     use tokio::sync::Semaphore;

@@ -24,6 +24,7 @@ pub mod oauth_server;
 pub mod process;
 pub mod project_resolver;
 pub mod quota;
+pub mod quota_refresh;
 pub mod tray;
 pub mod version;
 

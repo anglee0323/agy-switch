@@ -109,7 +109,7 @@
     "background_tasks": "Background tasks",
     "background_tasks_desc": "Choose how often account quotas refresh and the active account syncs.",
     "auto_refresh": "Refresh account quotas",
-    "auto_refresh_desc": "Periodically query Google API to refresh quota and reset countdowns for all accounts.",
+    "auto_refresh_desc": "Refresh quota and reset times for all accounts in the background, even when the main window is hidden.",
     "auto_refresh_badge": "Recommended",
     "refresh_interval": "Refresh interval",
     "auto_sync": "Auto-sync new accounts from official app",

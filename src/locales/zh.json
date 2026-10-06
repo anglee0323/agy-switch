@@ -109,7 +109,7 @@
     "background_tasks": "后台任务",
     "background_tasks_desc": "设置账号配额刷新和当前账号同步频率。",
     "auto_refresh": "自动刷新账号配额",
-    "auto_refresh_desc": "定时在后台向 Google API 查询并刷新所有账号的最新配额与重置时间，保持额度最新。",
+    "auto_refresh_desc": "在后台定时刷新全部账号的额度与重置时间，主窗口隐藏时仍持续运行。",
     "auto_refresh_badge": "推荐开启",
     "refresh_interval": "刷新间隔",
     "auto_sync": "同步官方应用新登录账号",
