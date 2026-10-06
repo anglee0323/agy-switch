@@ -1,11 +1,14 @@
-import { Fragment, type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, BarChart3, CalendarDays, Cpu, Database, DollarSign, Gauge, LayoutDashboard, MessageSquare, PieChart, RefreshCw, Timer } from 'lucide-react';
+import { Fragment, type ReactElement, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Activity, BarChart3, CalendarDays, Clock3, Cpu, Database, DollarSign, Gauge, LayoutDashboard, MessageSquare, PieChart, RefreshCw, Timer, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { request as invoke } from '../utils/request';
 import { showToast } from '../components/common/ToastContainer';
 import { estimateApiCost, findModelPricing } from '../utils/modelPricing';
 import { useConfigStore } from '../stores/useConfigStore';
-import { dashboardCards, dashboardGridClass, type DashboardCardId } from '../types/config';
+import { dashboardCards, dashboardGridClass, DEFAULT_MENU_BAR_PREFERENCES, type DashboardCardId } from '../types/config';
+import { dashboardOverview, resetCountdown } from '../utils/dashboardOverview';
+import { quotaDisplay } from '../utils/menuBarOverview';
+import { useDashboardOverview } from '../hooks/useDashboardOverview';
 
 interface LocalTokenTotals {
     input_tokens: number;
@@ -262,6 +265,7 @@ function TokenCard({
     detail,
     hint,
     locale,
+    children,
 }: {
     cardId: DashboardCardId;
     label: string;
@@ -273,6 +277,7 @@ function TokenCard({
     detail?: string;
     hint?: string;
     locale: string;
+    children?: ReactNode;
 }) {
     return (
         <div data-dashboard-card={cardId} className="relative min-w-0 rounded-2xl border border-gray-100 bg-white p-3 shadow-sm transition-all hover:border-gray-200 hover:shadow-md dark:border-base-200 dark:bg-base-100">
@@ -284,10 +289,10 @@ function TokenCard({
                     {label}
                 </div>
             </div>
-            <div className="break-words text-xl font-bold tracking-tight text-gray-900 dark:text-base-content" title={`${displayValue || formatTokens(value, locale)}${unit ? ` ${unit}` : ''}`}>
+            {children ?? <div className="break-words text-xl font-bold tracking-tight text-gray-900 dark:text-base-content" title={`${displayValue || formatTokens(value, locale)}${unit ? ` ${unit}` : ''}`}>
                 {displayValue || compactTokens(value, locale)}
                 {unit && <> <span className="inline-block text-sm font-medium text-gray-500 dark:text-gray-400">{unit}</span></>}
-            </div>
+            </div>}
             <div
                 data-card-detail
                 className="mt-1 break-words text-xs leading-5 text-gray-500 dark:text-gray-400"
@@ -302,8 +307,17 @@ function TokenCard({
 function Dashboard() {
     const config = useConfigStore(state => state.config);
     const visibleCards = dashboardCards(config?.dashboard?.cards);
+    const accountData = useDashboardOverview(Boolean(config) && visibleCards.some(id => ['account_status', 'aggregate_quota', 'quota_reset'].includes(id)));
     const { t, i18n } = useTranslation();
     const locale = i18n.resolvedLanguage === 'zh' ? 'zh-CN' : 'en-US';
+    const quotaPreferences = useMemo(() => ({ ...DEFAULT_MENU_BAR_PREFERENCES, ...config?.menu_bar }), [config?.menu_bar]);
+    const overview = useMemo(() => accountData.snapshot ? dashboardOverview(accountData.snapshot, quotaPreferences, accountData.now,
+        config?.refresh_interval, accountData.reserve ?? config?.quota_protection.threshold_percentage ?? 10) : null,
+    [accountData.snapshot, accountData.now, accountData.reserve, quotaPreferences, config?.refresh_interval, config?.quota_protection.threshold_percentage]);
+    const quotaScope = t(`local_dashboard.quota_scope_${quotaPreferences.quota_scope}`);
+    const overviewUnavailable = t(accountData.failed ? 'local_dashboard.overview_failed' : accountData.loading ? 'local_dashboard.overview_loading' : 'local_dashboard.overview_unknown');
+    const nextReset = overview?.reset;
+    const countdown = nextReset ? resetCountdown(nextReset.at, accountData.now) : null;
     const rangeLabels: Record<RangeKey, string> = {
         today: t('local_dashboard.today'),
         yesterday: t('local_dashboard.yesterday'),
@@ -567,6 +581,46 @@ function Dashboard() {
             icon={Gauge}
             locale={locale}
         />),
+        account_status: (<TokenCard cardId="account_status"
+            label={t('local_dashboard.account_status')}
+            value={overview?.accounts.total ?? 0}
+            displayValue={overview ? formatTokens(overview.accounts.total, locale) : '—'}
+            unit={overview ? t('local_dashboard.accounts_unit') : undefined}
+            detail={overview ? t('local_dashboard.account_status_detail', overview.accounts) : overviewUnavailable}
+            hint={t('local_dashboard.account_status_hint', { scope: quotaScope, threshold: overview?.threshold ?? 10 })}
+            color="bg-teal-50 text-teal-600 dark:bg-teal-900/20 dark:text-teal-300"
+            icon={Users}
+            locale={locale}
+        />),
+        aggregate_quota: (<TokenCard cardId="aggregate_quota"
+            label={t('local_dashboard.aggregate_quota')}
+            value={0}
+            detail={overview ? t('local_dashboard.quota_average_detail', { scope: quotaScope }) : overviewUnavailable}
+            hint={`${t('local_dashboard.quota_used_hint')}\n${overview ? t('local_dashboard.quota_coverage', {
+                session: overview.windows['5h'].covered, weekly: overview.windows.weekly.covered, total: overview.windows['5h'].total,
+            }) : overviewUnavailable}`}
+            color="bg-orange-50 text-orange-600 dark:bg-orange-900/20 dark:text-orange-300"
+            icon={PieChart}
+            locale={locale}
+        >
+            <div className="space-y-1">
+                {(['5h', 'weekly'] as const).map(window => <div key={window} data-quota-window={window} className="flex flex-wrap items-baseline justify-between gap-x-2">
+                    <span className="text-xs leading-5 text-gray-600 dark:text-gray-300">{t(`local_dashboard.quota_used_${window}`)}</span>
+                    <span className="text-lg font-bold tabular-nums tracking-tight text-gray-900 dark:text-base-content">{quotaDisplay(overview?.windows[window].used ?? null)}</span>
+                </div>)}
+            </div>
+        </TokenCard>),
+        quota_reset: (<TokenCard cardId="quota_reset"
+            label={t('local_dashboard.quota_reset')}
+            value={0}
+            displayValue={countdown ? t(`local_dashboard.${countdown.key}`, countdown) : '—'}
+            detail={nextReset ? t('local_dashboard.quota_reset_detail', { window: t(`local_dashboard.quota_reset_${nextReset.window}`), count: nextReset.accounts })
+                : overview ? t('local_dashboard.quota_reset_empty') : overviewUnavailable}
+            hint={`${t('local_dashboard.quota_reset_hint', { scope: quotaScope })}${nextReset ? `\n${new Date(nextReset.at).toLocaleString(locale)}` : ''}`}
+            color="bg-violet-50 text-violet-600 dark:bg-violet-900/20 dark:text-violet-300"
+            icon={Clock3}
+            locale={locale}
+        />),
     };
 
     return (
@@ -602,7 +656,7 @@ function Dashboard() {
                             ))}
                         </div>
                         <button
-                            onClick={() => fetchUsage(true)}
+                            onClick={() => { void fetchUsage(true); void accountData.refresh(); }}
                             disabled={loading}
                             title={scanStatus}
                             className="flex items-center gap-1.5 rounded-xl bg-blue-500 px-2.5 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"

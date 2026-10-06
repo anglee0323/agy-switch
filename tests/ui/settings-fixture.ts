@@ -48,6 +48,13 @@ export function setupSettingsFixture(options: { theme?: string; language?: strin
             if (command === 'get_auto_switch_status') return copy(status);
             if (command === 'list_accounts') return copy(accounts);
             if (command === 'get_current_account') return copy(accounts[0]);
+            if (command === 'get_account_dashboard_snapshot') return {
+                indexed_total: accounts.length, loaded_count: accounts.length, failed_count: 0,
+                current_account_id: accounts[0].id, current_identity_source: 'tools_record',
+                accounts: accounts.map(account => ({ id: account.id, email: account.email, name: null, custom_label: null,
+                    read_status: 'loaded', read_error: null, disabled: false, validation_blocked: false,
+                    validation_blocked_until: null, protected_models: [], quota: null })),
+            };
             if (command === 'get_desktop_settings') return copy(desktop);
             if (command === 'set_desktop_preferences') { desktop = { ...desktop, ...args.patch }; general.desktop = { launch_at_login: desktop.launch_at_login, hide_dock_icon: desktop.hide_dock_icon, start_minimized: desktop.start_minimized }; return copy(desktop); }
             if (command === 'set_menu_bar_preferences') { general.menu_bar = { ...general.menu_bar, ...args.patch, ...(args.quotaScope ? { quota_scope: args.quotaScope } : {}) }; return copy(general.menu_bar); }

@@ -132,7 +132,7 @@ mod tests {
         let mut stale = load_config_at(&path).unwrap();
         let desktop = DesktopPreferences { launch_at_login: true, ..Default::default() };
         set_desktop_preferences_at(&path, &desktop).unwrap();
-        let selected = vec!["body_speed".into(), "total_tokens".into(), "first_text_latency".into()];
+        let selected = vec!["quota_reset".into(), "account_status".into(), "aggregate_quota".into(), "body_speed".into(), "total_tokens".into(), "first_text_latency".into()];
         set_dashboard_cards_at(&path, selected.clone()).unwrap();
         stale.language = "en".into();
         save_config_at(&path, &stale).unwrap();

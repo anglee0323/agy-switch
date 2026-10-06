@@ -15,14 +15,17 @@ model speeds. These cards are independent of the
 usage date-range selector. One available sample can be shown; no eligible samples
 produce an unknown value (`—`), never a zero-speed claim.
 
-In **Settings > General > Dashboard cards**, select any of the seven summary
+In **Settings > General > Dashboard cards**, select any of the ten summary
 cards and drag their handles to set the display order. The compact two-column
 list shows order numbers and becomes a single column in narrow windows.
 Keyboard users can press Space, move with the arrow
 keys and confirm with Space. Changes save automatically and persist across app
 restarts. The dashboard adapts its columns to the selection; an empty selection
-hides the summary cards while retaining charts. Existing configurations default
-to all seven cards. Appearance changes cannot overwrite a newer card selection.
+hides the summary cards while retaining charts. New configurations without a
+saved selection default to all ten cards. Explicit selections, including empty
+selections and older five- or seven-card layouts, retain their order and visibility.
+Appearance changes cannot overwrite a newer card selection. See
+[account and quota cards](dashboard-overview.md) for the three additional metrics.
 
 Native `ChatModelMetadata` supplies `time_to_first_token` (field 11),
 `streaming_duration` (12), and usage `response_output_tokens` (10).

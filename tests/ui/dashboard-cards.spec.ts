@@ -33,7 +33,7 @@ for (const count of [2, 3, 4, 6]) {
     test(`${count} selected cards persist and fill the available row`, async ({ page }) => {
         await setup(page);
         const section = page.getByRole('region', { name: '首页卡片', exact: true });
-        await expect(section.getByRole('checkbox')).toHaveCount(7);
+        await expect(section.getByRole('checkbox')).toHaveCount(10);
         for (const id of ids.slice(count)) {
             const checkbox = section.locator(`[data-card-option="${id}"] input`);
             await expect(checkbox).toBeEnabled(); await checkbox.uncheck();
@@ -76,7 +76,7 @@ test('failed saves roll back and retry without overlapping writes', async ({ pag
     const checkbox = section.locator('[data-card-option="body_speed"] input');
     await page.evaluate(() => { (window as any).__settingsFixture.holdDashboardSave = true; });
     await checkbox.uncheck(); await expect(checkbox).toBeDisabled();
-    await expect(section.getByRole('checkbox', { disabled: true })).toHaveCount(7);
+    await expect(section.getByRole('checkbox', { disabled: true })).toHaveCount(10);
     await page.evaluate(() => (window as any).__settingsFixture.rejectDashboardSave());
     await expect(section.getByRole('alert')).toContainText('synthetic card save rejection');
     await expect(checkbox).toBeChecked(); await expect(checkbox).toBeEnabled();
