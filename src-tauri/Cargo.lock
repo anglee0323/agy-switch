@@ -72,7 +72,7 @@ checksum = "34fde25430d87a9388dadbe6e34d7f72a462c8b43ac8d309b42b0a8505d7e2a5"
 
 [[package]]
 name = "agy-switch"
-version = "4.9.2"
+version = "4.9.3"
 dependencies = [
  "base64 0.22.1",
  "chrono",
