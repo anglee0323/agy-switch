@@ -39,16 +39,10 @@
     "quota_scope_hint": "统计范围：{{scope}}。",
     "quota_used_hint": "与菜单栏使用相同的系列范围及账号显示设置。使用率为 100% 减去有效账号额度的平均剩余比例，不叠加额度容量。过期或缺失观测不参与平均；真实零额度参与统计。周额度按账号报告的重置窗口计算，独立于用量统计日期。",
     "quota_coverage": "有效观测：5 小时 {{session}}/{{total}}，周额度 {{weekly}}/{{total}}。",
-    "quota_reset": "额度重置",
-    "quota_reset_detail": "{{window}}，{{count}} 个账号",
-    "quota_reset_5h": "5 小时额度",
-    "quota_reset_weekly": "周额度",
-    "quota_reset_mixed": "多个额度窗口",
-    "quota_reset_hint": "{{scope}}已使用额度中最近一次报告的重置时间。仅采用仍有效的配额观测；不预测未报告或已过期的重置。该时间不代表所有账号或窗口同时恢复。",
-    "quota_reset_empty": "暂无有效恢复记录",
-    "reset_days_hours": "{{days}} 天 {{hours}} 小时",
-    "reset_hours_minutes": "{{hours}} 小时 {{minutes}} 分",
-    "reset_minutes": "{{minutes}} 分钟",
+    "average_input": "平均输入规模",
+    "average_input_detail": "{{requestCount}} 次请求，含缓存输入",
+    "average_input_hint": "统计范围内输入与缓存输入 Token 的总和除以请求次数，包含系统提示词，汇总所有模型。用于观察平均请求规模，不代表某次请求的上下文长度或模型上下文上限，也不能单独解释响应延迟。",
+    "average_input_empty": "暂无有效请求",
     "overview_loading": "正在读取本地观测",
     "overview_failed": "本地观测读取失败",
     "overview_unknown": "暂无有效观测",
@@ -490,7 +484,7 @@
       "body_speed": "正文速度",
       "account_status": "账号状态",
       "aggregate_quota": "综合额度",
-      "quota_reset": "额度重置"
+      "average_input": "平均输入规模"
     }
   }
 }

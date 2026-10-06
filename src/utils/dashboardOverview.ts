@@ -1,5 +1,5 @@
 import type { DashboardSnapshot } from './accountDashboard';
-import { aggregateMenuBar, familyOf, menuBarAccount, reportedQuotaDetails, type QuotaFamily, type QuotaWindow } from './menuBarOverview';
+import { aggregateMenuBar, menuBarAccount, type QuotaFamily, type QuotaWindow } from './menuBarOverview';
 import { DEFAULT_MENU_BAR_PREFERENCES, type MenuBarPreferences } from '../types/config';
 
 /** Read-only projection of the same cached quota observations used by the menu.
@@ -22,30 +22,5 @@ export function dashboardOverview(snapshot: DashboardSnapshot, preferences: Menu
         const summary = aggregateMenuBar(visible, preferences.quota_scope, window, threshold);
         return [window, { ...summary, used: summary.remaining === null ? null : 100 - summary.remaining }];
     })) as Record<QuotaWindow, ReturnType<typeof aggregateMenuBar> & { used: number | null }>;
-    const resets = visible.flatMap(view => reportedQuotaDetails(view.account).flatMap(pool => {
-        const family = familyOf(pool.name);
-        if (pool.source !== 'group' || !family || !families.includes(family)) return [];
-        return pool.windows.flatMap(row => {
-            const window = row.window.trim().toLowerCase();
-            // Validate the whole family/window with the shared menu projection,
-            // then exclude each full pool rather than relying on its family mean.
-            if ((window !== '5h' && window !== 'weekly') || view.windows[window][family].remaining === null
-                || row.remaining === null || row.remaining >= 100) return [];
-            return [{ at: Date.parse(row.resetTime), window, id: view.account.id }];
-        });
-    }));
-    const at = resets.length ? Math.min(...resets.map(reset => reset.at)) : null;
-    const next = resets.filter(reset => reset.at === at);
-    const reset = at === null ? null : {
-        at, window: new Set(next.map(reset => reset.window)).size > 1 ? 'mixed' as const : next[0].window,
-        accounts: new Set(next.map(reset => reset.id)).size,
-    };
-    return { accounts, windows, reset, threshold };
-}
-
-export function resetCountdown(at: number, now: number) {
-    const minutes = Math.max(1, Math.ceil((at - now) / 60_000));
-    return minutes >= 1440 ? { key: 'reset_days_hours', days: Math.floor(minutes / 1440), hours: Math.floor(minutes % 1440 / 60) }
-        : minutes >= 60 ? { key: 'reset_hours_minutes', hours: Math.floor(minutes / 60), minutes: minutes % 60 }
-        : { key: 'reset_minutes', minutes };
+    return { accounts, windows, threshold };
 }

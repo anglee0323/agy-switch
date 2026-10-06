@@ -1,12 +1,13 @@
 import { Fragment, type ReactElement, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, BarChart3, CalendarDays, Clock3, Cpu, Database, DollarSign, Gauge, LayoutDashboard, MessageSquare, PieChart, RefreshCw, Timer, Users } from 'lucide-react';
+import { Activity, BarChart3, CalendarDays, Cpu, Database, DollarSign, Gauge, Layers3, LayoutDashboard, MessageSquare, PieChart, RefreshCw, Timer, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { request as invoke } from '../utils/request';
 import { showToast } from '../components/common/ToastContainer';
 import { estimateApiCost, findModelPricing } from '../utils/modelPricing';
 import { useConfigStore } from '../stores/useConfigStore';
 import { dashboardCards, dashboardGridClass, DEFAULT_MENU_BAR_PREFERENCES, type DashboardCardId } from '../types/config';
-import { dashboardOverview, resetCountdown } from '../utils/dashboardOverview';
+import { dashboardOverview } from '../utils/dashboardOverview';
+import { averageRequestInput } from '../utils/dashboardUsage';
 import { quotaDisplay, quotaTone } from '../utils/menuBarOverview';
 import { useDashboardOverview } from '../hooks/useDashboardOverview';
 
@@ -307,7 +308,7 @@ function TokenCard({
 function Dashboard() {
     const config = useConfigStore(state => state.config);
     const visibleCards = dashboardCards(config?.dashboard?.cards);
-    const accountData = useDashboardOverview(Boolean(config) && visibleCards.some(id => ['account_status', 'aggregate_quota', 'quota_reset'].includes(id)));
+    const accountData = useDashboardOverview(Boolean(config) && visibleCards.some(id => ['account_status', 'aggregate_quota'].includes(id)));
     const { t, i18n } = useTranslation();
     const locale = i18n.resolvedLanguage === 'zh' ? 'zh-CN' : 'en-US';
     const quotaPreferences = useMemo(() => ({ ...DEFAULT_MENU_BAR_PREFERENCES, ...config?.menu_bar }), [config?.menu_bar]);
@@ -316,8 +317,6 @@ function Dashboard() {
     [accountData.snapshot, accountData.now, accountData.reserve, quotaPreferences, config?.refresh_interval, config?.quota_protection.threshold_percentage]);
     const quotaScope = t(`local_dashboard.quota_scope_${quotaPreferences.quota_scope}`);
     const overviewUnavailable = t(accountData.failed ? 'local_dashboard.overview_failed' : accountData.loading ? 'local_dashboard.overview_loading' : 'local_dashboard.overview_unknown');
-    const nextReset = overview?.reset;
-    const countdown = nextReset ? resetCountdown(nextReset.at, accountData.now) : null;
     const rangeLabels: Record<RangeKey, string> = {
         today: t('local_dashboard.today'),
         yesterday: t('local_dashboard.yesterday'),
@@ -448,6 +447,7 @@ function Dashboard() {
         const denominator = totals.input_tokens + totals.cached_tokens;
         return denominator > 0 ? (totals.cached_tokens / denominator) * 100 : 0;
     }, [totals]);
+    const averageInput = averageRequestInput(totals);
 
     const apiCost = useMemo(() => estimateApiCost(modelsForRange, pricing), [modelsForRange, pricing]);
 
@@ -625,15 +625,15 @@ function Dashboard() {
                 })}
             </div>
         </TokenCard>),
-        quota_reset: (<TokenCard cardId="quota_reset"
-            label={t('local_dashboard.quota_reset')}
-            value={0}
-            displayValue={countdown ? t(`local_dashboard.${countdown.key}`, countdown) : '—'}
-            detail={nextReset ? t('local_dashboard.quota_reset_detail', { window: t(`local_dashboard.quota_reset_${nextReset.window}`), count: nextReset.accounts })
-                : overview ? t('local_dashboard.quota_reset_empty') : overviewUnavailable}
-            hint={`${t('local_dashboard.quota_reset_hint', { scope: quotaScope })}${nextReset ? `\n${new Date(nextReset.at).toLocaleString(locale)}` : ''}`}
+        average_input: (<TokenCard cardId="average_input"
+            label={t('local_dashboard.average_input')}
+            value={averageInput ?? 0}
+            displayValue={averageInput === null ? '—' : undefined}
+            unit={averageInput === null ? undefined : 'Token'}
+            detail={averageInput === null ? t('local_dashboard.average_input_empty') : t('local_dashboard.average_input_detail', { requestCount: formatTokens(totals.request_count, locale) })}
+            hint={t('local_dashboard.average_input_hint')}
             color="bg-violet-50 text-violet-600 dark:bg-violet-900/20 dark:text-violet-300"
-            icon={Clock3}
+            icon={Layers3}
             locale={locale}
         />),
     };

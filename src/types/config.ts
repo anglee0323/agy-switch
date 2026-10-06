@@ -5,12 +5,13 @@ export interface DesktopPreferences {
 }
 
 export type MenuBarQuotaScope = 'all' | 'gemini' | 'other';
-export const DASHBOARD_CARD_IDS = ['total_tokens', 'input_tokens', 'output_tokens', 'cache_hit_rate', 'api_cost', 'first_text_latency', 'body_speed', 'account_status', 'aggregate_quota', 'quota_reset'] as const;
+export const DASHBOARD_CARD_IDS = ['total_tokens', 'input_tokens', 'output_tokens', 'cache_hit_rate', 'api_cost', 'first_text_latency', 'body_speed', 'account_status', 'aggregate_quota', 'average_input'] as const;
 export type DashboardCardId = typeof DASHBOARD_CARD_IDS[number];
 export interface DashboardPreferences { cards: DashboardCardId[]; }
 export function dashboardCards(cards: unknown): DashboardCardId[] {
     if (!Array.isArray(cards)) return [...DASHBOARD_CARD_IDS];
-    return [...new Set(cards.filter((id): id is DashboardCardId => DASHBOARD_CARD_IDS.includes(id)))];
+    return [...new Set(cards.map(id => id === 'quota_reset' ? 'average_input' : id)
+        .filter((id): id is DashboardCardId => DASHBOARD_CARD_IDS.includes(id)))];
 }
 export function dashboardGridClass(count: number): string {
     return [

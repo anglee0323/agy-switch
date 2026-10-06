@@ -3,7 +3,7 @@ import { setupSettingsFixture } from './settings-fixture';
 import { makeDashboardSnapshot } from './dashboard-overview-fixture';
 
 const originalCards = ['total_tokens', 'input_tokens', 'output_tokens', 'cache_hit_rate', 'api_cost', 'first_text_latency', 'body_speed'];
-const newCards = ['account_status', 'aggregate_quota', 'quota_reset'];
+const newCards = ['account_status', 'aggregate_quota', 'average_input'];
 const allCards = [...originalCards, ...newCards];
 async function setup(page: Page, cards = allCards, language = 'zh', withModels = false, quotaScope = 'all') {
     const install = (snapshot: ReturnType<typeof makeDashboardSnapshot>, withModels: boolean) => {
@@ -49,15 +49,14 @@ for (const language of ['zh', 'en']) test(`ten selectable cards remain readable 
     await setup(page, allCards, language);
     const status = page.locator('[data-dashboard-card="account_status"]');
     const quota = page.locator('[data-dashboard-card="aggregate_quota"]');
-    const reset = page.locator('[data-dashboard-card="quota_reset"]');
+    const input = page.locator('[data-dashboard-card="average_input"]');
     await expect(status).toContainText(language === 'zh' ? '5 个账号' : '5 accounts');
     await expect(status).toContainText(language === 'zh' ? '可用 2，不可用 2，未知 1' : 'Available 2, unavailable 2, unknown 1');
     await expect(quota.locator('[data-quota-window="5h"]')).toContainText('53%');
     await expect(quota.locator('[data-quota-window="weekly"]')).toContainText('67%');
     await expect(quota.getByRole('meter', { name: language === 'zh' ? '5 小时已用' : '5-hour used', exact: true })).toHaveAttribute('aria-valuetext', '53%');
     await expect(quota.getByRole('meter', { name: language === 'zh' ? '周额度已用' : 'Weekly used', exact: true })).toHaveAttribute('aria-valuetext', '67%');
-    await expect(reset).toContainText(language === 'zh' ? '3 小时 0 分' : '3h 0m');
-    await expect(reset).toContainText(language === 'zh' ? '5 小时额度，3 个账号' : '5-hour quota, 3 account(s)');
+    await expect(input).toContainText(language === 'zh' ? '暂无有效请求' : 'No eligible requests');
     expect(await quota.getAttribute('title')).toContain('3/4');
     const range = page.getByRole('button', { name: language === 'zh' ? '近 30 天' : 'Last 30 days', exact: true });
     await range.click(); await expect(quota.locator('[data-quota-window="5h"]')).toContainText('53%');
@@ -73,7 +72,7 @@ for (const language of ['zh', 'en']) test(`ten selectable cards remain readable 
         const heights = await page.locator('[data-dashboard-card]').evaluateAll(cards => cards.map(card => card.getBoundingClientRect().height));
         expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1);
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-        await reset.scrollIntoViewIfNeeded(); await expect(reset).toBeVisible();
+        await input.scrollIntoViewIfNeeded(); await expect(input).toBeVisible();
         await page.screenshot({ path: `test-results/auto-switch/dashboard-ten-${language}-${width}.png`, fullPage: true });
     }
     expect(await page.locator('[data-dashboard-cards]').innerText()).not.toMatch(/[·•]/);
@@ -108,7 +107,37 @@ for (const language of ['zh', 'en']) test(`eight cards have equal dimensions wit
         await quota.scrollIntoViewIfNeeded(); await expect(quota).toBeInViewport({ ratio: 1 });
         await page.screenshot({ path: `test-results/auto-switch/dashboard-uniform-eight-${language}-${width}.png`, fullPage: true });
     }
-    expect(await page.locator('[data-dashboard-card]').evaluateAll(cards => cards.map(card => card.getAttribute('data-dashboard-card')))).toEqual(saved);
+    expect(await page.locator('[data-dashboard-card]').evaluateAll(cards => cards.map(card => card.getAttribute('data-dashboard-card')))).toEqual(saved.map(id => id === 'quota_reset' ? 'average_input' : id));
+});
+
+for (const language of ['zh', 'en']) test(`mean request input includes cache, pools models and follows the date range (${language})`, async ({ page }) => {
+    await setup(page, ['quota_reset'], language);
+    const input = page.locator('[data-dashboard-card="average_input"]');
+    await expect(input).toContainText(language === 'zh' ? '暂无有效请求' : 'No eligible requests');
+    expect(await page.evaluate(() => (window as any).__settingsFixture.calls.some((call: any) => call.command === 'get_account_dashboard_snapshot'))).toBe(false);
+    await page.evaluate(() => {
+        const w = window as any, original = w.__TAURI_INTERNALS__.invoke;
+        w.__TAURI_INTERNALS__.invoke = async (command: string, args: any = {}) => {
+            const value = await original(command, args);
+            if (command !== 'get_local_token_usage') return value;
+            const models = [
+                { model: 'gemini-test', input_tokens: 10_000, cached_tokens: 20_000, output_tokens: 500, total_tokens: 30_500, request_count: 3 },
+                { model: 'claude-test', input_tokens: 90_000, cached_tokens: 180_000, output_tokens: 1_000, total_tokens: 271_000, request_count: 1 },
+            ];
+            return { ...value, today: { input_tokens: 100_000, cached_tokens: 200_000, output_tokens: 1_500, total_tokens: 301_500, request_count: 4 },
+                last_30_days: { input_tokens: 600_000, cached_tokens: 400_000, output_tokens: 100_000, total_tokens: 1_100_000, request_count: 5 }, by_model_today: models };
+        };
+    });
+    await page.getByRole('button', { name: language === 'zh' ? '刷新' : 'Refresh', exact: true }).click();
+    await expect(input).toContainText('75K Token');
+    await expect(input).toContainText(language === 'zh' ? '4 次请求，含缓存输入' : '4 requests, cache included');
+    await page.getByRole('button', { name: language === 'zh' ? '近 30 天' : 'Last 30 days', exact: true }).click();
+    await expect(input).toContainText('200K Token');
+    await page.locator('a[href="/settings"]').first().click();
+    const section = page.getByRole('region', { name: language === 'zh' ? '首页卡片' : 'Dashboard cards', exact: true });
+    await expect(section.getByRole('checkbox')).toHaveCount(10);
+    await expect(section.getByRole('checkbox', { name: language === 'zh' ? '平均输入规模' : 'Mean request input', exact: true })).toBeChecked();
+    await expect(section.getByRole('checkbox', { name: language === 'zh' ? '额度重置' : 'Quota reset', exact: true })).toHaveCount(0);
 });
 
 test('quota meters distinguish unused, exhausted and unknown observations', async ({ page }) => {
@@ -149,11 +178,13 @@ test('existing five-card selection survives expansion; new choices and keyboard 
         await expect(checkbox).not.toBeChecked(); await checkbox.check(); await expect(checkbox).toBeEnabled();
     }
     for (const id of saved) { const checkbox = section.locator(`[data-card-option="${id}"] input`); await checkbox.uncheck(); await expect(checkbox).toBeEnabled(); }
-    const handle = section.locator('[data-card-option="quota_reset"] button');
+    const handle = section.locator('[data-card-option="average_input"] button');
     await handle.scrollIntoViewIfNeeded(); await handle.focus(); await page.keyboard.press('Space');
-    await expect(handle).toHaveAttribute('aria-pressed', 'true'); await page.keyboard.press('ArrowUp');
+    await expect(handle).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByRole('status').filter({ hasText: '移动到平均输入规模的位置' })).toBeVisible();
+    await page.keyboard.press('ArrowUp');
     await expect(page.getByRole('status').filter({ hasText: '移动到账号状态的位置' })).toBeVisible(); await page.keyboard.press('Space');
-    const order = ['quota_reset', 'account_status', 'aggregate_quota'];
+    const order = ['average_input', 'account_status', 'aggregate_quota'];
     await expect.poll(() => page.evaluate(async () => (await (window as any).__TAURI_INTERNALS__.invoke('load_config')).dashboard.cards)).toEqual(order);
     await page.locator('a[href="/"]').first().click();
     await expect.poll(() => page.locator('[data-dashboard-card]').evaluateAll(cards => cards.map(card => card.getAttribute('data-dashboard-card')))).toEqual(order);
@@ -178,20 +209,18 @@ test('read failure clears cached values, recovery reads locally, and no data is 
     await expect(quota.locator('[data-quota-window="5h"]')).toContainText('—');
     await expect(quota.getByRole('meter')).toHaveCount(0);
     await expect(quota.getByRole('img')).toHaveCount(2);
-    await expect(page.locator('[data-dashboard-card="quota_reset"]')).toContainText('暂无有效恢复记录');
     const calls = await page.evaluate(() => (window as any).__settingsFixture.calls.map((c: any) => c.command));
     expect(calls.filter((c: string) => c === 'get_account_dashboard_snapshot')).toHaveLength(3);
     expect(calls.slice(initialCalls)).not.toContain('list_accounts'); expect(calls).not.toContain('refresh_all_quotas');
 });
 
-test('elapsed freshness expires displayed quota and recovery instead of retaining old values', async ({ page }) => {
+test('elapsed freshness expires displayed quota instead of retaining old values', async ({ page }) => {
     await page.clock.install({ time: new Date('2026-10-06T00:00:00Z') });
     await setup(page, newCards);
     await expect(page.locator('[data-dashboard-card="account_status"]')).toContainText('可用 2');
     await page.clock.fastForward(16 * 60_000);
     await expect(page.locator('[data-dashboard-card="account_status"]')).toContainText('可用 0，不可用 1，未知 4');
     await expect(page.locator('[data-dashboard-card="aggregate_quota"] [data-quota-window="5h"]')).toContainText('—');
-    await expect(page.locator('[data-dashboard-card="quota_reset"]')).toContainText('暂无有效恢复记录');
 });
 
 test('leaving dashboard ignores an old read; returning uses new observations', async ({ page }) => {

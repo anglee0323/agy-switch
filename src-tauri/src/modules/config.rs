@@ -132,7 +132,7 @@ mod tests {
         let mut stale = load_config_at(&path).unwrap();
         let desktop = DesktopPreferences { launch_at_login: true, ..Default::default() };
         set_desktop_preferences_at(&path, &desktop).unwrap();
-        let selected = vec!["quota_reset".into(), "account_status".into(), "aggregate_quota".into(), "body_speed".into(), "total_tokens".into(), "first_text_latency".into()];
+        let selected = vec!["average_input".into(), "account_status".into(), "aggregate_quota".into(), "body_speed".into(), "total_tokens".into(), "first_text_latency".into()];
         set_dashboard_cards_at(&path, selected.clone()).unwrap();
         stale.language = "en".into();
         save_config_at(&path, &stale).unwrap();
@@ -143,6 +143,19 @@ mod tests {
         set_dashboard_cards_at(&path, Vec::new()).unwrap();
         save_config_at(&path, &stale).unwrap();
         assert!(load_config_at(&path).unwrap().dashboard.cards.is_empty());
+    }
+
+    #[test]
+    fn dashboard_replaces_legacy_reset_in_place_without_adding_hidden_cards() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join(CONFIG_FILE);
+        fs::write(&path, r#"{"dashboard":{"cards":["api_cost","quota_reset","account_status","average_input"]}}"#).unwrap();
+        let migrated = load_config_at(&path).unwrap();
+        assert_eq!(migrated.dashboard.cards, ["api_cost", "average_input", "account_status"]);
+        save_config_at(&path, &migrated).unwrap();
+        assert_eq!(load_config_at(&path).unwrap().dashboard.cards, migrated.dashboard.cards);
+        set_dashboard_cards_at(&path, vec!["body_speed".into(), "api_cost".into()]).unwrap();
+        assert_eq!(load_config_at(&path).unwrap().dashboard.cards, ["body_speed", "api_cost"]);
     }
 
     #[test]

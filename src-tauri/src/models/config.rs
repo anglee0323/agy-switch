@@ -24,7 +24,7 @@ pub struct AppConfig {
 /// Stable card identifiers used by the homepage and settings editor.
 const DEFAULT_DASHBOARD_CARDS: [&str; 10] = [
     "total_tokens", "input_tokens", "output_tokens", "cache_hit_rate", "api_cost",
-    "first_text_latency", "body_speed", "account_status", "aggregate_quota", "quota_reset",
+    "first_text_latency", "body_speed", "account_status", "aggregate_quota", "average_input",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -40,6 +40,9 @@ impl Default for DashboardPreferences {
 }
 impl DashboardPreferences {
     pub fn normalize(&mut self) {
+        for id in &mut self.cards {
+            if id == "quota_reset" { *id = "average_input".to_string(); }
+        }
         let mut seen = std::collections::HashSet::new();
         self.cards.retain(|id| DEFAULT_DASHBOARD_CARDS.contains(&id.as_str()) && seen.insert(id.clone()));
     }
@@ -238,9 +241,9 @@ mod tests {
         let mut config: AppConfig = serde_json::from_str(r#"{"dashboard":{"cards":["total_tokens","cache_hit_rate","first_text_latency","body_speed","api_cost"]}}"#).unwrap();
         config.dashboard.normalize();
         assert_eq!(config.dashboard.cards, ["total_tokens", "cache_hit_rate", "first_text_latency", "body_speed", "api_cost"]);
-        config.dashboard.cards = ["quota_reset", "account_status", "aggregate_quota", "quota_reset", "unknown"].map(String::from).to_vec();
+        config.dashboard.cards = ["quota_reset", "account_status", "aggregate_quota", "average_input", "unknown"].map(String::from).to_vec();
         config.dashboard.normalize();
-        assert_eq!(config.dashboard.cards, ["quota_reset", "account_status", "aggregate_quota"]);
+        assert_eq!(config.dashboard.cards, ["average_input", "account_status", "aggregate_quota"]);
     }
 
     #[test]

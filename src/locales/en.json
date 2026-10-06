@@ -39,16 +39,10 @@
     "quota_scope_hint": "Scope: {{scope}}.",
     "quota_used_hint": "Uses the menu's family scope and account visibility settings. Usage is 100% minus the mean remaining quota of valid accounts, not summed capacity. Missing or stale observations are excluded; known zero quota is included. Weekly quota follows the account's reported reset window, independently of the usage date range.",
     "quota_coverage": "Valid observations: 5-hour {{session}}/{{total}}, weekly {{weekly}}/{{total}}.",
-    "quota_reset": "Quota reset",
-    "quota_reset_detail": "{{window}}, {{count}} account(s)",
-    "quota_reset_5h": "5-hour quota",
-    "quota_reset_weekly": "Weekly quota",
-    "quota_reset_mixed": "Multiple windows",
-    "quota_reset_hint": "Earliest reported reset for used quota in {{scope}}, based on valid observations only. Unreported or expired resets are not predicted. This does not imply that every account or window recovers together.",
-    "quota_reset_empty": "No valid recovery records",
-    "reset_days_hours": "{{days}}d {{hours}}h",
-    "reset_hours_minutes": "{{hours}}h {{minutes}}m",
-    "reset_minutes": "{{minutes}}m",
+    "average_input": "Mean request input",
+    "average_input_detail": "{{requestCount}} requests, cache included",
+    "average_input_hint": "Total input and cached input tokens divided by request count in the selected date range, including system prompts and all models. Measures average request size, not an individual context length or a model's context limit; it does not establish the cause of response latency.",
+    "average_input_empty": "No eligible requests",
     "overview_loading": "Reading local observations",
     "overview_failed": "Local observations unavailable",
     "overview_unknown": "No valid observations",
@@ -490,7 +484,7 @@
       "body_speed": "Body output speed",
       "account_status": "Account status",
       "aggregate_quota": "Aggregate quota",
-      "quota_reset": "Quota reset"
+      "average_input": "Mean request input"
     }
   }
 }
