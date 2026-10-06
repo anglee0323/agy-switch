@@ -1,3 +1,8 @@
+export async function settleKeyboardDrag(page: import('@playwright/test').Page) {
+    // The sensor defers its key listener; the announcement can precede attachment.
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+}
+
 // Installs an in-memory IPC double before importing the app. No native bridge,
 // filesystem, accounts, system preference or external quota request is involved.
 export function setupSettingsFixture(options: { theme?: string; language?: string; failLoad?: boolean; failLowQuotaLoad?: boolean; dashboardCards?: string[]; quotaScope?: string } = {}) {

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { setupSettingsFixture } from './settings-fixture';
+import { settleKeyboardDrag, setupSettingsFixture } from './settings-fixture';
 import { makeDashboardSnapshot } from './dashboard-overview-fixture';
 
 const originalCards = ['total_tokens', 'input_tokens', 'output_tokens', 'cache_hit_rate', 'api_cost', 'first_text_latency', 'body_speed'];
@@ -189,6 +189,7 @@ test('existing five-card selection survives expansion; new choices and keyboard 
     await handle.scrollIntoViewIfNeeded(); await handle.focus(); await page.keyboard.press('Space');
     await expect(handle).toHaveAttribute('aria-pressed', 'true');
     await expect(page.getByRole('status').filter({ hasText: '移动到平均输入规模的位置' })).toBeVisible();
+    await settleKeyboardDrag(page);
     await page.keyboard.press('ArrowUp');
     await expect(page.getByRole('status').filter({ hasText: '移动到账号状态的位置' })).toBeVisible(); await page.keyboard.press('Space');
     const order = ['average_input', 'account_status', 'aggregate_quota'];
