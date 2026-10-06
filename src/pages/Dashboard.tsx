@@ -870,7 +870,7 @@ function Dashboard() {
                     </section>
                 </div>
 
-                <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-base-200 dark:bg-base-100 lg:flex lg:min-h-0 lg:flex-1 lg:flex-col">
+                <section className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-base-200 dark:bg-base-100 lg:flex lg:min-h-[160px] lg:flex-1 lg:flex-col">
                     <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-2 dark:border-base-200">
                         <div>
                             <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-base-content">

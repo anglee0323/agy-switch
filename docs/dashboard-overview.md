@@ -6,6 +6,8 @@ status, aggregate quota and quota reset. Settings uses the same saved selection
 and drag/keyboard ordering for all ten. Existing selections remain unchanged;
 new cards can be enabled individually. Eight or ten selected cards use two rows
 on wide screens; nine use three rows. Narrow and short windows wrap and scroll.
+The model-detail section retains enough height for its table instead of
+collapsing when the card grid occupies additional rows.
 
 The three account cards read the credential-free `get_account_dashboard_snapshot`
 and saved reserve policy on opening, every 60 seconds, relevant account events

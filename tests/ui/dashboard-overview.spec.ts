@@ -5,14 +5,15 @@ import { makeDashboardSnapshot } from './dashboard-overview-fixture';
 const originalCards = ['total_tokens', 'input_tokens', 'output_tokens', 'cache_hit_rate', 'api_cost', 'first_text_latency', 'body_speed'];
 const newCards = ['account_status', 'aggregate_quota', 'quota_reset'];
 const allCards = [...originalCards, ...newCards];
-async function setup(page: Page, cards = allCards, language = 'zh') {
-    const install = (snapshot: ReturnType<typeof makeDashboardSnapshot>) => {
+async function setup(page: Page, cards = allCards, language = 'zh', withModels = false) {
+    const install = (snapshot: ReturnType<typeof makeDashboardSnapshot>, withModels: boolean) => {
         const w = window as any, original = w.__TAURI_INTERNALS__.invoke;
         w.__overviewFixture = { snapshot, fail: false, hold: false, resolve: null };
         const totals = { input_tokens: 0, output_tokens: 0, cached_tokens: 0, total_tokens: 0, request_count: 0 };
+        const models = withModels ? [{ ...totals, model: 'gemini-dashboard-test' }] : [];
         w.__TAURI_INTERNALS__.invoke = async (command: string, args: any = {}) => {
             if (command === 'get_local_token_usage') return { today: totals, yesterday: totals, last_3_days: totals, last_7_days: totals, last_30_days: totals,
-                by_model_today: [], by_model_yesterday: [], by_model_3_days: [], by_model_7_days: [], by_model: [], daily: [], hourly: [], unreadable_databases: 0, generated_at: 1, recent_performance: null };
+                by_model_today: models, by_model_yesterday: models, by_model_3_days: models, by_model_7_days: models, by_model: models, daily: [], hourly: [], unreadable_databases: 0, generated_at: 1, recent_performance: null };
             if (command === 'get_api_pricing') return { prices: [], source: 'fixture' };
             if (command === 'get_account_dashboard_snapshot') {
                 w.__settingsFixture.calls.push({ command, args });
@@ -23,9 +24,26 @@ async function setup(page: Page, cards = allCards, language = 'zh') {
             return original(command, args);
         };
     };
-    await page.addInitScript({ content: `(${setupSettingsFixture.toString()})(${JSON.stringify({ language, dashboardCards: cards })});(${install.toString()})((${makeDashboardSnapshot.toString()})(Date.now()));` });
+    await page.addInitScript({ content: `(${setupSettingsFixture.toString()})(${JSON.stringify({ language, dashboardCards: cards })});(${install.toString()})((${makeDashboardSnapshot.toString()})(Date.now()),${withModels});` });
     await page.goto('/');
 }
+
+for (const language of ['zh', 'en']) for (const count of [5, 8, 10]) test(`model details remain reachable with ${count} cards in short windows (${language})`, async ({ page }) => {
+    await setup(page, allCards.slice(0, count), language, true);
+    const cell = page.getByRole('cell', { name: 'gemini-dashboard-test', exact: true });
+    await expect(cell).toBeVisible();
+    for (const width of [1440, 1046, 760, 420]) {
+        await page.setViewportSize({ width, height: 520 });
+        await cell.scrollIntoViewIfNeeded(); await expect(cell).toBeInViewport({ ratio: 1 });
+        const geometry = await cell.evaluate(el => {
+            const section = el.closest('section')!;
+            return { section: section.clientHeight, scroller: section.querySelector('.overflow-y-auto')!.clientHeight };
+        });
+        if (width >= 1024) { expect(geometry.section).toBeGreaterThanOrEqual(158); expect(geometry.scroller).toBeGreaterThanOrEqual(64); }
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+        await page.screenshot({ path: `test-results/auto-switch/dashboard-model-details-${language}-${count}-${width}.png` });
+    }
+});
 
 for (const language of ['zh', 'en']) test(`ten selectable cards remain readable and show shared quota summaries (${language})`, async ({ page }) => {
     await setup(page, allCards, language);
