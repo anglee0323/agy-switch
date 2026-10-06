@@ -54,6 +54,8 @@ for (const language of ['zh', 'en']) test(`ten selectable cards remain readable 
     await expect(status).toContainText(language === 'zh' ? '可用 2，不可用 2，未知 1' : 'Available 2, unavailable 2, unknown 1');
     await expect(quota.locator('[data-quota-window="5h"]')).toContainText('53%');
     await expect(quota.locator('[data-quota-window="weekly"]')).toContainText('67%');
+    await expect(quota.getByRole('meter', { name: language === 'zh' ? '5 小时已用' : '5-hour used', exact: true })).toHaveAttribute('aria-valuetext', '53%');
+    await expect(quota.getByRole('meter', { name: language === 'zh' ? '周额度已用' : 'Weekly used', exact: true })).toHaveAttribute('aria-valuetext', '67%');
     await expect(reset).toContainText(language === 'zh' ? '3 小时 0 分' : '3h 0m');
     await expect(reset).toContainText(language === 'zh' ? '5 小时额度，3 个账号' : '5-hour quota, 3 account(s)');
     expect(await quota.getAttribute('title')).toContain('3/4');
@@ -97,10 +99,40 @@ for (const language of ['zh', 'en']) test(`eight cards have equal dimensions wit
             const values = sizes.map(size => size[dimension]);
             expect(Math.max(...values) - Math.min(...values)).toBeLessThanOrEqual(1);
         }
+        const bars = await quota.getByRole('meter').evaluateAll(meters => meters.map(meter => ({
+            expected: Number(meter.getAttribute('aria-valuenow')),
+            shown: meter.firstElementChild!.getBoundingClientRect().width / meter.getBoundingClientRect().width * 100,
+        })));
+        expect(bars).toHaveLength(2);
+        for (const bar of bars) expect(Math.abs(bar.expected - bar.shown)).toBeLessThan(0.5);
         await quota.scrollIntoViewIfNeeded(); await expect(quota).toBeInViewport({ ratio: 1 });
         await page.screenshot({ path: `test-results/auto-switch/dashboard-uniform-eight-${language}-${width}.png`, fullPage: true });
     }
     expect(await page.locator('[data-dashboard-card]').evaluateAll(cards => cards.map(card => card.getAttribute('data-dashboard-card')))).toEqual(saved);
+});
+
+test('quota meters distinguish unused, exhausted and unknown observations', async ({ page }) => {
+    await setup(page, ['aggregate_quota']);
+    const quota = page.locator('[data-dashboard-card="aggregate_quota"]');
+    await expect(quota.getByRole('meter')).toHaveCount(2);
+    for (const [remaining, expected] of [[1, '0'], [0, '100']]) {
+        await page.evaluate(value => {
+            (window as any).__overviewFixture.snapshot.accounts.forEach((account: any) => {
+                account.quota.groups.forEach((group: any) => group.buckets.forEach((bucket: any) => { bucket.remaining_fraction = value; }));
+            });
+        }, remaining);
+        await page.getByRole('button', { name: '刷新', exact: true }).click();
+        for (const meter of await quota.getByRole('meter').all()) {
+            await expect(meter).toHaveAttribute('aria-valuenow', expected);
+            await expect(meter).toHaveAttribute('aria-valuetext', `${expected}%`);
+        }
+        await expect(page.getByRole('button', { name: '刷新', exact: true })).toBeEnabled();
+    }
+    await page.evaluate(() => { (window as any).__overviewFixture.snapshot.accounts.forEach((account: any) => { account.quota.groups = []; }); });
+    await page.getByRole('button', { name: '刷新', exact: true }).click();
+    await expect(quota.getByRole('meter')).toHaveCount(0);
+    await expect(quota.getByRole('img')).toHaveCount(2);
+    await expect(quota).not.toContainText('0%');
 });
 
 test('existing five-card selection survives expansion; new choices and keyboard order persist', async ({ page }) => {
@@ -118,7 +150,8 @@ test('existing five-card selection survives expansion; new choices and keyboard 
     }
     for (const id of saved) { const checkbox = section.locator(`[data-card-option="${id}"] input`); await checkbox.uncheck(); await expect(checkbox).toBeEnabled(); }
     const handle = section.locator('[data-card-option="quota_reset"] button');
-    await handle.scrollIntoViewIfNeeded(); await handle.focus(); await page.keyboard.press('Space'); await page.keyboard.press('ArrowUp');
+    await handle.scrollIntoViewIfNeeded(); await handle.focus(); await page.keyboard.press('Space');
+    await expect(handle).toHaveAttribute('aria-pressed', 'true'); await page.keyboard.press('ArrowUp');
     await expect(page.getByRole('status').filter({ hasText: '移动到账号状态的位置' })).toBeVisible(); await page.keyboard.press('Space');
     const order = ['quota_reset', 'account_status', 'aggregate_quota'];
     await expect.poll(() => page.evaluate(async () => (await (window as any).__TAURI_INTERNALS__.invoke('load_config')).dashboard.cards)).toEqual(order);
@@ -143,6 +176,8 @@ test('read failure clears cached values, recovery reads locally, and no data is 
     await page.getByRole('button', { name: '刷新', exact: true }).click();
     await expect(status).toContainText('可用 0，不可用 0，未知 5');
     await expect(quota.locator('[data-quota-window="5h"]')).toContainText('—');
+    await expect(quota.getByRole('meter')).toHaveCount(0);
+    await expect(quota.getByRole('img')).toHaveCount(2);
     await expect(page.locator('[data-dashboard-card="quota_reset"]')).toContainText('暂无有效恢复记录');
     const calls = await page.evaluate(() => (window as any).__settingsFixture.calls.map((c: any) => c.command));
     expect(calls.filter((c: string) => c === 'get_account_dashboard_snapshot')).toHaveLength(3);

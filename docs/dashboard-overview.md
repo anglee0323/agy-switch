@@ -26,12 +26,14 @@ unavailability. These are quota readiness counts, not live login verification.
 
 **Aggregate quota** reuses the menu's projection, selected family scope,
 visibility preference, freshness interval and equal-weight account/family mean.
-Each window shows used percentage as 100 minus mean remaining quota. Missing or
-stale observations are excluded, while known zero quota is included. Coverage
+Each window shows used percentage and a progress bar filled to 100 minus mean
+remaining quota. Bar colors follow the menu's remaining-quota thresholds. Missing
+or stale observations are excluded, while known zero quota is included. Coverage
 counts and family scope are in the tooltip; the card contains only the two quota
 windows, without an additional scope footer. The percentages never add up account
 allowances or estimate token capacity. Weekly refers to the server-reported reset window, not
-a calendar-week token total. No eligible observations produce `—`.
+a calendar-week token total. No eligible observations produce `—` and a neutral
+hatched track, rather than a zero-valued meter.
 
 **Quota reset** finds the earliest future reset among valid, partially or fully
 used pools in that same scope. Full pools and invalid observations are excluded.

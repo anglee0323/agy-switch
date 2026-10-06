@@ -7,7 +7,7 @@ import { estimateApiCost, findModelPricing } from '../utils/modelPricing';
 import { useConfigStore } from '../stores/useConfigStore';
 import { dashboardCards, dashboardGridClass, DEFAULT_MENU_BAR_PREFERENCES, type DashboardCardId } from '../types/config';
 import { dashboardOverview, resetCountdown } from '../utils/dashboardOverview';
-import { quotaDisplay } from '../utils/menuBarOverview';
+import { quotaDisplay, quotaTone } from '../utils/menuBarOverview';
 import { useDashboardOverview } from '../hooks/useDashboardOverview';
 
 interface LocalTokenTotals {
@@ -604,10 +604,25 @@ function Dashboard() {
             locale={locale}
         >
             <div className="space-y-1">
-                {(['5h', 'weekly'] as const).map(window => <div key={window} data-quota-window={window} className="flex flex-wrap items-baseline justify-between gap-x-2">
-                    <span className="text-xs leading-5 text-gray-600 dark:text-gray-300">{t(`local_dashboard.quota_used_${window}`)}</span>
-                    <span className="text-lg font-bold leading-6 tabular-nums tracking-tight text-gray-900 dark:text-base-content">{quotaDisplay(overview?.windows[window].used ?? null)}</span>
-                </div>)}
+                {(['5h', 'weekly'] as const).map(window => {
+                    const used = overview?.windows[window].used ?? null;
+                    const label = t(`local_dashboard.quota_used_${window}`);
+                    const tone = quotaTone(used === null ? null : 100 - used, quotaPreferences);
+                    const fill = { healthy: 'bg-emerald-500', warning: 'bg-amber-500', critical: 'bg-red-500', unknown: '' }[tone];
+                    return <div key={window} data-quota-window={window}>
+                        <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+                            <span className="text-xs leading-4 text-gray-600 dark:text-gray-300">{label}</span>
+                            <span className="text-sm font-semibold leading-4 tabular-nums text-gray-900 dark:text-base-content">{quotaDisplay(used)}</span>
+                        </div>
+                        <div className="mt-1 h-1 overflow-hidden rounded-full bg-gray-100 text-gray-400 dark:bg-base-300 dark:text-gray-500"
+                            role={used === null ? 'img' : 'meter'} aria-label={used === null ? `${label}: ${overviewUnavailable}` : label}
+                            aria-valuemin={used === null ? undefined : 0} aria-valuemax={used === null ? undefined : 100}
+                            aria-valuenow={used ?? undefined} aria-valuetext={used === null ? undefined : quotaDisplay(used)}>
+                            {used === null ? <span className="block h-full opacity-30" style={{ backgroundImage: 'repeating-linear-gradient(135deg, transparent 0px, transparent 3px, currentColor 3px, currentColor 4px)' }} />
+                                : <span className={`block h-full rounded-full ${fill}`} style={{ width: `${used}%` }} />}
+                        </div>
+                    </div>;
+                })}
             </div>
         </TokenCard>),
         quota_reset: (<TokenCard cardId="quota_reset"
