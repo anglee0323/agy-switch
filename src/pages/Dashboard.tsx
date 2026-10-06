@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, BarChart3, CalendarDays, Cpu, Database, DollarSign, LayoutDashboard, MessageSquare, PieChart, RefreshCw } from 'lucide-react';
+import { Activity, BarChart3, CalendarDays, Cpu, Database, DollarSign, Gauge, LayoutDashboard, MessageSquare, PieChart, RefreshCw, Timer } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { request as invoke } from '../utils/request';
 import { showToast } from '../components/common/ToastContainer';
@@ -26,6 +26,14 @@ interface LocalTokenModel extends LocalTokenTotals {
 }
 
 interface LocalTokenUsageSummary {
+    recent_performance?: {
+        model: string;
+        source: string;
+        sample_count: number;
+        first_text_seconds: number;
+        body_tokens_per_second: number;
+        last_activity: number;
+    } | null;
     today: LocalTokenTotals;
     yesterday: LocalTokenTotals;
     last_3_days: LocalTokenTotals;
@@ -248,6 +256,7 @@ function TokenCard({
     icon: Icon,
     displayValue,
     detail,
+    hint,
     locale,
 }: {
     label: string;
@@ -256,6 +265,7 @@ function TokenCard({
     icon: typeof Cpu;
     displayValue?: string;
     detail?: string;
+    hint?: string;
     locale: string;
 }) {
     return (
@@ -273,7 +283,7 @@ function TokenCard({
             </div>
             <div
                 className="mt-0.5 truncate text-[10px] text-gray-400 dark:text-gray-500"
-                title={detail || `${formatTokens(value, locale)} Token`}
+                title={hint || detail || `${formatTokens(value, locale)} Token`}
             >
                 {detail || `${formatTokens(value, locale)} Token`}
             </div>
@@ -480,6 +490,15 @@ function Dashboard() {
             : t('local_dashboard.pricing_google')
         : t('local_dashboard.pricing_fallback');
 
+    const performance = usage?.recent_performance;
+    const performanceDetail = performance
+        ? t('local_dashboard.recent_performance', {
+            count: performance.sample_count,
+            model: performance.model,
+            source: t(performance.source.includes('cli') ? 'local_dashboard.source_cli' : 'local_dashboard.source_desktop'),
+        })
+        : t('local_dashboard.performance_empty');
+
     // Scan freshness is intentionally not rendered inline: the toolbar row only fits next to
     // the page title when this string stays out of the layout. It is exposed on the refresh button.
     const scanStatus = loading
@@ -544,7 +563,7 @@ function Dashboard() {
                     </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-2 lg:grid-cols-5">
+                <div className="grid grid-cols-2 gap-2 lg:grid-cols-4 xl:grid-cols-7">
                     <TokenCard label={t('local_dashboard.total_tokens', { range: rangeLabels[range] })} value={totals.total_tokens} color="bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-300" icon={BarChart3} locale={locale} />
                     <TokenCard label={t('local_dashboard.input_tokens')} value={totals.input_tokens} color="bg-indigo-50 text-indigo-600 dark:bg-indigo-900/20 dark:text-indigo-300" icon={MessageSquare} locale={locale} />
                     <TokenCard label={t('local_dashboard.output_tokens')} value={totals.output_tokens} color="bg-purple-50 text-purple-600 dark:bg-purple-900/20 dark:text-purple-300" icon={Cpu} locale={locale} />
@@ -568,6 +587,26 @@ function Dashboard() {
                         })}
                         color="bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-300"
                         icon={DollarSign}
+                        locale={locale}
+                    />
+                    <TokenCard
+                        label={t('local_dashboard.first_text_latency')}
+                        value={performance?.first_text_seconds ?? 0}
+                        displayValue={performance ? t('local_dashboard.seconds_value', { value: performance.first_text_seconds.toLocaleString(locale, { maximumFractionDigits: 2 }) }) : '—'}
+                        detail={performanceDetail}
+                        hint={`${performanceDetail}\n${t('local_dashboard.first_text_hint')}`}
+                        color="bg-cyan-50 text-cyan-600 dark:bg-cyan-900/20 dark:text-cyan-300"
+                        icon={Timer}
+                        locale={locale}
+                    />
+                    <TokenCard
+                        label={t('local_dashboard.body_speed')}
+                        value={performance?.body_tokens_per_second ?? 0}
+                        displayValue={performance ? `${performance.body_tokens_per_second.toLocaleString(locale, { maximumFractionDigits: 1 })} token/s` : '—'}
+                        detail={performanceDetail}
+                        hint={`${performanceDetail}\n${t('local_dashboard.body_speed_hint')}`}
+                        color="bg-rose-50 text-rose-600 dark:bg-rose-900/20 dark:text-rose-300"
+                        icon={Gauge}
                         locale={locale}
                     />
                 </div>

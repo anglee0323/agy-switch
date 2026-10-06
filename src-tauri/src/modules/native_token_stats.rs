@@ -1,9 +1,12 @@
 use chrono::{Duration, Local, NaiveDate, TimeZone};
-use rusqlite::{Connection, OpenFlags, OptionalExtension};
+use rusqlite::{Connection, OpenFlags};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+
+mod performance;
+pub use performance::RecentPerformance;
 
 const GEMINI_DIR: &str = ".gemini";
 const ANTIGRAVITY_PREFIX: &str = "antigravity";
@@ -54,6 +57,7 @@ pub struct LocalTokenModel {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LocalTokenUsageSummary {
+    pub recent_performance: Option<RecentPerformance>,
     pub today: LocalTokenTotals,
     pub yesterday: LocalTokenTotals,
     pub last_3_days: LocalTokenTotals,
@@ -107,6 +111,7 @@ pub fn get_local_token_usage() -> Result<LocalTokenUsageSummary, String> {
         .collect::<HashSet<_>>();
 
     let mut events = Vec::new();
+    let mut performance_samples = Vec::new();
     let mut scanned_sources = HashSet::new();
     let mut generations_scanned = 0_u64;
     let mut skipped_large_records = 0_u64;
@@ -148,6 +153,7 @@ pub fn get_local_token_usage() -> Result<LocalTokenUsageSummary, String> {
                 generations_scanned += result.generations_scanned;
                 skipped_large_records += result.skipped_large_records;
                 events.extend(result.events);
+                performance_samples.extend(result.performance_samples);
             }
             Err(error) => {
                 unreadable_databases += 1;
@@ -252,6 +258,7 @@ pub fn get_local_token_usage() -> Result<LocalTokenUsageSummary, String> {
         .collect();
 
     Ok(LocalTokenUsageSummary {
+        recent_performance: performance::summarize(performance_samples, now.timestamp()),
         today: today_totals,
         yesterday: yesterday_totals,
         last_3_days: last_3_days_totals,
@@ -308,6 +315,7 @@ fn is_within_last_days(date: NaiveDate, today: NaiveDate, days: i64) -> bool {
 
 struct DatabaseScanResult {
     events: Vec<GenerationEvent>,
+    performance_samples: Vec<performance::Sample>,
     generations_scanned: u64,
     skipped_large_records: u64,
 }
@@ -459,49 +467,53 @@ fn scan_database(
         .busy_timeout(std::time::Duration::from_secs(2))
         .map_err(|error| error.to_string())?;
 
-    let has_step_metadata = connection
-        .query_row(
-            "SELECT 1 FROM pragma_table_info('steps') WHERE name = 'metadata' LIMIT 1",
-            [],
-            |row| row.get::<_, i64>(0),
-        )
-        .optional()
+    let mut columns = connection
+        .prepare("SELECT name FROM pragma_table_info('steps')")
+        .map_err(|error| error.to_string())?;
+    let step_columns = columns
+        .query_map([], |row| row.get::<_, String>(0))
         .map_err(|error| error.to_string())?
-        .is_some();
+        .collect::<Result<HashSet<_>, _>>()
+        .map_err(|error| error.to_string())?;
 
     // `gen_metadata.idx` and `steps.idx` are separate sequences. The
     // generation metadata rows correspond to the ordered type-15 generation
     // steps, not to a step with the same numeric idx.
-    let step_timestamps = if has_step_metadata
-        && connection
-            .query_row(
-                "SELECT 1 FROM pragma_table_info('steps') WHERE name = 'step_type' LIMIT 1",
-                [],
-                |row| row.get::<_, i64>(0),
-            )
-            .optional()
-            .map_err(|error| error.to_string())?
-            .is_some()
-    {
+    let step_records = if step_columns.contains("metadata") && step_columns.contains("step_type") {
+        let status_column = if step_columns.contains("status") {
+            "status"
+        } else {
+            "NULL"
+        };
+        let payload_column = if step_columns.contains("step_payload") {
+            "CASE WHEN length(step_payload) <= 1048576 THEN step_payload ELSE NULL END"
+        } else {
+            "NULL"
+        };
         let mut statement = connection
-            .prepare(
-                "SELECT CASE WHEN length(metadata) <= 65536 THEN metadata ELSE NULL END
+            .prepare(&format!(
+                "SELECT CASE WHEN length(metadata) <= 65536 THEN metadata ELSE NULL END,
+                        {status_column}, {payload_column}
                  FROM steps
                  WHERE step_type = ?1
-                 ORDER BY idx",
-            )
+                 ORDER BY idx"
+            ))
             .map_err(|error| error.to_string())?;
         let rows = statement
             .query_map([GENERATION_STEP_TYPE], |row| {
                 let metadata: Option<Vec<u8>> = row.get(0)?;
-                Ok(metadata.as_deref().and_then(step_timestamp))
+                let status: Option<i64> = row.get(1)?;
+                let payload: Option<Vec<u8>> = row.get(2)?;
+                let timestamp = metadata.as_deref().and_then(step_timestamp);
+                let text_complete = performance::is_completed_text(status, payload.as_deref());
+                Ok((timestamp, text_complete))
             })
             .map_err(|error| error.to_string())?;
-        let mut timestamps = Vec::new();
+        let mut records = Vec::new();
         for row in rows {
-            timestamps.push(row.map_err(|error| error.to_string())?);
+            records.push(row.map_err(|error| error.to_string())?);
         }
-        timestamps
+        records
     } else {
         Vec::new()
     };
@@ -516,6 +528,10 @@ fn scan_database(
         .map_err(|error| error.to_string())?;
     let mut rows = statement.query([]).map_err(|error| error.to_string())?;
     let mut events = Vec::new();
+    let mut performance_samples = Vec::new();
+    let source = path.parent().and_then(Path::parent)
+        .and_then(Path::file_name).and_then(|name| name.to_str())
+        .unwrap_or("antigravity");
     let mut generations_scanned = 0_u64;
     let mut skipped_large_records = 0_u64;
     let mut generation_ordinal = 0_usize;
@@ -524,18 +540,29 @@ fn scan_database(
         let generation_idx: i64 = row.get(0).map_err(|error| error.to_string())?;
         let current_ordinal = generation_ordinal;
         generation_ordinal = generation_ordinal.saturating_add(1);
-        if archived_generation_ids.contains(&generation_idx) {
-            continue;
+        let archived = archived_generation_ids.contains(&generation_idx);
+        if !archived {
+            generations_scanned = generations_scanned.saturating_add(1);
         }
-        generations_scanned = generations_scanned.saturating_add(1);
         let blob_size: i64 = row.get(2).map_err(|error| error.to_string())?;
         if blob_size > MAX_GENERATION_BLOB_BYTES {
-            skipped_large_records = skipped_large_records.saturating_add(1);
+            if !archived {
+                skipped_large_records = skipped_large_records.saturating_add(1);
+            }
             continue;
         }
 
         let blob: Vec<u8> = row.get(1).map_err(|error| error.to_string())?;
-        let step_timestamp = step_timestamps.get(current_ordinal).copied().flatten();
+        let (step_timestamp, text_complete) = step_records.get(current_ordinal)
+            .copied().unwrap_or((None, false));
+        if text_complete {
+            if let Some(sample) = performance::sample(&blob, step_timestamp, source) {
+                performance_samples.push(sample);
+            }
+        }
+        if archived {
+            continue;
+        }
         let Some(event) = generation_event(&blob, step_timestamp) else {
             continue;
         };
@@ -550,6 +577,7 @@ fn scan_database(
 
     Ok(DatabaseScanResult {
         events,
+        performance_samples,
         generations_scanned,
         skipped_large_records,
     })
