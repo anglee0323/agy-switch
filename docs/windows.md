@@ -23,7 +23,7 @@ The console executable has the Windows console subsystem, so PowerShell waits fo
 
 ## Desktop parity
 
-The main app provides the same accounts, usage, smart-switch strategy/order, update notices and preferences as Mac. The tray dashboard uses the same three sections and settings, rendered as an opaque compact WebView with the system UI font. Switch controls have hover/focus feedback; current/disabled controls use the same dimensions and distinct status colors. Account identity labels do not open a redundant second window.
+The main app provides the same accounts, usage, smart-switch strategy/order, update notices and preferences as Mac. The tray dashboard uses the same three sections and settings, rendered as an opaque compact WebView with the system UI font. Switch controls have hover/focus feedback; saved/disabled labels use the same dimensions and distinct status colors. A saved selection is labelled Saved and can be reapplied; it is not proof of live login. Account identity labels do not open a redundant second window.
 
 The panel is prepared while hidden, reused across opens and clamped to the monitor work area. Escape and focus loss dismiss it. Missing tray support preserves access to the main window. Native Mac menu materials are specific to AppKit; no transparent glass overlay is used on Windows.
 
@@ -53,4 +53,4 @@ This builds both executables before bundling the console program as a resource. 
 
 CI separately exercises JSON/exit codes, a real ConPTY terminal, the actual NSIS installer, and native WebView2 windows with synthetic accounts. The native GUI test build explicitly enables `native-gui-test`; only debug Windows builds can pass a WebDriver port through the WebView2 API. Production builds cannot use this path. It addresses [the elevated WebView2 automation restriction](https://github.com/tauri-apps/wry/issues/1782) without registry changes or disabling OS security.
 
-Hosted Windows CI is not a substitute for every physical Windows 10/11 device, display arrangement, startup registration, real Google login or authenticated switching. Exact outcomes and source commits belong in [native acceptance](maintainers/native-gui-acceptance.md) and release notes.
+Hosted Windows CI is not a substitute for every physical Windows 10/11 device, display arrangement, startup registration, real Google login or authenticated switching. Exact outcomes and source commits belong in [native acceptance](maintainers/native-gui-acceptance.md), [4.9.4 package verification](maintainers/4.9.4-public-acceptance.md) and release notes.
