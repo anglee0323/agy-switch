@@ -1,6 +1,7 @@
 pub mod account;
 pub mod account_dashboard;
 pub mod account_service;
+pub mod account_sync;
 pub mod api_pricing;
 pub(crate) mod app_identity;
 #[cfg(any(target_os = "macos", test))]

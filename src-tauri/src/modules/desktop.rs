@@ -15,6 +15,8 @@ pub struct DesktopRuntime {
     tray_available: AtomicBool,
     preferences_lock: tokio::sync::Mutex<()>,
     dock_error: std::sync::Mutex<Option<String>>,
+    #[cfg(target_os = "macos")]
+    hide_dock_icon: AtomicBool,
     #[cfg(not(target_os = "macos"))]
     panel_transition: std::sync::Mutex<()>,
     #[cfg(target_os = "macos")]
@@ -183,12 +185,7 @@ pub fn get_desktop_settings(app: tauri::AppHandle) -> Result<DesktopStatus, Stri
         autostart_supported: !cfg!(debug_assertions),
         launch_at_login,
         autostart_error,
-        dock_error: app
-            .state::<DesktopRuntime>()
-            .dock_error
-            .lock()
-            .unwrap_or_else(|error| error.into_inner())
-            .clone(),
+        dock_error: dock_status_error(&app, preferences.hide_dock_icon),
         hide_dock_icon: preferences.hide_dock_icon,
         start_minimized: preferences.start_minimized,
     })
@@ -233,21 +230,22 @@ pub async fn set_desktop_preferences(
     } else {
         None
     };
-    preference_transaction(
+    let handle = app.clone();
+    tauri::async_runtime::spawn_blocking(move || preference_transaction(
         &old,
         &next,
         old_autostart,
         |enabled| {
             let result = if enabled {
-                app.autolaunch().enable()
+                handle.autolaunch().enable()
             } else {
-                app.autolaunch().disable()
+                handle.autolaunch().disable()
             };
             result.map_err(|error| error.to_string())
         },
-        |preferences| apply_dock_preference(&app, preferences),
+        |preferences| apply_dock_preference(&handle, preferences),
         || modules::set_saved_desktop_preferences(&next),
-    )?;
+    )).await.map_err(|_| "Desktop preference task failed".to_string())??;
     let _ = app.emit("config://updated", ());
     get_desktop_settings(app.clone())
 }
@@ -305,37 +303,97 @@ fn apply_dock_preference(
     preferences: &DesktopPreferences,
 ) -> Result<(), String> {
     #[cfg(target_os = "macos")]
-    let result = {
-        let policy = if preferences.hide_dock_icon && tray_available(app) {
-            tauri::ActivationPolicy::Accessory
-        } else {
-            tauri::ActivationPolicy::Regular
-        };
-        app.set_activation_policy(policy).map_err(|e| e.to_string())
-    };
+    return apply_dock_state(app, Some(preferences.hide_dock_icon));
     #[cfg(not(target_os = "macos"))]
-    let result: Result<(), String> = {
-        let _ = preferences;
+    {
+        let _ = (app, preferences);
         Ok(())
-    };
-    // A failed native rollback is not proof of the saved Dock preference.
-    // Preserve uncertainty through Settings reloads until an apply succeeds.
-    *app.state::<DesktopRuntime>()
-        .dock_error
-        .lock()
-        .unwrap_or_else(|error| error.into_inner()) = result.as_ref().err().cloned();
-    result
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn with_appkit<T: Send + 'static>(
+    app: &tauri::AppHandle,
+    action: impl FnOnce(objc2_foundation::MainThreadMarker) -> T + Send + 'static,
+) -> Result<T, String> {
+    if let Some(marker) = objc2_foundation::MainThreadMarker::new() {
+        return Ok(action(marker));
+    }
+    let (send, receive) = std::sync::mpsc::sync_channel(1);
+    app.run_on_main_thread(move || {
+        let marker = objc2_foundation::MainThreadMarker::new().expect("AppKit requires the main thread");
+        let _ = send.send(action(marker));
+    }).map_err(|error| error.to_string())?;
+    receive.recv().map_err(|_| "Dock state is unavailable".into())
+}
+
+#[cfg(target_os = "macos")]
+fn dock_policy(hidden: bool, tray: bool) -> objc2_app_kit::NSApplicationActivationPolicy {
+    if hidden && tray { objc2_app_kit::NSApplicationActivationPolicy::Accessory }
+    else { objc2_app_kit::NSApplicationActivationPolicy::Regular }
+}
+
+#[cfg(target_os = "macos")]
+fn apply_dock_state(app: &tauri::AppHandle, preference: Option<bool>) -> Result<(), String> {
+    let handle = app.clone();
+    with_appkit(app, move |marker| {
+        let runtime = handle.state::<DesktopRuntime>();
+        // Stage updates and native writes on the same UI thread as window events.
+        // Reopen/close use this latest value; they never replay a disk snapshot.
+        if let Some(hidden) = preference { runtime.hide_dock_icon.store(hidden, Ordering::Release); }
+        let policy = dock_policy(runtime.hide_dock_icon.load(Ordering::Acquire), tray_available(&handle));
+        let application = objc2_app_kit::NSApplication::sharedApplication(marker);
+        let result = if application.activationPolicy() == policy
+            || (application.setActivationPolicy(policy) && application.activationPolicy() == policy)
+        { Ok(()) } else { Err("macOS did not apply the Dock visibility preference".to_string()) };
+        // Tauri's dispatch success does not include AppKit's boolean result.
+        *runtime.dock_error.lock().unwrap_or_else(|error| error.into_inner()) = result.as_ref().err().cloned();
+        result
+    })?
+}
+
+fn reconcile_dock_preference(app: &tauri::AppHandle) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    return apply_dock_state(app, None);
+    #[cfg(not(target_os = "macos"))]
+    { let _ = app; Ok(()) }
+}
+
+fn dock_status_error(app: &tauri::AppHandle, hidden: bool) -> Option<String> {
+    let saved_error = app.state::<DesktopRuntime>().dock_error.lock()
+        .unwrap_or_else(|error| error.into_inner()).clone();
+    #[cfg(target_os = "macos")]
+    {
+        let policy = dock_policy(hidden, tray_available(app));
+        let observed = with_appkit(app, move |marker| {
+            objc2_app_kit::NSApplication::sharedApplication(marker).activationPolicy() == policy
+        });
+        saved_error.or_else(|| match observed {
+            Ok(true) => None,
+            Ok(false) => Some("Dock visibility does not match the saved preference".into()),
+            Err(error) => Some(error),
+        })
+    }
+    #[cfg(not(target_os = "macos"))]
+    { let _ = hidden; saved_error }
 }
 
 pub fn initialize(app: &tauri::AppHandle) -> Result<(), String> {
     let config = modules::load_app_config().unwrap_or_default();
     apply_dock_preference(app, &config.desktop)?;
     let autostart = std::env::args().any(|arg| arg == "--autostart");
-    if !start_hidden(
+    if start_hidden(
         autostart,
         config.desktop.start_minimized,
         tray_available(app),
     ) {
+        // Creating the native WebView can map a window despite its initial
+        // visibility flag (notably WebKitGTK). Apply the requested state after
+        // creation rather than relying on that flag alone.
+        if let Some(window) = app.get_webview_window("main") {
+            window.hide().map_err(|error| error.to_string())?;
+        }
+    } else {
         show_main(app)?;
     }
     Ok(())
@@ -346,8 +404,6 @@ fn start_hidden(autostart: bool, minimized: bool, available: bool) -> bool {
 }
 
 pub fn show_main(app: &tauri::AppHandle) -> Result<(), String> {
-    // Initialization and the serialized preference setter own activation policy.
-    // Replaying a disk snapshot here could overwrite a newer in-flight change.
     if let Some(popover) = app.get_webview_window(DASHBOARD_LABEL) {
         let _ = popover.hide();
     }
@@ -356,7 +412,8 @@ pub fn show_main(app: &tauri::AppHandle) -> Result<(), String> {
         .ok_or("Main window is unavailable")?;
     window.unminimize().map_err(|e| e.to_string())?;
     window.show().map_err(|e| e.to_string())?;
-    window.set_focus().map_err(|e| e.to_string())
+    window.set_focus().map_err(|e| e.to_string())?;
+    reconcile_dock_preference(app)
 }
 
 #[tauri::command]
@@ -391,23 +448,26 @@ fn panel_bounds(
     anchor: (f64, f64, f64, f64),
     area: (f64, f64, f64, f64),
     scale: f64,
+    frame: (f64, f64),
 ) -> (f64, f64, f64, f64) {
     let (ax, ay, aw, ah) = anchor;
     let (x, y, w, h) = area;
     let margin = 8.0 * scale;
-    let width = (424.0 * scale).min((w - margin * 2.0).max(1.0));
-    let height = (680.0 * scale).min((h - margin * 2.0).max(1.0));
+    let width = (424.0 * scale).min((w - margin * 2.0 - frame.0).max(1.0));
+    let height = (680.0 * scale).min((h - margin * 2.0 - frame.1).max(1.0));
+    let outer_width = width + frame.0;
+    let outer_height = height + frame.1;
     let px =
-        (ax + aw / 2.0 - width / 2.0).clamp(x + margin, (x + w - width - margin).max(x + margin));
+        (ax + aw / 2.0 - outer_width / 2.0).clamp(x + margin, (x + w - outer_width - margin).max(x + margin));
     let below = if ah > 0.0 { ay + ah + 2.0 * scale } else { (ay + ah).max(y) };
-    let py = if below + height <= y + h - margin {
+    let py = if below + outer_height <= y + h - margin {
         below
     } else {
-        ay - height
+        ay - outer_height
     };
     (
         px,
-        py.clamp(y, (y + h - height).max(y)),
+        py.clamp(y, (y + h - outer_height).max(y)),
         width,
         height,
     )
@@ -475,12 +535,33 @@ fn toggle_web_dashboard(app: &tauri::AppHandle, rect: Option<tauri::Rect>) -> Re
     let point = anchor
         .map(|r| r.position.to_physical::<f64>(1.0))
         .or_else(|| app.cursor_position().ok());
-    let monitor = point
-        .and_then(|p| app.monitor_from_point(p.x, p.y).ok().flatten())
-        .or_else(|| app.primary_monitor().ok().flatten());
+    // Linux monitor lookup and conversion both read GDK. Window getters also
+    // convert native handles on their caller, so collect the complete snapshot
+    // on the UI thread before continuing this blocking tray task.
+    let (send, receive) = std::sync::mpsc::sync_channel(1);
+    let probe = window.clone();
+    app.run_on_main_thread(move || {
+        let monitor = point
+            .and_then(|p| probe.monitor_from_point(p.x, p.y).ok().flatten())
+            .or_else(|| probe.primary_monitor().ok().flatten());
+        let _ = send.send(monitor);
+    }).map_err(|error| error.to_string())?;
+    let monitor = receive.recv().map_err(|_| "Dashboard monitor is unavailable".to_string())?;
     if let Some(monitor) = monitor {
         let scale = monitor.scale_factor();
         let area = monitor.work_area();
+        #[cfg(target_os = "windows")]
+        let frame = {
+            // Undecorated Windows shadows still enlarge the native rectangle.
+            // Reserve that frame when sizing and positioning the content.
+            let outer = window.outer_size().map_err(|error| error.to_string())?;
+            let inner = window.inner_size().map_err(|error| error.to_string())?;
+            let ratio = scale / window.scale_factor().map_err(|error| error.to_string())?;
+            (f64::from(outer.width.saturating_sub(inner.width)) * ratio,
+             f64::from(outer.height.saturating_sub(inner.height)) * ratio)
+        };
+        #[cfg(not(target_os = "windows"))]
+        let frame = (0.0, 0.0);
         let anchor = anchor
             .map(|r| {
                 let pos = r.position.to_physical::<f64>(scale);
@@ -502,6 +583,7 @@ fn toggle_web_dashboard(app: &tauri::AppHandle, rect: Option<tauri::Rect>) -> Re
                 f64::from(area.size.height),
             ),
             scale,
+            frame,
         );
         window
             .set_size(tauri::PhysicalSize::new(width as u32, height as u32))
@@ -547,7 +629,14 @@ pub fn handle_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
                 // Never hide the only recovery path when the tray failed.
                 if window.hide().is_ok() {
                     api.prevent_close();
+                    if let Err(error) = reconcile_dock_preference(window.app_handle()) {
+                        modules::logger::log_warn(&format!("Dock state could not be restored after closing: {error}"));
+                    }
                 }
+            } else {
+                // Prewarming may have left a hidden secondary window alive.
+                // Closing only main would leave an inaccessible runtime.
+                window.app_handle().exit(0);
             }
         }
     }
@@ -689,6 +778,7 @@ mod tests {
             (-12.0, -32.0, 20.0, 24.0),
             (-800.0, -10.0, 800.0, 540.0),
             1.0,
+            (0.0, 0.0),
         );
         assert!(x >= -792.0 && x + w <= -8.0);
         assert!(y >= -10.0 && y + h <= 530.0);
@@ -699,9 +789,23 @@ mod tests {
             (2800.0, 1760.0, 40.0, 40.0),
             (0.0, 0.0, 2880.0, 1760.0),
             2.0,
+            (0.0, 0.0),
         );
         assert_eq!(w, 848.0);
         assert_eq!(h, 1360.0);
         assert!(x + w <= 2864.0 && y + h <= 1760.0);
+    }
+    #[test]
+    fn popover_keeps_windows_shadow_inside_work_area() {
+        let (x, y, w, h) = panel_bounds(
+            (1000.0, 720.0, 24.0, 40.0),
+            (0.0, 0.0, 1024.0, 720.0),
+            1.0,
+            (16.0, 9.0),
+        );
+        // Observed on the hosted Windows desktop: the 424x680 content has
+        // a 440x689 native outer rectangle, including its shadow frame.
+        assert!(x + w + 16.0 <= 1024.0);
+        assert!(y + h + 9.0 <= 720.0);
     }
 }

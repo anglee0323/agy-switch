@@ -18,3 +18,16 @@ test('quota settings save without starting duplicate WebView refresh timers', as
   expect(calls.filter((call: any) => call.command === 'refresh_all_quotas')).toHaveLength(0);
   expect(calls.filter((call: any) => call.command === 'save_config').map((call: any) => call.args.config.auto_refresh)).toEqual([false, true]);
 });
+
+test('account synchronization has no WebView timer when enabled or rescheduled', async ({ page }) => {
+  await page.addInitScript(setupSettingsFixture, { autoSync: true });
+  await page.clock.install();
+  await page.goto('/settings');
+  await page.getByRole('tab', { name: '配额与模型', exact: true }).click();
+  await expect(page.locator('#sync-interval')).toBeEnabled();
+  await page.clock.fastForward(3600001);
+  await page.locator('#sync-interval').selectOption('1');
+  await expect.poll(() => page.evaluate(() => (window as any).__settingsFixture.calls.filter((call: any) => call.command === 'save_config').at(-1)?.args.config.sync_interval)).toBe(1);
+  await page.clock.fastForward(3600001);
+  expect(await page.evaluate(() => (window as any).__settingsFixture.calls.filter((call: any) => call.command === 'sync_account_from_db'))).toEqual([]);
+});

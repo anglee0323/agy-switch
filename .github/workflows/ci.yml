@@ -100,6 +100,11 @@ jobs:
       - name: Test read-only account dashboard contract
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib account_dashboard::tests
 
+      - name: Test native background schedules and coalescing
+        run: |
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib quota_refresh::tests
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib account_sync::tests
+
       - name: Test menu-bar quota snapshots
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib menu_bar_projection::tests
 
@@ -144,11 +149,43 @@ jobs:
           node scripts/test-cli-terminal.mjs "$BINARY"
 
       - name: Validate native GUI fixture and screenshot checks
-        run: node scripts/test-native-gui.mjs --self-test
+        run: |
+          node scripts/test-native-gui.mjs --self-test
+          node scripts/test-desktop-lifecycle.mjs --self-test
 
       - name: Install official native GUI test tools (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get install -y webkit2gtk-driver xvfb dbus-x11 fonts-noto-cjk
+        run: sudo apt-get install -y webkit2gtk-driver xvfb dbus-x11 fonts-noto-cjk openbox gdb
+
+      - name: Test actual macOS Dock and window lifecycle
+        if: runner.os == 'macOS'
+        timeout-minutes: 5
+        run: node scripts/test-macos-desktop.mjs
+
+      - name: Test actual Linux tray and secondary-window lifecycle
+        if: runner.os == 'Linux'
+        timeout-minutes: 5
+        env:
+          SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: xvfb-run -a -s "-screen 0 1280x1024x24 -nolisten tcp" dbus-run-session -- sh -c 'openbox >/tmp/agy-lifecycle-window-manager.log 2>&1 & node scripts/test-desktop-lifecycle.mjs'
+
+      - name: Test actual Windows tray and secondary-window lifecycle
+        if: runner.os == 'Windows'
+        timeout-minutes: 5
+        env:
+          SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: node scripts/test-desktop-lifecycle.mjs
+
+      - name: Upload native desktop lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-lifecycle-${{ runner.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            artifacts/desktop-lifecycle/
+            artifacts/macos-desktop/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Install pinned official Tauri WebDriver
         if: runner.os != 'macOS'

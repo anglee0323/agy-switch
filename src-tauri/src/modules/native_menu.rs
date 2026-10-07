@@ -24,6 +24,7 @@ struct MenuSession {
     zh: bool,
     _targets: Vec<Retained<MenuAction>>,
     controls: Vec<AccountControls>,
+    identity_summary: Retained<NSTextField>,
     usage: UsageWidgets,
     quotas: Vec<AccountQuotaWidgets>,
     aggregates: Vec<AggregateWidgets>,
@@ -373,11 +374,6 @@ fn readonly_item(menu: &NSMenu, title: &str, marker: MainThreadMarker) {
     let item = unsafe { NSMenuItem::initWithTitle_action_keyEquivalent(NSMenuItem::alloc(marker), &NSString::from_str(title), None, &NSString::from_str("")) };
     item.setEnabled(false); menu.addItem(&item);
 }
-fn can_switch(account: &DashboardEntry, now: i64) -> bool {
-    account.read_status == "loaded" && !account.disabled && !account.quota.as_ref().is_some_and(|quota| quota.is_forbidden)
-        && !(account.validation_blocked && account.validation_blocked_until.is_none_or(|until| until > now))
-}
-
 struct AccountControls { id: String, switch: Retained<NSButton>, badge: Retained<StatusBadge>, caption: Retained<NSTextField> }
 struct AccountQuotaWidgets {
     id: String,
@@ -421,7 +417,7 @@ impl MenuSession {
         }
         for control in &self.controls {
             let switchable = snapshot.and_then(|snapshot| snapshot.accounts.iter().find(|account| account.id == control.id))
-                .is_some_and(|account| can_switch(account, now));
+                .is_some_and(|account| projection::switchable_account(account, now));
             control.switch.setEnabled(!self.busy && !BUSY.load(Ordering::Acquire) && switchable);
         }
     }
@@ -441,7 +437,7 @@ fn account_item(menu: &NSMenu, app: &tauri::AppHandle, account: &DashboardEntry,
         status_badge(&view, if zh { "禁用" } else { "Disabled" }, "nosign", &NSColor::systemRedColor(), action_frame, marker);
         None
     } else {
-        let switch = button(&view, menu, app, if zh { "切换" } else { "Switch" }, Action::Switch(account.id.clone()), !busy && can_switch(account, chrono::Utc::now().timestamp()), action_frame, Some("arrow.left.arrow.right"), zh, targets, marker);
+        let switch = button(&view, menu, app, if zh { "切换" } else { "Switch" }, Action::Switch(account.id.clone()), !busy && projection::switchable_account(account, chrono::Utc::now().timestamp()), action_frame, Some("arrow.left.arrow.right"), zh, targets, marker);
         let (badge, caption) = status_badge(&view, if zh { "当前" } else { "Current" }, "checkmark.circle", &NSColor::systemBlueColor(), action_frame, marker);
         badge.setHidden(true);
         Some(AccountControls { id: account.id.clone(), switch, badge, caption })
@@ -503,9 +499,12 @@ define_class!(
                     match update {
                         MenuUpdate::Identity(current, source) => { for control in &session.controls {
                             let selected = current.as_ref() == Some(&control.id);
-                            control.switch.setHidden(selected); control.badge.setHidden(!selected);
-                            control.caption.setStringValue(&NSString::from_str(if source == "running_app" { if session.zh { "当前" } else { "Current" } } else { if session.zh { "记录" } else { "Saved" } }));
+                            let verified = projection::verified_current(&control.id, current.as_deref(), source);
+                            control.switch.setHidden(verified); control.badge.setHidden(!verified);
+                            control.switch.setTitle(&NSString::from_str(if selected && !verified { if session.zh { "记录" } else { "Saved" } } else { if session.zh { "切换" } else { "Switch" } }));
+                            control.caption.setStringValue(&NSString::from_str(if session.zh { "当前" } else { "Current" }));
                         }
+                            session.identity_summary.setStringValue(&NSString::from_str(&projection::account_heading_summary(session.quotas.len(), current.as_deref(), source, session.zh)));
                             modules::logger::log_info(&format!("Native menu identity applied in {} ms ({source})", self.ivars().started.elapsed().as_millis()));
                         },
                         MenuUpdate::Quotas(snapshot) => session.apply_quotas(snapshot.as_ref().ok()),
@@ -557,7 +556,7 @@ fn show(app: tauri::AppHandle, config: AppConfig, snapshot: Option<DashboardSnap
     }
     let account_header = section(marker, 29.0);
     label(&account_header, if zh { "账号列表" } else { "Accounts" }, 20.0, 4.0, 160.0, 13.0, true, false, marker);
-    let count = label(&account_header, &if zh { format!("{} 个账号", accounts.len()) } else { format!("{} accounts", accounts.len()) }, 210.0, 5.0, WIDTH - 230.0, 11.0, false, true, marker);
+    let count = label(&account_header, &projection::account_heading_summary(accounts.len(), None, "checking", zh), 180.0, 5.0, WIDTH - 200.0, 11.0, false, true, marker);
     count.setAlignment(objc2_app_kit::NSTextAlignment::Right);
     custom_item(&menu, &account_header, "Accounts", marker);
     let busy = BUSY.load(Ordering::Acquire) || status.as_ref().is_none_or(|status| status.phase == "switching");
@@ -584,7 +583,7 @@ fn show(app: tauri::AppHandle, config: AppConfig, snapshot: Option<DashboardSnap
     standard_item(&menu, &app, if zh { "设置" } else { "Settings" }, Action::Page("settings"), true, ",", preferences.show_icons, zh, &mut targets, marker);
     standard_item(&menu, &app, "GitHub ↗", Action::Github, true, "", preferences.show_icons, zh, &mut targets, marker);
     standard_item(&menu, &app, if zh { "退出" } else { "Quit" }, Action::Quit, true, "q", preferences.show_icons, zh, &mut targets, marker);
-    SESSION.with(|session| *session.borrow_mut() = Some(MenuSession { zh, _targets: targets, controls, usage, quotas, aggregates,
+    SESSION.with(|session| *session.borrow_mut() = Some(MenuSession { zh, _targets: targets, controls, identity_summary: count, usage, quotas, aggregates,
         preferences: preferences.clone(), freshness_minutes: config.refresh_interval, reserve, busy }));
     ACTIVE.with(|active| *active.borrow_mut() = Some(menu.clone()));
     let refresh = MenuRefresh::alloc(marker).set_ivars(MenuRefreshState { updates, ticket, started });

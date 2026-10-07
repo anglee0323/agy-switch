@@ -111,11 +111,13 @@ test('failed saves roll back and retry without overlapping writes', async ({ pag
     await page.evaluate(() => { (window as any).__settingsFixture.holdDashboardSave = true; });
     await checkbox.uncheck(); await expect(checkbox).toBeDisabled();
     await expect(section.getByRole('checkbox', { disabled: true })).toHaveCount(10);
+    await expect.poll(() => page.evaluate(() => (window as any).__settingsFixture.dashboardSavePending())).toBe(true);
     await page.evaluate(() => (window as any).__settingsFixture.rejectDashboardSave());
     await expect(section.getByRole('alert')).toContainText('synthetic card save rejection');
     await expect(checkbox).toBeChecked(); await expect(checkbox).toBeEnabled();
     expect(await savedCards(page)).toEqual(ids);
     await checkbox.uncheck(); await expect(checkbox).toBeDisabled();
+    await expect.poll(() => page.evaluate(() => (window as any).__settingsFixture.dashboardSavePending())).toBe(true);
     await page.evaluate(() => (window as any).__settingsFixture.resolveDashboardSave());
     await expect(checkbox).toBeEnabled(); await expect(section.getByRole('alert')).toHaveCount(0);
     await expect.poll(() => savedCards(page)).toEqual(ids.slice(0, -1));

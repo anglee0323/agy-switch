@@ -8,6 +8,12 @@ mod models;
 mod modules;
 mod utils;
 
+/// Production lifecycle code exposed only to the hosted debug acceptance example.
+#[cfg(all(debug_assertions, feature = "native-gui-test", not(target_os = "macos")))]
+pub mod desktop_lifecycle {
+    pub use crate::modules::{desktop, tray};
+}
+
 use tauri::Manager;
 use tracing::{info, warn};
 
@@ -261,6 +267,7 @@ pub fn run() {
             modules::desktop::install_dashboard_shortcut(app.handle())?;
             modules::auto_switch::start(app.handle().clone());
             modules::quota_refresh::start(app.handle().clone());
+            modules::account_sync::start(app.handle().clone());
             if tray_enabled {
                 match modules::tray::create_tray(app.handle()) {
                     Ok(()) => {

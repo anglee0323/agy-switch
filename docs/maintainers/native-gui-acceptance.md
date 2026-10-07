@@ -9,6 +9,39 @@ Actual GUI execution is intentionally refused outside a GitHub-hosted runner.
 
 ## Evidence and scope
 
+The separate `desktop-lifecycle-{OS}-{source SHA}` lane uses the production
+desktop runtime, an owned tray and the actual secondary WebView window. On
+Windows/Linux, `scripts/test-desktop-lifecycle.mjs` requires a fresh hosted runner
+and isolated empty account/config files. It checks background startup, prewarm,
+window reuse, monitor bounds, click-toggle semantics, close-to-hide, focus-loss
+dismissal, main-window recovery and exit without a tray. Linux runs with Openbox
+inside Xvfb and a private D-Bus session. Reports require all 16 stages across the
+with-tray and without-tray runs; incomplete or failed runs cannot pass. It does
+not assert physical icon clicks, taskbar presentation, Wayland behavior or
+authenticated switching. The fixture access point is excluded from release
+builds and requires the existing `native-gui-test` feature.
+
+Tray opening runs in a blocking task because Windows WebView creation must not
+block the event loop. Monitor lookup and native-handle conversion both run on
+the UI thread before returning a plain snapshot. Application-level getters
+and window-getter conversion can call GDK on their caller, so neither belongs
+in that worker. Repeated native opens cover this boundary. Failed Linux fixtures retain the original
+report and capture a separate native exit stack for diagnosis, never a substitute
+pass. Windows fixture cleanup waits for the WebView2 processes associated with
+its unique data directory to exit, then retries file removal briefly. The host's
+exit alone does not release that directory; see Microsoft's
+[user-data folder guidance](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/user-data-folder).
+Startup checkpoints and elapsed time are retained on failure. A fresh Windows
+profile has a 60-second process budget for WebView2 initialization and the entire
+lifecycle sequence (Linux uses 30 seconds); this is not a startup-performance
+benchmark. Every native assertion and clean exit remains required.
+
+macOS runs its separate AppKit fixture with 12 native Dock/window stages,
+including process exit after closing the main window without a usable tray.
+Its isolated configuration, native policy observations and full output are
+uploaded alongside the platform reports; installed-package verification remains
+separate.
+
 The `native-gui-{OS}-{source SHA}` artifact contains `acceptance.json`, bounded
 driver diagnostics, and these screenshots:
 

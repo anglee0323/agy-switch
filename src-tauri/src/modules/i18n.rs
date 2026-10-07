@@ -32,14 +32,20 @@ fn supported_language(locale: &str) -> Option<&'static str> {
 #[derive(Debug, Clone)]
 pub struct TrayTexts {
     pub current: String,
+    pub saved: String,
     pub quota: String,
     pub switch_next: String,
     pub refresh_current: String,
+    pub refresh_saved: String,
     pub show_window: String,
     pub quit: String,
     pub no_account: String,
     pub unknown_quota: String,
     pub forbidden: String,
+    pub disabled: String,
+    pub blocked: String,
+    pub identity_checking: String,
+    pub identity_unavailable: String,
 }
 
 /// Load translations from JSON
@@ -74,6 +80,7 @@ pub fn get_tray_texts(lang: &str) -> TrayTexts {
             .get("current")
             .cloned()
             .unwrap_or_else(|| "Current".to_string()),
+        saved: t.get("saved").cloned().unwrap_or_else(|| "Saved".into()),
         quota: t
             .get("quota")
             .cloned()
@@ -86,6 +93,7 @@ pub fn get_tray_texts(lang: &str) -> TrayTexts {
             .get("refresh_current")
             .cloned()
             .unwrap_or_else(|| "Refresh Current Quota".to_string()),
+        refresh_saved: t.get("refresh_saved").cloned().unwrap_or_else(|| "Refresh Saved Account Quota".into()),
         show_window: t
             .get("show_window")
             .cloned()
@@ -106,6 +114,10 @@ pub fn get_tray_texts(lang: &str) -> TrayTexts {
             .get("forbidden")
             .cloned()
             .unwrap_or_else(|| "Account Forbidden".to_string()),
+        disabled: t.get("disabled").cloned().unwrap_or_else(|| "Account disabled".into()),
+        blocked: t.get("blocked").cloned().unwrap_or_else(|| "Account verification required".into()),
+        identity_checking: t.get("identity_checking").cloned().unwrap_or_else(|| "Checking".into()),
+        identity_unavailable: t.get("identity_unavailable").cloned().unwrap_or_else(|| "Current unknown".into()),
     }
 }
 

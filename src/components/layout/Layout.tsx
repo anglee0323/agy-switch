@@ -2,7 +2,6 @@ import { Outlet } from 'react-router-dom';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import Navbar from '../navbar/Navbar';
 import { AutoSwitchStatusBar } from '../autoSwitch/AutoSwitch';
-import BackgroundTaskRunner from '../common/BackgroundTaskRunner';
 import ToastContainer from '../common/ToastContainer';
 import { useEffect } from 'react';
 import { isTauri } from '../../utils/env';
@@ -32,7 +31,6 @@ function Layout() {
                     getCurrentWindow().startDragging();
                 }}
             />
-            <BackgroundTaskRunner />
             <ToastContainer />
             <Navbar />
             <AutoSwitchStatusBar />

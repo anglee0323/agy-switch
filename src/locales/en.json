@@ -112,8 +112,8 @@
     "auto_refresh_desc": "Refresh quota and reset times for all accounts in the background, even when the main window is hidden.",
     "auto_refresh_badge": "Recommended",
     "refresh_interval": "Refresh interval",
-    "auto_sync": "Auto-sync new accounts from official app",
-    "auto_sync_desc": "Periodically detect the local official Antigravity app login state. If a new account is logged in, it will be imported automatically (one-way import). Keep disabled if managing accounts in this tool.",
+    "auto_sync": "Sync the official app's current account",
+    "auto_sync_desc": "Keep the recorded account aligned with the official Antigravity app in the background, including when the main window is closed. Synchronization does not switch the client account. On macOS, import new accounts into account management first.",
     "auto_sync_badge": "Optional, off by default",
     "sync_interval": "Sync interval",
     "minutes": "{{count}} min",
@@ -290,14 +290,20 @@
   },
   "tray": {
     "current": "Current",
+    "saved": "Saved",
     "quota": "Quota",
     "switch_next": "Switch to Next Account",
     "refresh_current": "Refresh Current Quota",
+    "refresh_saved": "Refresh Saved Account Quota",
     "show_window": "Show Main Window",
     "quit": "Quit Application",
     "no_account": "No Account",
-    "unknown_quota": "Unknown (Click to Refresh)",
-    "forbidden": "Account rejected (403)"
+    "unknown_quota": "Unknown (Refresh needed)",
+    "disabled": "Account disabled",
+    "blocked": "Account verification required",
+    "forbidden": "Account rejected (403)",
+    "identity_checking": "Checking",
+    "identity_unavailable": "Current unknown"
   },
   "auto_switch": {
     "title": "Smart Auto-Switch Strategy",
