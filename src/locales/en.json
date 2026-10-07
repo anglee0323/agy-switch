@@ -297,7 +297,9 @@
     "quit": "Quit Application",
     "no_account": "No Account",
     "unknown_quota": "Unknown (Click to Refresh)",
-    "forbidden": "Account rejected (403)"
+    "forbidden": "Account rejected (403)",
+    "identity_checking": "Checking",
+    "identity_unavailable": "Current unknown"
   },
   "auto_switch": {
     "title": "Smart Auto-Switch Strategy",

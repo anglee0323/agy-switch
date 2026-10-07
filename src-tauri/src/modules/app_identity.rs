@@ -104,9 +104,8 @@ pub(crate) fn running_email(configured: Option<&str>) -> Result<Option<String>, 
         Err("not_running") => return Ok(None),
         Err(error) => return Err(error.into()),
     };
-    if installation.version != "2.19.1" {
-        return Err("running_app_identity_unavailable".into());
-    }
+    // Package identity, process ownership and the status response establish
+    // compatibility. A client update alone must not prevent this read-only RPC.
     let servers = metadata::pids(&[
         "-P".into(),
         app_pid.to_string(),

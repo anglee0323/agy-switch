@@ -24,6 +24,7 @@ struct MenuSession {
     zh: bool,
     _targets: Vec<Retained<MenuAction>>,
     controls: Vec<AccountControls>,
+    identity_summary: Retained<NSTextField>,
     usage: UsageWidgets,
     quotas: Vec<AccountQuotaWidgets>,
     aggregates: Vec<AggregateWidgets>,
@@ -506,6 +507,7 @@ define_class!(
                             control.switch.setHidden(selected); control.badge.setHidden(!selected);
                             control.caption.setStringValue(&NSString::from_str(if source == "running_app" { if session.zh { "当前" } else { "Current" } } else { if session.zh { "记录" } else { "Saved" } }));
                         }
+                            session.identity_summary.setStringValue(&NSString::from_str(&projection::account_heading_summary(session.quotas.len(), current.as_deref(), source, session.zh)));
                             modules::logger::log_info(&format!("Native menu identity applied in {} ms ({source})", self.ivars().started.elapsed().as_millis()));
                         },
                         MenuUpdate::Quotas(snapshot) => session.apply_quotas(snapshot.as_ref().ok()),
@@ -557,7 +559,7 @@ fn show(app: tauri::AppHandle, config: AppConfig, snapshot: Option<DashboardSnap
     }
     let account_header = section(marker, 29.0);
     label(&account_header, if zh { "账号列表" } else { "Accounts" }, 20.0, 4.0, 160.0, 13.0, true, false, marker);
-    let count = label(&account_header, &if zh { format!("{} 个账号", accounts.len()) } else { format!("{} accounts", accounts.len()) }, 210.0, 5.0, WIDTH - 230.0, 11.0, false, true, marker);
+    let count = label(&account_header, &projection::account_heading_summary(accounts.len(), None, "checking", zh), 180.0, 5.0, WIDTH - 200.0, 11.0, false, true, marker);
     count.setAlignment(objc2_app_kit::NSTextAlignment::Right);
     custom_item(&menu, &account_header, "Accounts", marker);
     let busy = BUSY.load(Ordering::Acquire) || status.as_ref().is_none_or(|status| status.phase == "switching");
@@ -584,7 +586,7 @@ fn show(app: tauri::AppHandle, config: AppConfig, snapshot: Option<DashboardSnap
     standard_item(&menu, &app, if zh { "设置" } else { "Settings" }, Action::Page("settings"), true, ",", preferences.show_icons, zh, &mut targets, marker);
     standard_item(&menu, &app, "GitHub ↗", Action::Github, true, "", preferences.show_icons, zh, &mut targets, marker);
     standard_item(&menu, &app, if zh { "退出" } else { "Quit" }, Action::Quit, true, "q", preferences.show_icons, zh, &mut targets, marker);
-    SESSION.with(|session| *session.borrow_mut() = Some(MenuSession { zh, _targets: targets, controls, usage, quotas, aggregates,
+    SESSION.with(|session| *session.borrow_mut() = Some(MenuSession { zh, _targets: targets, controls, identity_summary: count, usage, quotas, aggregates,
         preferences: preferences.clone(), freshness_minutes: config.refresh_interval, reserve, busy }));
     ACTIVE.with(|active| *active.borrow_mut() = Some(menu.clone()));
     let refresh = MenuRefresh::alloc(marker).set_ivars(MenuRefreshState { updates, ticket, started });

@@ -297,7 +297,9 @@
     "quit": "退出应用",
     "no_account": "无账号",
     "unknown_quota": "未知 (点击刷新)",
-    "forbidden": "账号被拒绝（403）"
+    "forbidden": "账号被拒绝（403）",
+    "identity_checking": "识别中",
+    "identity_unavailable": "当前未识别"
   },
   "auto_switch": {
     "title": "智能切换策略",

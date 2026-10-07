@@ -17,7 +17,6 @@ use std::path::PathBuf;
 pub(crate) struct Installation {
     pub bundle: PathBuf,
     pub executable: PathBuf,
-    pub version: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -251,7 +250,6 @@ pub(crate) fn installed(configured: Option<&str>) -> Result<Option<Installation>
         return Ok(Some(Installation {
             executable: bundle.join("Contents/MacOS/Antigravity"),
             bundle,
-            version,
         }));
     }
     Ok(None)
@@ -417,10 +415,9 @@ mod tests {
 
     #[test]
     fn reads_only_standalone_app_identity() {
-        assert_eq!(
-            package_version(&official_package("2.19.1")),
-            Some("2.19.1".into())
-        );
+        for version in ["2.19.1", "2.21.0", "3.0.0"] {
+            assert_eq!(package_version(&official_package(version)), Some(version.into()));
+        }
         for version in ["", "2.19", "2.19.1-extra", "2.19.1.1", "a.b.c"] {
             assert_eq!(package_version(&official_package(version)), None);
         }

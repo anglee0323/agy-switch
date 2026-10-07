@@ -40,6 +40,8 @@ pub struct TrayTexts {
     pub no_account: String,
     pub unknown_quota: String,
     pub forbidden: String,
+    pub identity_checking: String,
+    pub identity_unavailable: String,
 }
 
 /// Load translations from JSON
@@ -106,6 +108,8 @@ pub fn get_tray_texts(lang: &str) -> TrayTexts {
             .get("forbidden")
             .cloned()
             .unwrap_or_else(|| "Account Forbidden".to_string()),
+        identity_checking: t.get("identity_checking").cloned().unwrap_or_else(|| "Checking".into()),
+        identity_unavailable: t.get("identity_unavailable").cloned().unwrap_or_else(|| "Current unknown".into()),
     }
 }
 

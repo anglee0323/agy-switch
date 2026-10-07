@@ -27,6 +27,17 @@ pub fn identity_parts(account: &DashboardEntry, preferences: &MenuBarPreferences
     }
 }
 
+/// Keep the account count visible while explaining a pending or failed identity
+/// observation. Unknown and ambiguous live emails must not look like success.
+pub fn account_heading_summary(count: usize, current: Option<&str>, source: &str, zh: bool) -> String {
+    let count = if zh { format!("{count} 个账号") } else { format!("{count} accounts") };
+    let texts = super::i18n::get_tray_texts(if zh { "zh" } else { "en" });
+    let status = if source == "checking" { texts.identity_checking }
+        else if source == "unavailable" || (source == "running_app" && current.is_none()) { texts.identity_unavailable }
+        else { return count; };
+    format!("{count}  {status}")
+}
+
 pub fn account_windows(account: &DashboardEntry, now: i64, freshness_minutes: i32) -> [[Option<f64>; 2]; 2] {
     let unavailable = account.read_status != "loaded" || account.disabled
         || (account.validation_blocked && account.validation_blocked_until.is_none_or(|until| until > now))
@@ -121,6 +132,14 @@ pub fn account_reset_labels(account: &DashboardEntry, now: i64, zh: bool) -> [[S
 mod tests {
     use super::*;
     use crate::modules::account_dashboard::{ReadOnlyQuota, ReadOnlyGroup, ReadOnlyBucket};
+    #[test] fn identity_heading_explains_failures_and_recovers_without_claiming_a_current_account() {
+        assert_eq!(account_heading_summary(5, None, "checking", true), "5 个账号  识别中");
+        assert_eq!(account_heading_summary(5, None, "unavailable", true), "5 个账号  当前未识别");
+        assert_eq!(account_heading_summary(5, None, "running_app", false), "5 accounts  Current unknown");
+        assert_eq!(account_heading_summary(5, Some("verified"), "running_app", false), "5 accounts");
+        assert_eq!(account_heading_summary(5, Some("saved"), "tools_record", true), "5 个账号");
+        assert_eq!(account_heading_summary(0, None, "tools_record", false), "0 accounts");
+    }
     fn account() -> DashboardEntry {
         let groups = ["Gemini", "Claude / GPT"].into_iter().enumerate().map(|(family, name)| ReadOnlyGroup {
             display_name: name.into(), buckets: ["5h", "weekly"].into_iter().map(|window| ReadOnlyBucket {
