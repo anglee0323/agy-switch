@@ -448,23 +448,26 @@ fn panel_bounds(
     anchor: (f64, f64, f64, f64),
     area: (f64, f64, f64, f64),
     scale: f64,
+    frame: (f64, f64),
 ) -> (f64, f64, f64, f64) {
     let (ax, ay, aw, ah) = anchor;
     let (x, y, w, h) = area;
     let margin = 8.0 * scale;
-    let width = (424.0 * scale).min((w - margin * 2.0).max(1.0));
-    let height = (680.0 * scale).min((h - margin * 2.0).max(1.0));
+    let width = (424.0 * scale).min((w - margin * 2.0 - frame.0).max(1.0));
+    let height = (680.0 * scale).min((h - margin * 2.0 - frame.1).max(1.0));
+    let outer_width = width + frame.0;
+    let outer_height = height + frame.1;
     let px =
-        (ax + aw / 2.0 - width / 2.0).clamp(x + margin, (x + w - width - margin).max(x + margin));
+        (ax + aw / 2.0 - outer_width / 2.0).clamp(x + margin, (x + w - outer_width - margin).max(x + margin));
     let below = if ah > 0.0 { ay + ah + 2.0 * scale } else { (ay + ah).max(y) };
-    let py = if below + height <= y + h - margin {
+    let py = if below + outer_height <= y + h - margin {
         below
     } else {
-        ay - height
+        ay - outer_height
     };
     (
         px,
-        py.clamp(y, (y + h - height).max(y)),
+        py.clamp(y, (y + h - outer_height).max(y)),
         width,
         height,
     )
@@ -538,6 +541,18 @@ fn toggle_web_dashboard(app: &tauri::AppHandle, rect: Option<tauri::Rect>) -> Re
     if let Some(monitor) = monitor {
         let scale = monitor.scale_factor();
         let area = monitor.work_area();
+        #[cfg(target_os = "windows")]
+        let frame = {
+            // Undecorated Windows shadows still enlarge the native rectangle.
+            // Reserve that frame when sizing and positioning the content.
+            let outer = window.outer_size().map_err(|error| error.to_string())?;
+            let inner = window.inner_size().map_err(|error| error.to_string())?;
+            let ratio = scale / window.scale_factor().map_err(|error| error.to_string())?;
+            (f64::from(outer.width.saturating_sub(inner.width)) * ratio,
+             f64::from(outer.height.saturating_sub(inner.height)) * ratio)
+        };
+        #[cfg(not(target_os = "windows"))]
+        let frame = (0.0, 0.0);
         let anchor = anchor
             .map(|r| {
                 let pos = r.position.to_physical::<f64>(scale);
@@ -559,6 +574,7 @@ fn toggle_web_dashboard(app: &tauri::AppHandle, rect: Option<tauri::Rect>) -> Re
                 f64::from(area.size.height),
             ),
             scale,
+            frame,
         );
         window
             .set_size(tauri::PhysicalSize::new(width as u32, height as u32))
@@ -753,6 +769,7 @@ mod tests {
             (-12.0, -32.0, 20.0, 24.0),
             (-800.0, -10.0, 800.0, 540.0),
             1.0,
+            (0.0, 0.0),
         );
         assert!(x >= -792.0 && x + w <= -8.0);
         assert!(y >= -10.0 && y + h <= 530.0);
@@ -763,9 +780,23 @@ mod tests {
             (2800.0, 1760.0, 40.0, 40.0),
             (0.0, 0.0, 2880.0, 1760.0),
             2.0,
+            (0.0, 0.0),
         );
         assert_eq!(w, 848.0);
         assert_eq!(h, 1360.0);
         assert!(x + w <= 2864.0 && y + h <= 1760.0);
+    }
+    #[test]
+    fn popover_keeps_windows_shadow_inside_work_area() {
+        let (x, y, w, h) = panel_bounds(
+            (1000.0, 720.0, 24.0, 40.0),
+            (0.0, 0.0, 1024.0, 720.0),
+            1.0,
+            (16.0, 9.0),
+        );
+        // Observed on the hosted Windows desktop: the 424x680 content has
+        // a 440x689 native outer rectangle, including its shadow frame.
+        assert!(x + w + 16.0 <= 1024.0);
+        assert!(y + h + 9.0 <= 720.0);
     }
 }

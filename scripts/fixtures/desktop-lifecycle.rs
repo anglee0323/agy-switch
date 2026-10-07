@@ -26,8 +26,10 @@ fn main() {
         let monitor = panel.current_monitor().unwrap().unwrap();
         let area = monitor.work_area();
         let scale = monitor.scale_factor();
-        let expected_width = (424.0 * scale).min((f64::from(area.size.width) - 16.0 * scale).max(1.0)) as u32;
-        let expected_height = (680.0 * scale).min((f64::from(area.size.height) - 16.0 * scale).max(1.0)) as u32;
+        let frame_width = f64::from(size.width.saturating_sub(content.width));
+        let frame_height = f64::from(size.height.saturating_sub(content.height));
+        let expected_width = (424.0 * scale).min((f64::from(area.size.width) - 16.0 * scale - frame_width).max(1.0)) as u32;
+        let expected_height = (680.0 * scale).min((f64::from(area.size.height) - 16.0 * scale - frame_height).max(1.0)) as u32;
         eprintln!("Panel geometry: {}", serde_json::json!({"position":position,"outer":size,"content":content,
             "work_area":[area.position.x,area.position.y,area.size.width,area.size.height],"scale":scale,"expected_content":[expected_width,expected_height]}));
         // Windows shadows contribute to the outer rectangle. Check content
