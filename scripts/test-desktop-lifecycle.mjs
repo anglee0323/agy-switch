@@ -79,7 +79,8 @@ if (selfTest) {
     assert.equal(run.status, 0, run.stderr);
     verifyStages(stages, noTray);
     assert.ok(report.runs.at(-1).config_unchanged, 'Lifecycle checks must not write preferences');
-    rmSync(root, { recursive: true }); // Only the freshly created, owned fixture.
+    // WebView2 may release its final cache file just after the host exits.
+    rmSync(root, { recursive: true, maxRetries: 10, retryDelay: 100 }); // Only the owned fixture.
   }
   report.passed = true; writeFileSync(join(output, 'acceptance.json'), JSON.stringify(report, null, 2));
   console.log(`${process.platform} native lifecycle: 16 stages passed, with and without tray`);
