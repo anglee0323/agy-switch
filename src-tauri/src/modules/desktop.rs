@@ -382,11 +382,18 @@ pub fn initialize(app: &tauri::AppHandle) -> Result<(), String> {
     let config = modules::load_app_config().unwrap_or_default();
     apply_dock_preference(app, &config.desktop)?;
     let autostart = std::env::args().any(|arg| arg == "--autostart");
-    if !start_hidden(
+    if start_hidden(
         autostart,
         config.desktop.start_minimized,
         tray_available(app),
     ) {
+        // Creating the native WebView can map a window despite its initial
+        // visibility flag (notably WebKitGTK). Apply the requested state after
+        // creation rather than relying on that flag alone.
+        if let Some(window) = app.get_webview_window("main") {
+            window.hide().map_err(|error| error.to_string())?;
+        }
+    } else {
         show_main(app)?;
     }
     Ok(())

@@ -22,11 +22,17 @@ fn main() {
         let panel = app.get_webview_window(desktop::DASHBOARD_LABEL).unwrap();
         let position = panel.outer_position().unwrap();
         let size = panel.outer_size().unwrap();
+        let content = panel.inner_size().unwrap();
         let monitor = panel.current_monitor().unwrap().unwrap();
         let area = monitor.work_area();
-        let expected_width = (424.0 * monitor.scale_factor()).min(f64::from(area.size.width)) as u32;
-        let expected_height = (680.0 * monitor.scale_factor()).min(f64::from(area.size.height)) as u32;
-        size.width.abs_diff(expected_width) <= 1 && size.height.abs_diff(expected_height) <= 1
+        let scale = monitor.scale_factor();
+        let expected_width = (424.0 * scale).min((f64::from(area.size.width) - 16.0 * scale).max(1.0)) as u32;
+        let expected_height = (680.0 * scale).min((f64::from(area.size.height) - 16.0 * scale).max(1.0)) as u32;
+        eprintln!("Panel geometry: {}", serde_json::json!({"position":position,"outer":size,"content":content,
+            "work_area":[area.position.x,area.position.y,area.size.width,area.size.height],"scale":scale,"expected_content":[expected_width,expected_height]}));
+        // Windows shadows contribute to the outer rectangle. Check content
+        // dimensions independently and still require the full frame to fit.
+        content.width.abs_diff(expected_width) <= 1 && content.height.abs_diff(expected_height) <= 1
             && position.x >= area.position.x && position.y >= area.position.y
             && i64::from(position.x) + i64::from(size.width) <= i64::from(area.position.x) + i64::from(area.size.width) + 1
             && i64::from(position.y) + i64::from(size.height) <= i64::from(area.position.y) + i64::from(area.size.height) + 1
@@ -51,8 +57,9 @@ fn main() {
     assert!(root.is_absolute() && root.join(".desktop-fixture").is_file());
     let no_tray = std::env::args().any(|arg| arg == "--no-tray");
     let failed = Arc::new(AtomicBool::new(false));
+    let run_failed = failed.clone();
     let closing = Arc::new(AtomicBool::new(false));
-    let setup_failed = failed.clone();
+    let close_timeout = Arc::new(AtomicBool::new(false));
     let mut context = tauri::generate_context!();
     // This example's identity is separate from the installed app's WebView data.
     context.config_mut().identifier = "com.agy-switch.desktop-lifecycle-fixture".into();
@@ -60,21 +67,26 @@ fn main() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_autostart::Builder::new().app_name("agy-switch-desktop-fixture").build())
         .manage(desktop::DesktopRuntime::default())
-        .on_window_event(desktop::handle_window_event)
+        .on_window_event(|window, event| {
+            if matches!(event, tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed | tauri::WindowEvent::Focused(_)) {
+                eprintln!("Native window event: {} {event:?}", window.label());
+            }
+            desktop::handle_window_event(window, event);
+        })
         .setup(move |app| {
             if !no_tray { tray::create_tray(app.handle())?; }
             desktop::set_tray_available(app.handle(), !no_tray);
             desktop::initialize(app.handle())?;
-            setup_failed.store(!record("startup", visible(app.handle(), "main") == no_tray), Ordering::Relaxed);
             if !no_tray { desktop::warm_dashboard(app.handle()); }
             Ok(())
         })
         .build(context).expect("Cannot build native lifecycle fixture")
         .run_return(move |app, event| match event {
             tauri::RunEvent::Ready => {
-                let app = app.clone(); let failed = failed.clone(); let closing = closing.clone();
+                let app = app.clone(); let failed = failed.clone(); let closing = closing.clone(); let close_timeout = close_timeout.clone();
                 tauri::async_runtime::spawn(async move {
-                    let mut passed = true;
+                    pause().await;
+                    let mut passed = on_main(&app, move |app| record("startup", visible(app, "main") == no_tray)).await;
                     if !no_tray {
                         for _ in 0..40 {
                             if app.get_webview_window(desktop::DASHBOARD_LABEL).is_some() { break; }
@@ -93,9 +105,11 @@ fn main() {
                         on_main(&app, |app| { app.get_webview_window(desktop::DASHBOARD_LABEL).unwrap().close().unwrap(); true }).await;
                         pause().await;
                         passed &= on_main(&app, |app| record("panel_close_hides", app.get_webview_window(desktop::DASHBOARD_LABEL).is_some() && !visible(app, desktop::DASHBOARD_LABEL))).await;
+                        eprintln!("Native action: reopen panel before focus check");
                         toggle(&app).await;
                         // Focus the main window directly: show_main's explicit panel
                         // hide must not stand in for the delayed blur dismissal.
+                        eprintln!("Native action: show and focus main");
                         on_main(&app, |app| { let main = app.get_webview_window("main").unwrap(); main.show().unwrap(); main.set_focus().unwrap(); true }).await;
                         pause().await;
                         passed &= on_main(&app, |app| record("blur_hides_panel", visible(app, "main") && !visible(app, desktop::DASHBOARD_LABEL))).await;
@@ -119,14 +133,17 @@ fn main() {
                     on_main(&app, |app| { app.get_webview_window("main").unwrap().close().unwrap(); true }).await;
                     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
                     failed.store(true, Ordering::Relaxed);
+                    close_timeout.store(true, Ordering::Relaxed);
                     // A retained hidden panel must not leave an inaccessible process.
                     app.exit(1);
                 });
             }
-            tauri::RunEvent::Exit => { record("close_without_tray", closing.load(Ordering::Relaxed) && !failed.load(Ordering::Relaxed)); }
+            tauri::RunEvent::ExitRequested { code, .. } => { eprintln!("Native exit requested: {code:?}"); }
+            tauri::RunEvent::Exit => { record("close_without_tray", closing.load(Ordering::Relaxed) && !close_timeout.load(Ordering::Relaxed)); }
             _ => {}
         });
-    std::process::exit(code);
+    eprintln!("Native run returned: {code}");
+    std::process::exit(if code == 0 && run_failed.load(Ordering::Relaxed) { 1 } else { code });
 }
 
 #[cfg(target_os = "macos")]
