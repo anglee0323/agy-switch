@@ -290,13 +290,17 @@
   },
   "tray": {
     "current": "Current",
+    "saved": "Saved",
     "quota": "Quota",
     "switch_next": "Switch to Next Account",
     "refresh_current": "Refresh Current Quota",
+    "refresh_saved": "Refresh Saved Account Quota",
     "show_window": "Show Main Window",
     "quit": "Quit Application",
     "no_account": "No Account",
-    "unknown_quota": "Unknown (Click to Refresh)",
+    "unknown_quota": "Unknown (Refresh needed)",
+    "disabled": "Account disabled",
+    "blocked": "Account verification required",
     "forbidden": "Account rejected (403)",
     "identity_checking": "Checking",
     "identity_unavailable": "Current unknown"

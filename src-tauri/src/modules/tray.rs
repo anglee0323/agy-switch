@@ -18,34 +18,19 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let config = modules::load_app_config().unwrap_or_default();
     let texts = modules::i18n::get_tray_texts(&config.language);
     let (dashboard, settings) = labels(&config.language);
-    let current = modules::get_current_account_id()
-        .ok()
-        .flatten()
-        .and_then(|id| modules::load_account(&id).ok());
+    let snapshot = modules::account_dashboard::snapshot().ok();
+    let current = snapshot.as_ref().and_then(|snapshot| snapshot.accounts.iter()
+        .find(|account| Some(&account.id) == snapshot.current_account_id.as_ref()));
     let user_text = format!(
         "{}: {}",
-        texts.current,
+        texts.saved,
         current
             .as_ref()
             .map(|a| a.email.as_str())
             .unwrap_or(&texts.no_account)
     );
-    let mut quota_lines = Vec::new();
-    if let Some(account) = &current {
-        if let Some(quota) = &account.quota {
-            if quota.is_forbidden {
-                quota_lines.push(texts.forbidden.clone());
-            } else {
-                // Only display models actually reported; absent data is never 0%.
-                for model in quota.models.iter().take(4) {
-                    quota_lines.push(format!("{}: {}%", model.name, model.percentage));
-                }
-            }
-        }
-    }
-    if quota_lines.is_empty() {
-        quota_lines.push(format!("{}: {}", texts.quota, texts.unknown_quota));
-    }
+    let now = chrono::Utc::now().timestamp();
+    let quota_lines = modules::menu_bar_projection::saved_quota_lines(current, now, config.refresh_interval, &config.language);
     let menu = Menu::new(app)?;
     menu.append(&MenuItem::with_id(
         app,
@@ -72,23 +57,19 @@ fn build_menu(app: &tauri::AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         )?)?;
     }
     menu.append(&PredefinedMenuItem::separator(app)?)?;
-    let switchable = modules::list_accounts()
-        .unwrap_or_default()
-        .iter()
-        .filter(|account| !account.disabled && !account.validation_blocked)
-        .count();
+    let next = snapshot.as_ref().and_then(|snapshot| modules::menu_bar_projection::next_switchable_account(snapshot, now));
     menu.append(&MenuItem::with_id(
         app,
         "switch_next",
         texts.switch_next,
-        switchable > 1,
+        next.is_some(),
         None::<&str>,
     )?)?;
     menu.append(&MenuItem::with_id(
         app,
         "refresh_curr",
-        texts.refresh_current,
-        current.is_some(),
+        texts.refresh_saved,
+        current.is_some_and(|account| modules::menu_bar_projection::switchable_account(account, now)),
         None::<&str>,
     )?)?;
     menu.append(&MenuItem::with_id(
@@ -159,28 +140,18 @@ pub fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
                         }
                     }
                     let _release = Release;
-                    let accounts: Vec<_> = modules::list_accounts()
-                        .unwrap_or_default()
-                        .into_iter()
-                        .filter(|account| !account.disabled && !account.validation_blocked)
-                        .collect();
-                    if accounts.len() < 2 {
-                        return;
-                    }
-                    let current = modules::get_current_account_id().ok().flatten();
-                    let next = current
-                        .and_then(|id| accounts.iter().position(|account| account.id == id))
-                        .map(|index| (index + 1) % accounts.len())
-                        .unwrap_or(0);
+                    let Ok(snapshot) = modules::account_dashboard::snapshot() else { return; };
+                    let Some(next) = modules::menu_bar_projection::next_switchable_account(&snapshot, chrono::Utc::now().timestamp()) else { return; };
+                    let next_id = next.id.clone();
                     match crate::commands::switch_account(
                         app.clone(),
-                        accounts[next].id.clone(),
+                        next_id.clone(),
                         None,
                     )
                     .await
                     {
                         Ok(()) => {
-                            let _ = app.emit("tray://account-switched", accounts[next].id.clone());
+                            let _ = app.emit("tray://account-switched", next_id);
                         }
                         Err(error) => {
                             let _ = app.emit("menubar://error", error);
@@ -191,9 +162,12 @@ pub fn create_tray(app: &tauri::AppHandle) -> tauri::Result<()> {
             "refresh_curr" => {
                 let app = app.clone();
                 tauri::async_runtime::spawn(async move {
-                    if let Ok(Some(id)) = modules::get_current_account_id() {
+                    let selected = modules::account_dashboard::snapshot().ok().and_then(|snapshot| snapshot.accounts.into_iter()
+                        .find(|account| Some(&account.id) == snapshot.current_account_id.as_ref()
+                            && modules::menu_bar_projection::switchable_account(account, chrono::Utc::now().timestamp())));
+                    if let Some(account) = selected {
                         if let Err(error) =
-                            crate::commands::fetch_account_quota(app.clone(), id).await
+                            crate::commands::fetch_account_quota(app.clone(), account.id).await
                         {
                             modules::logger::log_warn(&format!("Tray refresh failed: {error}"));
                             let _ = app.emit("menubar://error", error.to_string());

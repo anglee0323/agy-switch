@@ -374,11 +374,6 @@ fn readonly_item(menu: &NSMenu, title: &str, marker: MainThreadMarker) {
     let item = unsafe { NSMenuItem::initWithTitle_action_keyEquivalent(NSMenuItem::alloc(marker), &NSString::from_str(title), None, &NSString::from_str("")) };
     item.setEnabled(false); menu.addItem(&item);
 }
-fn can_switch(account: &DashboardEntry, now: i64) -> bool {
-    account.read_status == "loaded" && !account.disabled && !account.quota.as_ref().is_some_and(|quota| quota.is_forbidden)
-        && !(account.validation_blocked && account.validation_blocked_until.is_none_or(|until| until > now))
-}
-
 struct AccountControls { id: String, switch: Retained<NSButton>, badge: Retained<StatusBadge>, caption: Retained<NSTextField> }
 struct AccountQuotaWidgets {
     id: String,
@@ -422,7 +417,7 @@ impl MenuSession {
         }
         for control in &self.controls {
             let switchable = snapshot.and_then(|snapshot| snapshot.accounts.iter().find(|account| account.id == control.id))
-                .is_some_and(|account| can_switch(account, now));
+                .is_some_and(|account| projection::switchable_account(account, now));
             control.switch.setEnabled(!self.busy && !BUSY.load(Ordering::Acquire) && switchable);
         }
     }
@@ -442,7 +437,7 @@ fn account_item(menu: &NSMenu, app: &tauri::AppHandle, account: &DashboardEntry,
         status_badge(&view, if zh { "禁用" } else { "Disabled" }, "nosign", &NSColor::systemRedColor(), action_frame, marker);
         None
     } else {
-        let switch = button(&view, menu, app, if zh { "切换" } else { "Switch" }, Action::Switch(account.id.clone()), !busy && can_switch(account, chrono::Utc::now().timestamp()), action_frame, Some("arrow.left.arrow.right"), zh, targets, marker);
+        let switch = button(&view, menu, app, if zh { "切换" } else { "Switch" }, Action::Switch(account.id.clone()), !busy && projection::switchable_account(account, chrono::Utc::now().timestamp()), action_frame, Some("arrow.left.arrow.right"), zh, targets, marker);
         let (badge, caption) = status_badge(&view, if zh { "当前" } else { "Current" }, "checkmark.circle", &NSColor::systemBlueColor(), action_frame, marker);
         badge.setHidden(true);
         Some(AccountControls { id: account.id.clone(), switch, badge, caption })
@@ -504,8 +499,10 @@ define_class!(
                     match update {
                         MenuUpdate::Identity(current, source) => { for control in &session.controls {
                             let selected = current.as_ref() == Some(&control.id);
-                            control.switch.setHidden(selected); control.badge.setHidden(!selected);
-                            control.caption.setStringValue(&NSString::from_str(if source == "running_app" { if session.zh { "当前" } else { "Current" } } else { if session.zh { "记录" } else { "Saved" } }));
+                            let verified = projection::verified_current(&control.id, current.as_deref(), source);
+                            control.switch.setHidden(verified); control.badge.setHidden(!verified);
+                            control.switch.setTitle(&NSString::from_str(if selected && !verified { if session.zh { "记录" } else { "Saved" } } else { if session.zh { "切换" } else { "Switch" } }));
+                            control.caption.setStringValue(&NSString::from_str(if session.zh { "当前" } else { "Current" }));
                         }
                             session.identity_summary.setStringValue(&NSString::from_str(&projection::account_heading_summary(session.quotas.len(), current.as_deref(), source, session.zh)));
                             modules::logger::log_info(&format!("Native menu identity applied in {} ms ({source})", self.ivars().started.elapsed().as_millis()));

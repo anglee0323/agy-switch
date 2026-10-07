@@ -290,13 +290,17 @@
   },
   "tray": {
     "current": "当前",
+    "saved": "记录",
     "quota": "额度",
     "switch_next": "切换下一个账号",
     "refresh_current": "刷新当前账号额度",
+    "refresh_saved": "刷新记录账号额度",
     "show_window": "显示主窗口",
     "quit": "退出应用",
     "no_account": "无账号",
-    "unknown_quota": "未知 (点击刷新)",
+    "unknown_quota": "未知（请刷新）",
+    "disabled": "账号已禁用",
+    "blocked": "账号需要验证",
     "forbidden": "账号被拒绝（403）",
     "identity_checking": "识别中",
     "identity_unavailable": "当前未识别"

@@ -86,8 +86,20 @@ test('unknown live identity never chooses the first account and read failures cl
   await page.evaluate(() => (window as any).__menuFixture.setIdentity('B', 'tools_record')); await expect(page.getByRole('button', { name: '切换到 账号 B' })).toHaveAttribute('title', 'Tools 保存的账号');
   await expect(page.getByRole('status')).toHaveCount(0);
   await page.evaluate(() => (window as any).__menuFixture.failRead()); await expect(page.getByRole('alert')).toContainText('账号读取失败'); await expect(page.locator('.mb-account-row.current')).toHaveCount(0);
-  await page.evaluate(() => (window as any).__menuFixture.recover()); await expect(page.locator('.mb-account-row.current')).toContainText('账号 B');
+  await page.evaluate(() => (window as any).__menuFixture.recover()); await expect(page.locator('.mb-account-row.selected')).toContainText('账号 B');
   await page.evaluate(() => (window as any).__menuFixture.empty()); await expect(page.getByText('添加账号后显示额度')).toBeVisible(); await bounded(page);
+});
+test('a saved selection is not a verified login and can be reapplied in either language', async ({ page }) => {
+  for (const language of ['zh', 'en']) {
+    await page.evaluate(language => { (window as any).__menuFixture.setPreferences({ language }); (window as any).__menuFixture.setIdentity('B', 'tools_record'); }, language);
+    const selected = page.getByRole('button', { name: (language === 'zh' ? '切换到 ' : 'Switch to ') + '账号 B' });
+    await expect(selected).toHaveText(language === 'zh' ? '记录' : 'Saved');
+    await expect(selected).toBeEnabled(); await expect(page.locator('.mb-account-row.current')).toHaveCount(0);
+    const before = (await calls(page, 'switch_account')).length;
+    await selected.click(); await expect.poll(async () => (await calls(page, 'switch_account')).length).toBe(before + 1);
+    await page.evaluate(() => (window as any).__menuFixture.setIdentity('B', 'running_app'));
+    await expect(selected).toHaveText(language === 'zh' ? '当前' : 'Current'); await expect(selected).toBeDisabled();
+  }
 });
 test('English unknown identity stays explicit in the compact menu', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 400 });
