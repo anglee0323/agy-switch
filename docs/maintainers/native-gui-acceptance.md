@@ -31,6 +31,10 @@ pass. Windows fixture cleanup waits for the WebView2 processes associated with
 its unique data directory to exit, then retries file removal briefly. The host's
 exit alone does not release that directory; see Microsoft's
 [user-data folder guidance](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/user-data-folder).
+Startup checkpoints and elapsed time are retained on failure. A fresh Windows
+profile has a 60-second process budget for WebView2 initialization and the entire
+lifecycle sequence (Linux uses 30 seconds); this is not a startup-performance
+benchmark. Every native assertion and clean exit remains required.
 
 macOS runs its separate AppKit fixture with 12 native Dock/window stages,
 including process exit after closing the main window without a usable tray.

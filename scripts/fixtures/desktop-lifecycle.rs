@@ -67,7 +67,8 @@ fn main() {
     let mut context = tauri::generate_context!();
     // This example's identity is separate from the installed app's WebView data.
     context.config_mut().identifier = "com.agy-switch.desktop-lifecycle-fixture".into();
-    let code = tauri::Builder::default()
+    eprintln!("Native startup: building the application");
+    let application = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_autostart::Builder::new().app_name("agy-switch-desktop-fixture").build())
         .manage(desktop::DesktopRuntime::default())
@@ -78,15 +79,20 @@ fn main() {
             desktop::handle_window_event(window, event);
         })
         .setup(move |app| {
+            eprintln!("Native startup: setup entered");
             if !no_tray { tray::create_tray(app.handle())?; }
+            eprintln!("Native startup: tray initialized");
             desktop::set_tray_available(app.handle(), !no_tray);
             desktop::initialize(app.handle())?;
+            eprintln!("Native startup: desktop initialized");
             if !no_tray { desktop::warm_dashboard(app.handle()); }
             Ok(())
         })
-        .build(context).expect("Cannot build native lifecycle fixture")
-        .run_return(move |app, event| match event {
+        .build(context).expect("Cannot build native lifecycle fixture");
+    eprintln!("Native startup: running the event loop");
+    let code = application.run_return(move |app, event| match event {
             tauri::RunEvent::Ready => {
+                eprintln!("Native startup: ready");
                 let app = app.clone(); let failed = failed.clone(); let closing = closing.clone(); let close_timeout = close_timeout.clone();
                 tauri::async_runtime::spawn(async move {
                     pause().await;

@@ -36,7 +36,7 @@ function waitForWebViewExit(root, log) {
   // Match only this fixture's unique directory; never inspect or stop unrelated
   // browser processes. No process command lines are written to the report.
   const marker = (root.split(/[\\/]/).at(-1) + '\\home\\AppData\\Local\\com.agy-switch.desktop-lifecycle-fixture\\EBWebView').replaceAll("'", "''");
-  const script = `$marker='${marker}'; $deadline=[DateTime]::UtcNow.AddSeconds(30); do { $count=@(Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine.Replace('/','\\').IndexOf($marker,[StringComparison]::OrdinalIgnoreCase) -ge 0 }).Count; if($count -eq 0) { Write-Output 'Owned WebView2 processes exited'; exit 0 }; Start-Sleep -Milliseconds 250 } while([DateTime]::UtcNow -lt $deadline); Write-Output "Owned WebView2 processes still running: $count"; exit 1`;
+  const script = `$ErrorActionPreference='Stop'; $marker='${marker}'; $deadline=[DateTime]::UtcNow.AddSeconds(30); do { $count=@(Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine.Replace('/','\\').IndexOf($marker,[StringComparison]::OrdinalIgnoreCase) -ge 0 }).Count; if($count -eq 0) { Write-Output 'Owned WebView2 processes exited'; exit 0 }; Start-Sleep -Milliseconds 250 } while([DateTime]::UtcNow -lt $deadline); Write-Output "Owned WebView2 processes still running: $count"; exit 1`;
   const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', timeout: 35000 });
   writeFileSync(log, result.stdout + result.stderr + (result.error?.message ?? ''));
   return result.status === 0;
@@ -71,10 +71,13 @@ if (selfTest) {
       auto_refresh: false, auto_sync: false, check_updates_on_startup: false });
     writeFileSync(join(data, 'gui_config.json'), config);
     writeFileSync(join(data, 'accounts.json'), JSON.stringify({ version: '2.0', accounts: [], current_account_id: null }));
-    const run = spawnSync(binary, noTray ? ['--no-tray'] : [], { encoding: 'utf8', timeout: 30000, env: isolatedEnv(root, data) });
+    const started = Date.now();
+    // Fresh Windows profiles include WebView2's first initialization. Keep a
+    // bounded cold-start budget, separate from the required lifecycle assertions.
+    const run = spawnSync(binary, noTray ? ['--no-tray'] : [], { encoding: 'utf8', timeout: process.platform === 'win32' ? 60000 : 30000, env: isolatedEnv(root, data) });
     writeFileSync(join(output, noTray ? 'without-tray.log' : 'with-tray.log'), run.stdout + run.stderr);
     const stages = run.stdout.split('\n').filter(line => line.startsWith('{')).map(line => JSON.parse(line));
-    report.runs.push({ no_tray: noTray, stages, exit_code: run.status, signal: run.signal,
+    report.runs.push({ no_tray: noTray, stages, exit_code: run.status, signal: run.signal, duration_ms: Date.now() - started, process_error: run.error?.code ?? null,
       config_unchanged: readFileSync(join(data, 'gui_config.json'), 'utf8') === config });
     writeFileSync(join(output, 'acceptance.json'), JSON.stringify(report, null, 2));
     if (process.platform === 'linux' && run.status !== 0) {
