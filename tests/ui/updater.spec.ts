@@ -13,8 +13,7 @@ for (const language of ['zh', 'en']) test(`update prompt and manual check are lo
             if(command==='get_running_version')return '4.7.8';
             if(command==='download_and_install_update'){
                 args.progress.onmessage({stage:'downloading',downloaded:50,total:100});
-                await new Promise(resolve=>setTimeout(resolve,300));
-                throw 'update_mac_trust_required';
+                await new Promise((_, reject)=>{w.__updateFixture.rejectDownload=()=>reject('update_mac_trust_required');});
             }
             return original(command,args);
         };
@@ -29,6 +28,7 @@ for (const language of ['zh', 'en']) test(`update prompt and manual check are lo
     await expect(dialog.getByRole('status')).toContainText('50%');
     expect(await page.evaluate(()=>Boolean(document.activeElement?.closest('[role=dialog]')))).toBe(true);
     await page.keyboard.press('Escape'); await expect(dialog).toBeVisible();
+    await page.evaluate(()=>(window as any).__updateFixture.rejectDownload());
     await expect(dialog.getByRole('alert')).toContainText(language==='zh'?'未通过 macOS':'did not pass macOS');
     await expect(dialog.getByRole('status')).toHaveCount(0);
     await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0);
