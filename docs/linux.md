@@ -13,7 +13,7 @@ agy-switch-desktop
 
 The deb installs the `agy-switch` package, `/usr/bin/agy-switch-desktop` and its application-menu entry/icon, and the `/usr/bin/agy-switch` CLI. A desktop display and D-Bus session are needed for the GUI. Modern Antigravity APP credential switching needs an unlocked Secret Service such as GNOME Keyring. A compatible KWallet service has not been separately validated.
 
-The main app exposes the same account, quota, usage, switching strategy, update and appearance settings as Mac. A supported tray offers Quick Dashboard. If tray creation fails, the main window remains available and closing it exits. If the desktop creates an invisible tray icon, disable the tray as described below.
+The main app exposes the same account, quota, usage, switching strategy, update and appearance settings as Mac. A supported tray offers Quick Dashboard. Its Saved label refers to a recorded selection, not verified live login. Starting minimized requires a usable tray; if tray creation fails, the main window remains available and closing it exits. If the desktop creates an invisible tray icon, disable the tray as described below.
 
 ## Terminal-only installation
 
@@ -86,4 +86,4 @@ CI runs headless reads, real PTY interaction, deb payload checks, GTK/WebKitGTK 
 ./scripts/test-linux-credentials.sh
 ```
 
-It creates a disposable HOME and independent D-Bus session; never run ignored credential tests directly on your normal desktop bus. Real login, authenticated switching, Wayland/KDE tray behavior and ARM remain separate acceptance tasks. [Native acceptance](maintainers/native-gui-acceptance.md)
+It creates a disposable HOME and independent D-Bus session; never run ignored credential tests directly on your normal desktop bus. Real login, authenticated switching, Wayland/KDE tray behavior and ARM remain separate acceptance tasks. See [native acceptance](maintainers/native-gui-acceptance.md) and [4.9.4 package verification](maintainers/4.9.4-public-acceptance.md).
