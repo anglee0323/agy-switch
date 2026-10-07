@@ -27,6 +27,7 @@ export function setupSettingsFixture(options: { theme?: string; language?: strin
         resolveGeneralSave: () => { if (pendingGeneral) { general = { ...copy(pendingGeneral.config), desktop: general.desktop, menu_bar: general.menu_bar, dashboard: general.dashboard }; pendingGeneral.resolve(null); pendingGeneral = null; } },
         rejectDashboardSave: () => { pendingDashboard?.reject('synthetic card save rejection'); pendingDashboard = null; },
         resolveDashboardSave: () => { if (pendingDashboard) { general.dashboard = { cards: copy(pendingDashboard.cards), order: copy(pendingDashboard.order) }; pendingDashboard.resolve(copy(general.dashboard)); pendingDashboard = null; } },
+        dashboardSavePending: () => Boolean(pendingDashboard),
         rejectAutoSave: () => { pending?.reject('synthetic save rejection'); pending = null; },
         resolveAutoSave: () => { if (pending) { lowQuota = copy(pending.config); pending.resolve(copy(lowQuota)); pending = null; } },
     };

@@ -83,7 +83,7 @@ try {
   assert.ok(control.stderr.includes('FAKE-APP-STDERR'));
   console.log(`${count} CLI launch isolation checks passed; GUI inherited-I/O control passed`);
 } finally {
-  // The intentionally detached fixture children exit after 3s; the GUI control
-  // waits that long, so no fixture process remains when the temporary files go.
-  rmSync(root, { recursive: true, force: true });
+  // The GUI control waits for the child pipes. Windows may release the final
+  // pipe before releasing its executable mapping; retry that owned-file lock.
+  rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
 }
