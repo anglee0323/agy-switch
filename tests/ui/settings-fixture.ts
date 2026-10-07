@@ -5,10 +5,10 @@ export async function settleKeyboardDrag(page: import('@playwright/test').Page) 
 
 // Installs an in-memory IPC double before importing the app. No native bridge,
 // filesystem, accounts, system preference or external quota request is involved.
-export function setupSettingsFixture(options: { theme?: string; language?: string; failLoad?: boolean; failLowQuotaLoad?: boolean; dashboardCards?: string[]; quotaScope?: string; autoRefresh?: boolean } = {}) {
+export function setupSettingsFixture(options: { theme?: string; language?: string; failLoad?: boolean; failLowQuotaLoad?: boolean; dashboardCards?: string[]; quotaScope?: string; autoRefresh?: boolean; autoSync?: boolean } = {}) {
     const w = window as any;
     const callbacks: Record<number, Function> = {}; let callback = 1;
-    let general = { language: options.language || 'zh', theme: options.theme || 'light', auto_refresh: options.autoRefresh ?? false, refresh_interval: 15, auto_sync: false, sync_interval: 5,
+    let general = { language: options.language || 'zh', theme: options.theme || 'light', auto_refresh: options.autoRefresh ?? false, refresh_interval: 15, auto_sync: options.autoSync ?? false, sync_interval: 5,
         dashboard: { cards: options.dashboardCards ?? ['total_tokens', 'input_tokens', 'output_tokens', 'cache_hit_rate', 'api_cost', 'first_text_latency', 'body_speed'], order: [] as string[] },
         desktop: { launch_at_login: false, hide_dock_icon: false, start_minimized: false }, menu_bar: { quota_scope: options.quotaScope || 'all' },
         quota_protection: { enabled: false, threshold_percentage: 10, monitored_models: [] }, pinned_quota_models: { models: [] } };
@@ -24,7 +24,7 @@ export function setupSettingsFixture(options: { theme?: string; language?: strin
     const calls: { command: string; args: any }[] = [];
     const copy = (value: any) => JSON.parse(JSON.stringify(value));
     w.__settingsFixture = { calls, holdAutoSave: false, holdDashboardSave: false, holdGeneralSave: false, failLoad: Boolean(options.failLoad), failLowQuotaLoad: Boolean(options.failLowQuotaLoad), lowQuota: () => copy(lowQuota),
-        resolveGeneralSave: () => { if (pendingGeneral) { general = { ...copy(pendingGeneral.config), dashboard: general.dashboard }; pendingGeneral.resolve(null); pendingGeneral = null; } },
+        resolveGeneralSave: () => { if (pendingGeneral) { general = { ...copy(pendingGeneral.config), desktop: general.desktop, menu_bar: general.menu_bar, dashboard: general.dashboard }; pendingGeneral.resolve(null); pendingGeneral = null; } },
         rejectDashboardSave: () => { pendingDashboard?.reject('synthetic card save rejection'); pendingDashboard = null; },
         resolveDashboardSave: () => { if (pendingDashboard) { general.dashboard = { cards: copy(pendingDashboard.cards), order: copy(pendingDashboard.order) }; pendingDashboard.resolve(copy(general.dashboard)); pendingDashboard = null; } },
         rejectAutoSave: () => { pending?.reject('synthetic save rejection'); pending = null; },
@@ -38,7 +38,7 @@ export function setupSettingsFixture(options: { theme?: string; language?: strin
             if (command === 'load_config') { if (w.__settingsFixture.failLoad) throw 'synthetic load rejection'; return copy(general); }
             if (command === 'save_config') {
                 if (w.__settingsFixture.holdGeneralSave) return new Promise(resolve => { pendingGeneral = { resolve, config: copy(args.config) }; });
-                general = { ...copy(args.config), dashboard: general.dashboard }; return null;
+                general = { ...copy(args.config), desktop: general.desktop, menu_bar: general.menu_bar, dashboard: general.dashboard }; return null;
             }
             if (command === 'set_dashboard_cards') {
                 if (w.__settingsFixture.holdDashboardSave) return new Promise((resolve, reject) => { pendingDashboard = { resolve, reject, cards: copy(args.cards), order: copy(args.order) }; });

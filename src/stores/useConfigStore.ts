@@ -36,9 +36,14 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
         if (!silent) set({ loading: true, error: null });
         try {
             await configService.saveConfig(config);
-            // Card preferences have a dedicated writer; a delayed appearance
-            // save must retain the latest card selection already in the store.
-            set(state => ({ config: { ...config, dashboard: state.config?.dashboard ?? config.dashboard }, loading: false }));
+            // Dedicated writers may finish while an ordinary save is pending.
+            // Keep their latest values in the UI, as the backend does on disk.
+            set(state => ({ config: {
+                ...config,
+                desktop: state.config?.desktop ?? config.desktop,
+                menu_bar: state.config?.menu_bar ?? config.menu_bar,
+                dashboard: state.config?.dashboard ?? config.dashboard,
+            }, loading: false }));
             const { isTauri } = await import('../utils/env');
             if (isTauri()) {
                 const { invoke } = await import('@tauri-apps/api/core');

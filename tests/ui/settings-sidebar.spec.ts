@@ -103,6 +103,17 @@ test('desktop preferences survive navigation and ordinary appearance saves', asy
   await page.getByRole('button', { name: '深色', exact: true }).click(); await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   expect(await page.evaluate(() => (window as any).__TAURI_INTERNALS__.invoke('load_config'))).toMatchObject({ desktop: { launch_at_login: true, hide_dock_icon: true, start_minimized: true } });
 });
+test('a delayed appearance save retains newer menu preferences in the visible editor', async ({ page }) => {
+  await page.evaluate(() => { (window as any).__settingsFixture.holdGeneralSave = true; });
+  await page.getByRole('button', { name: '深色', exact: true }).click();
+  await expect.poll(() => page.evaluate(() => (window as any).__settingsFixture.calls.filter((call: any) => call.command === 'save_config').length)).toBe(1);
+  await page.getByLabel('菜单栏聚合额度').selectOption('gemini');
+  await expect(page.getByLabel('菜单栏聚合额度')).toHaveValue('gemini');
+  await page.evaluate(() => { (window as any).__settingsFixture.resolveGeneralSave(); });
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  expect(await page.evaluate(() => (window as any).__TAURI_INTERNALS__.invoke('load_config'))).toMatchObject({ menu_bar: { quota_scope: 'gemini' } });
+  await expect(page.getByLabel('菜单栏聚合额度')).toHaveValue('gemini');
+});
 test('all categories and controls fit short bilingual windows; scrollers reset on navigation', async ({ page }, info) => {
   for (const language of ['zh', 'en']) {
     await page.locator('#settings-tab-general').click(); await page.getByRole('button', { name: language === 'en' ? 'English' : '简体中文', exact: true }).click();
