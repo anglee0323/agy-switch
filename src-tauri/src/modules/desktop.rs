@@ -535,9 +535,18 @@ fn toggle_web_dashboard(app: &tauri::AppHandle, rect: Option<tauri::Rect>) -> Re
     let point = anchor
         .map(|r| r.position.to_physical::<f64>(1.0))
         .or_else(|| app.cursor_position().ok());
-    let monitor = point
-        .and_then(|p| app.monitor_from_point(p.x, p.y).ok().flatten())
-        .or_else(|| app.primary_monitor().ok().flatten());
+    // Linux monitor lookup and conversion both read GDK. Window getters also
+    // convert native handles on their caller, so collect the complete snapshot
+    // on the UI thread before continuing this blocking tray task.
+    let (send, receive) = std::sync::mpsc::sync_channel(1);
+    let probe = window.clone();
+    app.run_on_main_thread(move || {
+        let monitor = point
+            .and_then(|p| probe.monitor_from_point(p.x, p.y).ok().flatten())
+            .or_else(|| probe.primary_monitor().ok().flatten());
+        let _ = send.send(monitor);
+    }).map_err(|error| error.to_string())?;
+    let monitor = receive.recv().map_err(|_| "Dashboard monitor is unavailable".to_string())?;
     if let Some(monitor) = monitor {
         let scale = monitor.scale_factor();
         let area = monitor.work_area();

@@ -21,6 +21,14 @@ not assert physical icon clicks, taskbar presentation, Wayland behavior or
 authenticated switching. The fixture access point is excluded from release
 builds and requires the existing `native-gui-test` feature.
 
+Tray opening runs in a blocking task because Windows WebView creation must not
+block the event loop. Monitor lookup and native-handle conversion both run on
+the UI thread before returning a plain snapshot. Application-level getters
+and window-getter conversion can call GDK on their caller, so neither belongs
+in that worker. Repeated native opens cover this boundary. Failed Linux fixtures retain the original
+report and capture a separate native exit stack for diagnosis, never a substitute
+pass. Windows fixture cleanup retries briefly for WebView2 cache release.
+
 macOS runs its separate AppKit fixture with 12 native Dock/window stages,
 including process exit after closing the main window without a usable tray.
 Its isolated configuration, native policy observations and full output are

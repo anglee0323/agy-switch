@@ -104,8 +104,11 @@ fn main() {
                         toggle(&app).await;
                         passed &= on_main(&app, |app| record("second_click_hides", !visible(app, desktop::DASHBOARD_LABEL))).await;
                         toggle(&app).await;
+                        // Exercise repeated GDK monitor reads; the old worker
+                        // path could lose its X connection on any open.
+                        for _ in 0..4 { toggle(&app).await; toggle(&app).await; }
                         let reused = first.clone();
-                        passed &= on_main(&app, move |app| record("panel_reused", same_window(&reused, &app.get_webview_window(desktop::DASHBOARD_LABEL).unwrap()) && app.webview_windows().len() == 2)).await;
+                        passed &= on_main(&app, move |app| record("panel_reused", visible(app, desktop::DASHBOARD_LABEL) && same_window(&reused, &app.get_webview_window(desktop::DASHBOARD_LABEL).unwrap()) && app.webview_windows().len() == 2)).await;
                         on_main(&app, |app| { app.get_webview_window(desktop::DASHBOARD_LABEL).unwrap().close().unwrap(); true }).await;
                         pause().await;
                         passed &= on_main(&app, |app| record("panel_close_hides", app.get_webview_window(desktop::DASHBOARD_LABEL).is_some() && !visible(app, desktop::DASHBOARD_LABEL))).await;
