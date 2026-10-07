@@ -31,6 +31,16 @@ function verifyStages(stages, noTray) {
   assert.deepEqual(stages.map(stage => stage.stage), names, 'Every lifecycle stage must run exactly once');
   assert.ok(stages.every(stage => stage.passed === true), 'A native lifecycle assertion failed');
 }
+function waitForWebViewExit(root, log) {
+  // The host can exit before WebView2 releases its private user-data folder.
+  // Match only this fixture's unique directory; never inspect or stop unrelated
+  // browser processes. No process command lines are written to the report.
+  const marker = (root.split(/[\\/]/).at(-1) + '\\home\\AppData\\Local\\com.agy-switch.desktop-lifecycle-fixture\\EBWebView').replaceAll("'", "''");
+  const script = `$marker='${marker}'; $deadline=[DateTime]::UtcNow.AddSeconds(30); do { $count=@(Get-CimInstance Win32_Process -Filter "Name='msedgewebview2.exe'" | Where-Object { $_.CommandLine -and $_.CommandLine.Replace('/','\\').IndexOf($marker,[StringComparison]::OrdinalIgnoreCase) -ge 0 }).Count; if($count -eq 0) { Write-Output 'Owned WebView2 processes exited'; exit 0 }; Start-Sleep -Milliseconds 250 } while([DateTime]::UtcNow -lt $deadline); Write-Output "Owned WebView2 processes still running: $count"; exit 1`;
+  const result = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { encoding: 'utf8', timeout: 35000 });
+  writeFileSync(log, result.stdout + result.stderr + (result.error?.message ?? ''));
+  return result.status === 0;
+}
 if (selfTest) {
   assert.equal(isolatedEnv('/fixture', '/fixture/data').ABV_DATA_DIR, '/fixture/data');
   assert.ok(!('GITHUB_TOKEN' in isolatedEnv('/fixture', '/fixture/data')));
@@ -79,8 +89,15 @@ if (selfTest) {
     assert.equal(run.status, 0, run.stderr);
     verifyStages(stages, noTray);
     assert.ok(report.runs.at(-1).config_unchanged, 'Lifecycle checks must not write preferences');
-    // WebView2 may release its final cache file just after the host exits.
+    const cleanup = report.runs.at(-1).cleanup = {};
+    if (process.platform === 'win32') {
+      cleanup.browser_processes_exited = waitForWebViewExit(root, join(output, noTray ? 'without-tray-browser-exit.log' : 'with-tray-browser-exit.log'));
+      writeFileSync(join(output, 'acceptance.json'), JSON.stringify(report, null, 2));
+      assert.ok(cleanup.browser_processes_exited, 'Owned WebView2 processes must exit before deleting their cache');
+    }
     rmSync(root, { recursive: true, maxRetries: 10, retryDelay: 100 }); // Only the owned fixture.
+    cleanup.owned_directory_removed = true;
+    writeFileSync(join(output, 'acceptance.json'), JSON.stringify(report, null, 2));
   }
   report.passed = true; writeFileSync(join(output, 'acceptance.json'), JSON.stringify(report, null, 2));
   console.log(`${process.platform} native lifecycle: 16 stages passed, with and without tray`);

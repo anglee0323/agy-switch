@@ -27,7 +27,10 @@ the UI thread before returning a plain snapshot. Application-level getters
 and window-getter conversion can call GDK on their caller, so neither belongs
 in that worker. Repeated native opens cover this boundary. Failed Linux fixtures retain the original
 report and capture a separate native exit stack for diagnosis, never a substitute
-pass. Windows fixture cleanup retries briefly for WebView2 cache release.
+pass. Windows fixture cleanup waits for the WebView2 processes associated with
+its unique data directory to exit, then retries file removal briefly. The host's
+exit alone does not release that directory; see Microsoft's
+[user-data folder guidance](https://learn.microsoft.com/en-us/microsoft-edge/webview2/concepts/user-data-folder).
 
 macOS runs its separate AppKit fixture with 12 native Dock/window stages,
 including process exit after closing the main window without a usable tray.
