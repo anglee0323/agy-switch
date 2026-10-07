@@ -11,6 +11,10 @@ default-run = "agy-switch-desktop"
 name = "agy-switch-desktop"
 path = "src/main.rs"
 
+[[example]]
+name = "macos-desktop-check"
+path = "../scripts/fixtures/macos-desktop.rs"
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]
