@@ -15,6 +15,11 @@ path = "src/main.rs"
 name = "macos-desktop-check"
 path = "../scripts/fixtures/macos-desktop.rs"
 
+[[example]]
+name = "desktop-lifecycle-check"
+path = "../scripts/fixtures/desktop-lifecycle.rs"
+required-features = ["native-gui-test"]
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [lib]

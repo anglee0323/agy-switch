@@ -8,6 +8,12 @@ mod models;
 mod modules;
 mod utils;
 
+/// Production lifecycle code exposed only to the hosted debug acceptance example.
+#[cfg(all(debug_assertions, feature = "native-gui-test", not(target_os = "macos")))]
+pub mod desktop_lifecycle {
+    pub use crate::modules::{desktop, tray};
+}
+
 use tauri::Manager;
 use tracing::{info, warn};
 

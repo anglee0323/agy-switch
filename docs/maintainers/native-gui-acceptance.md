@@ -9,6 +9,23 @@ Actual GUI execution is intentionally refused outside a GitHub-hosted runner.
 
 ## Evidence and scope
 
+The separate `desktop-lifecycle-{OS}-{source SHA}` lane uses the production
+desktop runtime, an owned tray and the actual secondary WebView window. On
+Windows/Linux, `scripts/test-desktop-lifecycle.mjs` requires a fresh hosted runner
+and isolated empty account/config files. It checks background startup, prewarm,
+window reuse, monitor bounds, click-toggle semantics, close-to-hide, focus-loss
+dismissal, main-window recovery and exit without a tray. Linux runs with Openbox
+inside Xvfb and a private D-Bus session. Reports require all 16 stages across the
+with-tray and without-tray runs; incomplete or failed runs cannot pass. It does
+not assert physical icon clicks, taskbar presentation, Wayland behavior or
+authenticated switching. The fixture access point is excluded from release
+builds and requires the existing `native-gui-test` feature.
+
+macOS runs its separate AppKit fixture with 11 native Dock/window stages.
+Its isolated configuration, native policy observations and full output are
+uploaded alongside the platform reports; installed-package verification remains
+separate.
+
 The `native-gui-{OS}-{source SHA}` artifact contains `acceptance.json`, bounded
 driver diagnostics, and these screenshots:
 
