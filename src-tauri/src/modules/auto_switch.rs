@@ -1314,6 +1314,11 @@ async fn evaluate_core<E: Environment>(
                 "credentials_updated"
             };
             d.status.set("completed", final_reason);
+            tracing::info!(
+                source_account_id = source_id.as_str(), target_account_id = candidate.id.as_str(),
+                remaining_percentage = low, reserve_percentage = config.reserve_percentage,
+                "Automatic account switch completed"
+            );
             d.cooldown_until = now + COOLDOWN_SECONDS;
             if write_pause(d.canceled_source.clone(), false).is_err() {
                 d.failed = true;

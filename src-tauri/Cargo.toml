@@ -68,7 +68,7 @@ tempfile = "3.10"
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", features = ["NSString", "NSGeometry", "NSTimer", "NSRunLoop"] }
-objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWorkspace", "NSAccessibility", "NSMenu", "NSMenuItem", "NSView", "NSResponder", "NSControl", "NSButton", "NSAlert", "NSImage", "NSImageView", "NSCell", "NSText", "NSTextField", "NSFont", "NSColor", "NSBezierPath", "NSGraphics", "NSStatusItem", "NSStatusBarButton", "NSApplication", "NSEvent", "NSAppearance", "NSTrackingArea", "objc2-core-foundation"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSWorkspace", "NSAccessibility", "NSMenu", "NSMenuItem", "NSView", "NSResponder", "NSControl", "NSButton", "NSAlert", "NSImage", "NSImageView", "NSCell", "NSText", "NSTextField", "NSFont", "NSColor", "NSBezierPath", "NSGraphics", "NSStatusItem", "NSStatusBarButton", "NSApplication", "NSRunningApplication", "NSEvent", "NSAppearance", "NSTrackingArea", "objc2-core-foundation"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 secret-service = { version = "5.2", features = ["rt-tokio-crypto-rust"] }
