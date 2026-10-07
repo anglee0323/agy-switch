@@ -118,7 +118,7 @@ fn main() {
                     closing.store(true, Ordering::Relaxed);
                     on_main(&app, |app| { app.get_webview_window("main").unwrap().close().unwrap(); true }).await;
                     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-                    record("close_without_tray", false);
+                    failed.store(true, Ordering::Relaxed);
                     // A retained hidden panel must not leave an inaccessible process.
                     app.exit(1);
                 });

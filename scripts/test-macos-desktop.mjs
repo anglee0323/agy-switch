@@ -26,6 +26,6 @@ const stages = run.stdout.split('\n').filter(line => line.startsWith('{')).map(l
 writeFileSync(join(output, 'verification.json'), JSON.stringify({ fixture: root, stages, exit_code: run.status, signal: run.signal }, null, 2) + '\n');
 console.log(stages);
 assert.equal(run.status, 0, run.stderr);
-assert.equal(stages.length, 11, 'Every native lifecycle stage must execute');
+assert.equal(stages.length, 12, 'Every native lifecycle stage must execute');
 assert.ok(stages.every(stage => stage.passed));
-console.log('macOS native desktop lifecycle: 11 stages passed');
+console.log('macOS native desktop lifecycle: 12 stages passed');

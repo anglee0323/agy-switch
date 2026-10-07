@@ -601,6 +601,10 @@ pub fn handle_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
                         modules::logger::log_warn(&format!("Dock state could not be restored after closing: {error}"));
                     }
                 }
+            } else {
+                // Prewarming may have left a hidden secondary window alive.
+                // Closing only main would leave an inaccessible runtime.
+                window.app_handle().exit(0);
             }
         }
     }

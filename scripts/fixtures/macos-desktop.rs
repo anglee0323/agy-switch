@@ -60,6 +60,7 @@ fn main() {
     async fn pause() { tokio::time::sleep(std::time::Duration::from_millis(200)).await; }
 
     let failed = Arc::new(AtomicBool::new(false));
+    let closing = Arc::new(AtomicBool::new(false));
     let setup_failed = failed.clone();
     let exit_code = tauri::Builder::default()
         .plugin(tauri_plugin_autostart::Builder::new().app_name("agy-switch-desktop-fixture").build())
@@ -78,8 +79,11 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("Cannot build native fixture")
         .run_return(move |app, event| {
+            if let tauri::RunEvent::Exit = event {
+                println!("{}", serde_json::json!({"stage":"close_without_tray","passed":closing.load(Ordering::Relaxed) && !failed.load(Ordering::Relaxed)}));
+            }
             if let tauri::RunEvent::Ready = event {
-                let app = app.clone(); let failed = failed.clone();
+                let app = app.clone(); let failed = failed.clone(); let closing = closing.clone();
                 tauri::async_runtime::spawn(async move {
                     pause().await;
                     let mut passed = on_main(&app, |app| inspect(app, "after_ready", true, false)).await;
@@ -118,7 +122,11 @@ fn main() {
                         inspect(app, "tray_unavailable_recovery", false, true)
                     }).await;
                     failed.fetch_or(!passed, Ordering::Relaxed);
-                    app.exit(if failed.load(Ordering::Relaxed) { 1 } else { 0 });
+                    closing.store(true, Ordering::Relaxed);
+                    on_main(&app, |app| { app.get_webview_window("main").unwrap().close().unwrap(); true }).await;
+                    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+                    failed.store(true, Ordering::Relaxed);
+                    app.exit(1); // A close without a tray must actually terminate.
                 });
             }
         });

@@ -21,7 +21,8 @@ not assert physical icon clicks, taskbar presentation, Wayland behavior or
 authenticated switching. The fixture access point is excluded from release
 builds and requires the existing `native-gui-test` feature.
 
-macOS runs its separate AppKit fixture with 11 native Dock/window stages.
+macOS runs its separate AppKit fixture with 12 native Dock/window stages,
+including process exit after closing the main window without a usable tray.
 Its isolated configuration, native policy observations and full output are
 uploaded alongside the platform reports; installed-package verification remains
 separate.
