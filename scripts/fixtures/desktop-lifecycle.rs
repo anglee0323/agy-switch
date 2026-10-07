@@ -57,6 +57,8 @@ fn main() {
     assert_eq!(std::env::var("RUNNER_ENVIRONMENT").as_deref(), Ok("github-hosted"), "Never run on user machines");
     let root = std::path::PathBuf::from(std::env::var_os("ABV_DATA_DIR").expect("Missing isolated fixture"));
     assert!(root.is_absolute() && root.join(".desktop-fixture").is_file());
+    tracing_subscriber::fmt().with_max_level(tracing::Level::DEBUG)
+        .with_writer(std::io::stderr).with_ansi(false).init();
     let no_tray = std::env::args().any(|arg| arg == "--no-tray");
     let failed = Arc::new(AtomicBool::new(false));
     let run_failed = failed.clone();

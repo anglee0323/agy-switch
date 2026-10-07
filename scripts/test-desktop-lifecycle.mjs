@@ -67,6 +67,15 @@ if (selfTest) {
     report.runs.push({ no_tray: noTray, stages, exit_code: run.status, signal: run.signal,
       config_unchanged: readFileSync(join(data, 'gui_config.json'), 'utf8') === config });
     writeFileSync(join(output, 'acceptance.json'), JSON.stringify(report, null, 2));
+    if (process.platform === 'linux' && run.status !== 0) {
+      // Capture a native-library exit stack without turning a diagnostic rerun
+      // into acceptance. The original failed report remains authoritative.
+      const diagnostic = spawnSync('gdb', ['--batch', '-ex', 'set pagination off', '-ex', 'set follow-fork-mode parent',
+        '-ex', 'catch syscall exit_group', '-ex', 'run', '-ex', 'thread apply all bt 15', '--args', binary,
+        ...(noTray ? ['--no-tray'] : [])], { encoding: 'utf8', timeout: 30000, maxBuffer: 262144, env: isolatedEnv(root, data) });
+      writeFileSync(join(output, noTray ? 'without-tray-native-exit.log' : 'with-tray-native-exit.log'),
+        diagnostic.stdout + diagnostic.stderr + (diagnostic.error?.message ?? ''));
+    }
     assert.equal(run.status, 0, run.stderr);
     verifyStages(stages, noTray);
     assert.ok(report.runs.at(-1).config_unchanged, 'Lifecycle checks must not write preferences');

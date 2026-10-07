@@ -155,7 +155,7 @@ jobs:
 
       - name: Install official native GUI test tools (Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get install -y webkit2gtk-driver xvfb dbus-x11 fonts-noto-cjk openbox
+        run: sudo apt-get install -y webkit2gtk-driver xvfb dbus-x11 fonts-noto-cjk openbox gdb
 
       - name: Test actual macOS Dock and window lifecycle
         if: runner.os == 'macOS'
