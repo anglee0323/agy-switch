@@ -367,7 +367,8 @@
     "manual_continue": "账号凭据已更新，请在客户端确认账号后继续工作。",
     "reasons": {
       "monitoring": "正在监测当前账号额度",
-      "waiting_task_finish": "检测到近期任务活动，等待切换",
+      "waiting_task_finish": "任务仍在运行，等待结束后切换",
+      "task_state_unknown": "无法确认任务状态，继续等待",
       "restarted": "已切换账号并重启客户端",
       "paused_and_updated": "已尝试中断任务并更新凭据，请检查任务后再继续",
       "configuration_required": "请检查换号设置",

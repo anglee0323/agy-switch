@@ -367,7 +367,8 @@
     "manual_continue": "Account credentials updated. Confirm the account in the client before resuming.",
     "reasons": {
       "monitoring": "Monitoring the current account quota",
-      "waiting_task_finish": "Recent task activity detected; waiting to switch",
+      "waiting_task_finish": "A task is running; waiting for it to finish",
+      "task_state_unknown": "Task status is unavailable; continuing to wait",
       "restarted": "Account switched and client restarted",
       "paused_and_updated": "Credentials updated after an interruption attempt; check the task before resuming",
       "configuration_required": "Check your switching settings",
