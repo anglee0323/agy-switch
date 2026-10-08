@@ -49,3 +49,15 @@ test('pending writes disable competing controls and failed writes show confirmed
     await page.getByRole('button', { name: '重新读取', exact: true }).click();
     await expect(page.getByRole('alert')).toHaveCount(0);
 });
+test('translation can be disabled while the App is closed', async ({ page }) => {
+    await page.evaluate(() => (window as any).__settingsFixture.disconnectApp());
+    await page.getByRole('button', { name: '重新读取', exact: true }).click();
+    const translation = page.getByRole('switch', { name: '界面汉化' });
+    await expect(translation).toHaveAttribute('aria-checked','true');
+    await expect(translation).toBeEnabled();
+    await expect(page.getByRole('button', { name: '推荐配置', exact: true })).toBeDisabled();
+    await translation.click();
+    await expect(translation).toHaveAttribute('aria-checked','false');
+    await expect(translation).toBeDisabled();
+    await expect.poll(() => page.evaluate(() => (window as any).__settingsFixture.experiments().translation_enabled)).toBe(false);
+});

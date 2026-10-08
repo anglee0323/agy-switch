@@ -124,7 +124,7 @@ export default function ExperimentalSettings({ active }: { active: boolean }) {
             <div className="flex items-center justify-between gap-4">
                 <h3 className="flex items-center gap-2 text-base font-semibold"><Languages className="h-5 w-5 text-blue-500" />{t('app_experiments.translation_title')}</h3>
                 <button type="button" role="switch" aria-label={t('app_experiments.translation_title')} aria-checked={Boolean(status?.translation_enabled)}
-                    disabled={busy || !status?.available} onClick={() => void mutate('set_app_translation', { enabled: !status?.translation_enabled })}
+                    disabled={busy || (!status?.available && !status?.translation_enabled)} onClick={() => void mutate('set_app_translation', { enabled: !status?.translation_enabled })}
                     className={`relative h-6 w-11 shrink-0 rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-50 ${status?.translation_enabled ? 'bg-blue-600' : 'bg-gray-300 dark:bg-slate-600'}`}>
                     <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${status?.translation_enabled ? 'left-0.5 translate-x-5' : 'left-0.5'}`} />
                 </button>

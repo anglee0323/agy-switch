@@ -32,6 +32,7 @@ export function setupSettingsFixture(options: { theme?: string; language?: strin
     w.__settingsFixture = { calls, holdAutoSave: false, holdDashboardSave: false, holdGeneralSave: false, holdExperimentSave: false, failExperimentSave: false, failLoad: Boolean(options.failLoad), failLowQuotaLoad: Boolean(options.failLowQuotaLoad), lowQuota: () => copy(lowQuota),
         experiments: () => copy(experiments),
         externalExperimentEdit: () => { experiments.settings.conversationWidth = 2; experiments.recommended = false; },
+        disconnectApp: () => { experiments.available = false; experiments.state = 'not_running'; experiments.translation_enabled = true; },
         resolveExperimentSave: () => { if (pendingExperiment) { pendingExperiment.resolve(pendingExperiment.action()); pendingExperiment = null; } },
         resolveGeneralSave: () => { if (pendingGeneral) { general = { ...copy(pendingGeneral.config), desktop: general.desktop, menu_bar: general.menu_bar, dashboard: general.dashboard }; pendingGeneral.resolve(null); pendingGeneral = null; } },
         rejectDashboardSave: () => { pendingDashboard?.reject('synthetic card save rejection'); pendingDashboard = null; },
