@@ -40,4 +40,9 @@ pub mod menu_bar_projection;
 #[cfg(target_os = "macos")]
 pub mod native_menu;
 pub mod auto_switch;
+pub(crate) mod agent_activity;
+pub(crate) mod app_transport;
+pub(crate) mod app_connection;
+pub mod app_experiments;
+pub(crate) mod app_preferences;
 pub mod updater;

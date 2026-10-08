@@ -1,12 +1,12 @@
 # Smart account switching
 
-This opt-in feature selects a permitted backup when monitored quota reaches the reserve threshold. Its activity observations, client-close attempts and credential checks are separate steps: inactivity does not prove that every task has finished. Depending on the target and mode, it may close a client or attempt to interrupt a VS Code task. It does not migrate running work, replay tools or submit continuation messages.
+This opt-in feature selects a permitted backup when monitored quota reaches the reserve threshold. Its activity observations, client-close attempts and credential checks are separate steps: a live idle observation is not an atomic lock against new work starting. Depending on the target and mode, it may close a client or attempt to interrupt a VS Code task. It does not migrate running work, replay tools or submit continuation messages.
 
 ## Setup and the two modes
 
 Open **Settings → Auto Switch Policy**. Choose a model or family scope, the reserve threshold (default 10%), the minimum backup quota (default 30%) and allowed candidate accounts. The settings page separates **Switch timing** (when to switch) from **Account selection order** (which eligible backup to choose). Choose priority order or round robin; drag selected accounts or use their keyboard sorting controls to change the order. Settings save automatically. The feature is off by default; the original quota-protection setting is separate.
 
-- **Wait for detected inactivity:** Recent transcript/activity observations delay the switch; once no recent work is detected, the tool attempts to close the affected client and update credentials. This is a heuristic, not a task-completion guarantee.
+- **Wait for verified task inactivity:** Read live trajectory and executor status for every observed App conversation. A running executor, background work or an unknown response delays switching. Confirm idle again immediately before attempting to close the affected client and update credentials. Transcript timestamps are not used.
 - **Switch at the threshold:** The tool attempts to close the affected client or interrupt a VS Code task before updating credentials. Running work may be interrupted.
 
 After completion, reopen the client if necessary, verify the signed-in account, open the original conversation from history and continue manually. There is no claim that a running command or model generation has migrated to another account. A ten-percent reserve is a trigger, not a guarantee that a long task can finish within that balance.
@@ -30,7 +30,7 @@ The current-source CLI also edits this policy and candidate order through `agy-s
 
 `~/.antigravity_tools/auto_switch.json` stores this feature's settings separately from general UI preferences. `auto_switch_state.json` stores only cancellation/failure state, with no tokens, email addresses, prompts or conversation content. An in-progress credential commit is journaled before writing so that a crash cannot cause an unattended retry. Pending process observations are never trusted across restart.
 
-No task-observation Hooks are installed, no permission settings are changed and no extra network listener is started. Activity detection cannot confirm completion of every external task. Most targets require the detected clients to be closed before credential commit; the VS Code target has a separate interruption/in-place path. Conversation preservation and uninterrupted continuation are not guaranteed.
+No task-observation Hooks are installed, no permission settings are changed and no extra network listener is started. Live task confirmation currently supports the macOS standalone App. A running agy CLI, additional IDE/language-server processes, Windows/Linux or unavailable state remain unknown and keep wait mode pending. Threshold mode retains its explicit interruption behavior. Process checks cannot prevent new work from starting immediately after a successful idle observation. Most targets require the detected clients to be closed before credential commit; the VS Code target has a separate interruption/in-place path. Conversation preservation and uninterrupted continuation are not guaranteed.
 
 ## Verification
 

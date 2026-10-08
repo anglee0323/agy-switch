@@ -1,6 +1,6 @@
 [package]
 name = "agy-switch"
-version = "4.9.4"
+version = "4.10.0"
 description = "Local Antigravity account switching and usage dashboard"
 authors = ["you"]
 license = "CC-BY-NC-SA-4.0"
@@ -14,6 +14,10 @@ path = "src/main.rs"
 [[example]]
 name = "macos-desktop-check"
 path = "../scripts/fixtures/macos-desktop.rs"
+
+[[example]]
+name = "app-experiments-check"
+path = "../scripts/fixtures/app-experiments.rs"
 
 [[example]]
 name = "desktop-lifecycle-check"
@@ -69,6 +73,7 @@ rquest-util = "2.2.1"
 crossterm = "0.29.0"
 tauri-plugin-updater = "~2.12.0"
 tempfile = "3.10"
+tungstenite = "0.28"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

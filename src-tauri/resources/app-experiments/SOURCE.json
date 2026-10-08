@@ -1,0 +1,10 @@
+{
+  "source": "https://github.com/DSDS-CMHL/EasyAntigravity",
+  "commit": "6a3b11feec03765c38d98fd6802dfbb7ebf73250",
+  "files": [
+    "dicts/common.json",
+    "dicts/ui_v2.json"
+  ],
+  "license": "MIT",
+  "changes": "Combined UI dictionaries and added Antigravity 2.21.1 settings, permissions and input hints. Runtime and integration are maintained separately by AntiGravity Switch."
+}

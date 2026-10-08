@@ -114,7 +114,7 @@ test('switch locks and coordinator cancellation preserve safety; partial refresh
   await page.locator('.mb-account-label').filter({ hasText: '账号 B' }).click(); await page.evaluate(() => (window as any).__menuFixture.releaseSwitch()); await expect.poll(() => page.evaluate(() => (window as any).__menuFixture.current())).toBe('A'); await expect(page.getByText('b@example.invalid', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '返回总览' })).toHaveCount(0);
   await page.evaluate(() => (window as any).__menuFixture.setStatus({ phase: 'pending', reason: 'clients_running', pending_id: 'fixture-request' })); await page.getByRole('button', { name: '查看低额度换号详情' }).click();
-  await expect(page.getByText(/未检测到近期任务活动后/)).toBeVisible(); await page.getByRole('button', { name: '取消本次换号', exact: true }).click(); await expect.poll(async () => (await calls(page, 'cancel_auto_switch'))[0]?.args.pendingId).toBe('fixture-request');
+  await expect(page.getByText(/读取实时任务状态/)).toBeVisible(); await page.getByRole('button', { name: '取消本次换号', exact: true }).click(); await expect.poll(async () => (await calls(page, 'cancel_auto_switch'))[0]?.args.pendingId).toBe('fixture-request');
   await page.getByRole('button', { name: '返回总览' }).click(); await page.evaluate(() => (window as any).__menuFixture.failRefresh()); await page.getByRole('button', { name: '刷新全部额度' }).click(); await expect(page.getByRole('alert')).toContainText('7 个账号刷新失败');
 });
 test('scope, language and accessibility material respond to backend events and settings persist with rollback on failure', async ({ page }, info) => {

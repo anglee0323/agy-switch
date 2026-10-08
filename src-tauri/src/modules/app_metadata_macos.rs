@@ -17,6 +17,7 @@ use std::path::PathBuf;
 pub(crate) struct Installation {
     pub bundle: PathBuf,
     pub executable: PathBuf,
+    pub version: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -250,6 +251,7 @@ pub(crate) fn installed(configured: Option<&str>) -> Result<Option<Installation>
         return Ok(Some(Installation {
             executable: bundle.join("Contents/MacOS/Antigravity"),
             bundle,
+            version,
         }));
     }
     Ok(None)

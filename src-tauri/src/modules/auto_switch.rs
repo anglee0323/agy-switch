@@ -1,4 +1,4 @@
-//! Opt-in low-quota scheduling. This module never stops, kills, or starts a client.
+//! Opt-in low-quota scheduling with live task guards before client shutdown.
 //! A process scan is a conservative observation, not an atomic global idle barrier.
 use crate::models::{Account, QuotaData};
 use crate::modules::{account, cli_credentials, db, device, integration, version};
@@ -681,56 +681,6 @@ fn commit_guard(
     }
 }
 
-pub fn is_any_agent_actively_working() -> bool {
-    #[cfg(test)]
-    {
-        return false;
-    }
-    #[cfg(not(test))]
-    {
-        let Some(home) = dirs::home_dir() else { return false; };
-        let candidates = [
-            home.join(".gemini/antigravity/brain"),
-            home.join(".gemini/antigravity-cli/brain"),
-        ];
-        let now = std::time::SystemTime::now();
-
-        for brain_dir in &candidates {
-            if !brain_dir.is_dir() {
-                continue;
-            }
-            let Ok(entries) = std::fs::read_dir(brain_dir) else { continue; };
-            for entry in entries.flatten() {
-                let p = entry.path().join(".system_generated/logs/transcript.jsonl");
-                if !p.is_file() {
-                    continue;
-                }
-                let Ok(meta) = p.metadata() else { continue; };
-                let Ok(mtime) = meta.modified() else { continue; };
-                let Ok(elapsed) = now.duration_since(mtime) else { continue; };
-
-                if elapsed.as_secs() < 8 {
-                    if let Ok(file) = std::fs::File::open(&p) {
-                        use std::io::{BufRead, BufReader, Seek, SeekFrom};
-                        let mut reader = BufReader::new(file);
-                        if let Ok(len) = reader.seek(SeekFrom::End(0)) {
-                            let offset = if len > 4096 { len - 4096 } else { 0 };
-                            let _ = reader.seek(SeekFrom::Start(offset));
-                            let lines: Vec<String> = reader.lines().flatten().collect();
-                            if let Some(last_line) = lines.iter().rev().find(|l| !l.trim().is_empty()) {
-                                if !last_line.contains("\"status\":\"DONE\"") {
-                                    return true;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        false
-    }
-}
-
 pub fn interrupt_vscode_agent() {
     #[cfg(all(target_os = "macos", not(test)))]
     {
@@ -752,8 +702,8 @@ pub fn interrupt_vscode_agent() {
 trait Environment: Clone + Send + Sync + 'static {
     fn now(&self) -> i64;
     fn clients(&self) -> ProcessState;
-    fn is_agent_working(&self) -> bool {
-        false
+    fn agent_activity(&self) -> crate::modules::agent_activity::Activity {
+        crate::modules::agent_activity::Activity::Unknown
     }
     fn interrupt_vscode(&self) {}
     fn is_client_running(&self, _target_ide: Option<&str>) -> bool {
@@ -784,8 +734,8 @@ impl Environment for NativeEnvironment {
     fn clients(&self) -> ProcessState {
         clients()
     }
-    fn is_agent_working(&self) -> bool {
-        is_any_agent_actively_working()
+    fn agent_activity(&self) -> crate::modules::agent_activity::Activity {
+        crate::modules::agent_activity::running()
     }
     fn interrupt_vscode(&self) {
         interrupt_vscode_agent();
@@ -1214,14 +1164,20 @@ async fn evaluate_core<E: Environment>(
         return Ok(false);
     }
 
-    // In Mode::Wait, if agent is actively generating, wait for it to finish
-    if config.mode == Mode::Wait && environment.is_agent_working() {
-        let mut d = runtime.data.lock().map_err(|_| "State unavailable")?;
-        if d.revision == revision {
-            status.set("pending", "waiting_task_finish");
-            d.status = status;
+    if config.mode == Mode::Wait && process_state == ProcessState::Running {
+        let task_environment = environment.clone();
+        let activity = tokio::task::spawn_blocking(move || task_environment.agent_activity())
+            .await.unwrap_or(crate::modules::agent_activity::Activity::Unknown);
+        let reason = match activity {
+            crate::modules::agent_activity::Activity::Idle => None,
+            crate::modules::agent_activity::Activity::Busy => Some("waiting_task_finish"),
+            crate::modules::agent_activity::Activity::Unknown => Some("task_state_unknown"),
+        };
+        if let Some(reason) = reason {
+            status.set("pending", reason);
+            update_status(runtime, revision, status);
+            return Ok(false);
         }
-        return Ok(false);
     }
 
     // In VS Code mode: no client exit needed, hot-swap in place
@@ -1231,7 +1187,7 @@ async fn evaluate_core<E: Environment>(
             status.set("pending", "clients_running");
             update_status(runtime, revision, status.clone());
             // In automated mode, trigger close on running clients when safe:
-            if config.mode == Mode::Stop || (config.mode == Mode::Wait && !environment.is_agent_working()) {
+            if matches!(config.mode, Mode::Stop | Mode::Wait) {
                 let close_environment = environment.clone();
                 let close_data = runtime.data.clone();
                 let close_source = source.clone();
@@ -1260,6 +1216,14 @@ async fn evaluate_core<E: Environment>(
                             return Err("request_changed");
                         }
                     }
+                    // The task can resume during identity/configuration checks.
+                    if close_config.mode == Mode::Wait {
+                        match close_environment.agent_activity() {
+                            crate::modules::agent_activity::Activity::Idle => {},
+                            crate::modules::agent_activity::Activity::Busy => return Err("waiting_task_finish"),
+                            crate::modules::agent_activity::Activity::Unknown => return Err("task_state_unknown"),
+                        }
+                    }
                     close_environment
                         .close_client(20, close_config.target.argument())
                         .map_err(|_| "clients_running")
@@ -1267,7 +1231,7 @@ async fn evaluate_core<E: Environment>(
                 .await
                 .unwrap_or(Err("process_unknown"));
                 if let Err(reason) = checked_close {
-                    status.set("blocked", reason);
+                    status.set(if matches!(reason, "waiting_task_finish" | "task_state_unknown") { "pending" } else { "blocked" }, reason);
                     update_status(runtime, revision, status);
                 }
             }
@@ -1832,6 +1796,7 @@ mod tests {
         writes: Arc<std::sync::atomic::AtomicUsize>,
         source_checks: Arc<std::sync::atomic::AtomicUsize>,
         closes: Arc<std::sync::atomic::AtomicUsize>,
+        activity: Arc<std::sync::atomic::AtomicU8>,
         fail_save: Arc<std::sync::atomic::AtomicBool>,
         low_backup: Arc<std::sync::atomic::AtomicBool>,
         fail_write: Arc<std::sync::atomic::AtomicBool>,
@@ -1845,6 +1810,7 @@ mod tests {
                 writes: Arc::default(),
                 source_checks: Arc::default(),
                 closes: Arc::default(),
+                activity: Arc::default(),
                 fail_save: Arc::default(),
                 low_backup: Arc::default(),
                 fail_write: Arc::default(),
@@ -1861,6 +1827,13 @@ mod tests {
                 0 => ProcessState::Closed,
                 1 => ProcessState::Running,
                 _ => ProcessState::Unknown,
+            }
+        }
+        fn agent_activity(&self) -> crate::modules::agent_activity::Activity {
+            match self.activity.load(std::sync::atomic::Ordering::SeqCst) {
+                0 => crate::modules::agent_activity::Activity::Idle,
+                1 => crate::modules::agent_activity::Activity::Busy,
+                _ => crate::modules::agent_activity::Activity::Unknown,
             }
         }
         fn close_client(&self, _timeout: u64, _target_ide: Option<&str>) -> Result<(), String> {
@@ -2016,6 +1989,25 @@ mod tests {
                 assert!(!evaluate_core(&r, env.clone(), false).await.unwrap());
                 assert_eq!(env.writes.load(SeqCst), 1);
             }
+            // A silent task, unknown state, and a task resumed during the final
+            // identity check all leave the real coordinator pending without close.
+            for activity in [1, 2] {
+                let r = fixture_setup(Mode::Wait);
+                let env = FixtureEnvironment::default();
+                env.activity.store(activity, SeqCst);
+                assert!(!evaluate_core(&r, env.clone(), false).await.unwrap());
+                assert_eq!(env.closes.load(SeqCst), 0);
+                assert_eq!(env.writes.load(SeqCst), 0);
+                assert_eq!(r.data.lock().unwrap().status.reason.as_deref(), Some(if activity == 1 { "waiting_task_finish" } else { "task_state_unknown" }));
+            }
+            let r = fixture_setup(Mode::Wait);
+            let env = FixtureEnvironment::default();
+            let resumed = env.activity.clone();
+            *env.on_verify.lock().unwrap() = Some(Box::new(move || { resumed.store(1, SeqCst); }));
+            assert!(!evaluate_core(&r, env.clone(), false).await.unwrap());
+            assert_eq!(env.closes.load(SeqCst), 0);
+            assert_eq!(r.data.lock().unwrap().status.reason.as_deref(), Some("waiting_task_finish"));
+
             // Exercise production selection, including wraparound, configured priority,
             // an absent source, disabled candidates, and forbidden candidates.
             for (strategy, source, unavailable, expected) in [

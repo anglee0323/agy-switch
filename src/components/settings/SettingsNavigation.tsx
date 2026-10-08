@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeftRight, Gauge, Settings } from 'lucide-react';
+import { ArrowLeftRight, FlaskConical, Gauge, Settings } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 export const SETTINGS_SECTIONS = [
     { id: 'general', title: 'settings_sections.general', description: 'settings_sections.general_description', icon: Settings },
     { id: 'quota', title: 'settings_sections.quota', description: 'settings_sections.quota_description', icon: Gauge },
     { id: 'autoSwitch', title: 'settings_sections.auto_switch', description: 'settings_sections.auto_switch_description', icon: ArrowLeftRight },
+    { id: 'experimental', title: 'settings_sections.experimental', description: 'settings_sections.experimental_description', icon: FlaskConical },
 ] as const;
 export type SettingsSection = typeof SETTINGS_SECTIONS[number]['id'];
 

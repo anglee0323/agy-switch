@@ -104,6 +104,8 @@ For terminal use only, download the **Linux AMD64 console tarball**. Desktop tra
 3. **Switch accounts** — Save your work in Antigravity, then select Switch. Switching may close and reopen the client. Confirm the active account in Antigravity afterward.
 4. **Set your preferences** — In Settings, choose your language, theme and quick-dashboard display. Enable smart switching if you want automatic backup selection; it is off by default.
 
+On macOS, **Settings → Experimental Features** offers Antigravity quick setup and App translation. Shared setup configures both the App and agy CLI; translation applies only to the App. [Options and compatibility](docs/app-experiments.md)
+
 ## Everyday use
 
 | To… | Go to… |
@@ -151,7 +153,7 @@ The estimate covers the API-equivalent cost of recorded usage using known model 
 
 ### Running tasks
 
-Save your work before switching. Tasks already in progress stay with their original session. Smart switching can check for recent activity, but cannot guarantee every task has finished or migrate a running task. If a switch fails, inspect the client before retrying because credentials may have been partially updated. [Switching behavior](docs/low-quota-switching.md)
+Save your work before switching. Tasks already in progress stay with their original session. Smart switching reads live task state and waits when it cannot confirm idle, but cannot prevent new work from starting afterward or migrate a running task. If a switch fails, inspect the client before retrying because credentials may have been partially updated. [Switching behavior](docs/low-quota-switching.md)
 
 ### Updates
 

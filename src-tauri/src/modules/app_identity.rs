@@ -92,6 +92,17 @@ fn request_email(
 /// error: falling back to the keyring then would reproduce the false identity.
 #[cfg(target_os = "macos")]
 pub(crate) fn running_email(configured: Option<&str>) -> Result<Option<String>, String> {
+    let client = status_client()?;
+    with_running_connection(configured, |port, csrf| request_email(&client, port, csrf))
+}
+
+/// Execute a bounded RPC only on the standalone App's verified, owned listener.
+/// Credentials stay in memory and never appear in errors or diagnostics.
+#[cfg(target_os = "macos")]
+pub(crate) fn with_running_connection<T>(
+    configured: Option<&str>,
+    mut operation: impl FnMut(u16, &str) -> Result<T, String>,
+) -> Result<Option<T>, String> {
     use super::app_metadata_macos as metadata;
     let Some(installation) = metadata::installed(configured)? else {
         return Ok(None);
@@ -156,14 +167,13 @@ pub(crate) fn running_email(configured: Option<&str>) -> Result<Option<String>, 
     if ports.is_empty() || ports.len() > 8 {
         return Err("running_app_identity_unavailable".into());
     }
-    let client = status_client()?;
     for port in ports {
         // Revalidate ownership before sending the in-memory CSRF value.
         metadata::verify_executable(*server, &executable)?;
         metadata::listener(port, *server)?;
-        if let Ok(email) = request_email(&client, port, csrf) {
+        if let Ok(result) = operation(port, csrf) {
             metadata::verify_executable(app_pid, &installation.executable)?;
-            return Ok(Some(email));
+            return Ok(Some(result));
         }
     }
     Err("running_app_identity_unavailable".into())
