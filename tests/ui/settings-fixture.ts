@@ -21,9 +21,18 @@ export function setupSettingsFixture(options: { theme?: string; language?: strin
     let pending: { resolve: Function; reject: Function; config: any } | null = null;
     let pendingDashboard: { resolve: Function; reject: Function; cards: string[]; order: string[] } | null = null;
     let pendingGeneral: { resolve: Function; config: any } | null = null;
+    let experiments = { available: true, version: '2.21.1', translation_enabled: false, translated: 0, state: 'connected', recommended: false,
+        native: { keepComputerAwake: false, runInBackground: true },
+        settings: { permissionPreset: 1, artifactReviewMode: 1, nonWorkspaceFileAccessPolicy: 2, internetAccessPolicy: 1, browserJsExecutionPolicy: 2,
+            queuedMessageDeliveryStrategy: 2, conversationWidth: 1, verboseAgentChat: true, useAiCredits: false,
+            globalPermissionGrants: { allow: ['read_url(https://example.invalid/*)'], ask: [], deny: ['command(custom command)'] } } };
+    let pendingExperiment: { resolve: Function; action: () => any } | null = null;
     const calls: { command: string; args: any }[] = [];
     const copy = (value: any) => JSON.parse(JSON.stringify(value));
-    w.__settingsFixture = { calls, holdAutoSave: false, holdDashboardSave: false, holdGeneralSave: false, failLoad: Boolean(options.failLoad), failLowQuotaLoad: Boolean(options.failLowQuotaLoad), lowQuota: () => copy(lowQuota),
+    w.__settingsFixture = { calls, holdAutoSave: false, holdDashboardSave: false, holdGeneralSave: false, holdExperimentSave: false, failExperimentSave: false, failLoad: Boolean(options.failLoad), failLowQuotaLoad: Boolean(options.failLowQuotaLoad), lowQuota: () => copy(lowQuota),
+        experiments: () => copy(experiments),
+        externalExperimentEdit: () => { experiments.settings.conversationWidth = 2; experiments.recommended = false; },
+        resolveExperimentSave: () => { if (pendingExperiment) { pendingExperiment.resolve(pendingExperiment.action()); pendingExperiment = null; } },
         resolveGeneralSave: () => { if (pendingGeneral) { general = { ...copy(pendingGeneral.config), desktop: general.desktop, menu_bar: general.menu_bar, dashboard: general.dashboard }; pendingGeneral.resolve(null); pendingGeneral = null; } },
         rejectDashboardSave: () => { pendingDashboard?.reject('synthetic card save rejection'); pendingDashboard = null; },
         resolveDashboardSave: () => { if (pendingDashboard) { general.dashboard = { cards: copy(pendingDashboard.cards), order: copy(pendingDashboard.order) }; pendingDashboard.resolve(copy(general.dashboard)); pendingDashboard = null; } },
@@ -44,6 +53,23 @@ export function setupSettingsFixture(options: { theme?: string; language?: strin
             if (command === 'set_dashboard_cards') {
                 if (w.__settingsFixture.holdDashboardSave) return new Promise((resolve, reject) => { pendingDashboard = { resolve, reject, cards: copy(args.cards), order: copy(args.order) }; });
                 general.dashboard = { cards: copy(args.cards), order: copy(args.order) }; return copy(general.dashboard);
+            }
+            if (command === 'get_app_experiments') return copy(experiments);
+            if (['set_app_preset', 'set_app_translation', 'set_app_native_preferences', 'set_app_shared_preferences'].includes(command)) {
+                if (w.__settingsFixture.failExperimentSave) throw 'synthetic App write rejection';
+                const action = () => {
+                    if (command === 'set_app_translation') experiments.translation_enabled = args.enabled;
+                    else if (command === 'set_app_preset') {
+                        experiments.recommended = args.recommended;
+                        if (args.recommended) { experiments.native.keepComputerAwake = true; Object.assign(experiments.settings, { permissionPreset: 3, artifactReviewMode: 2, nonWorkspaceFileAccessPolicy: 1, browserJsExecutionPolicy: 4, queuedMessageDeliveryStrategy: 1, conversationWidth: 3 }); }
+                    } else {
+                        experiments.recommended = false;
+                        Object.assign(command === 'set_app_native_preferences' ? experiments.native : experiments.settings, copy(args.patch));
+                    }
+                    return copy(experiments);
+                };
+                if (w.__settingsFixture.holdExperimentSave) return new Promise(resolve => { pendingExperiment = { resolve, action }; });
+                return action();
             }
             if (command === 'get_data_dir_path') return '/synthetic/antigravity-tools';
             if (command === 'get_auto_switch_config') { if (w.__settingsFixture.failLowQuotaLoad) throw 'synthetic low-quota load rejection'; return copy(lowQuota); }

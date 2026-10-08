@@ -47,23 +47,24 @@ const Settings = compile('../src/pages/Settings.tsx', {
     '../components/settings/DesktopSettings': { default: 'DesktopSettings' },
     '../components/settings/DashboardSettings': { default: 'DashboardSettings' },
     '../components/settings/ModelDisplaySettings': { default: 'ModelDisplaySettings' },
+    '../components/settings/ExperimentalSettings': { default: 'ExperimentalSettings' },
     '../components/autoSwitch/AutoSwitch': { AutoSwitchSettings: 'AutoSwitchSettings' },
     '../components/settings/SettingsNavigation': { ...nav, default: 'SettingsNavigation' },
     '../components/settings/SettingsLayout.css': {},
 });
 function renderSettings() { h.reset(); return Settings.default(); }
-test('three categories have one selected roving tab and matching panel targets', () => {
-    assert.deepEqual(ids, ['general', 'quota', 'autoSwitch']);
+test('four categories have one selected roving tab and matching panel targets', () => {
+    assert.deepEqual(ids, ['general', 'quota', 'autoSwitch', 'experimental']);
     const tree = renderNav('general');
     const tabs = walk(tree, n => n.props?.role === 'tab');
-    assert.equal(tabs.length, 3); assert.equal(tabs.filter(t => t.props.tabIndex === 0).length, 1);
+    assert.equal(tabs.length, 4); assert.equal(tabs.filter(t => t.props.tabIndex === 0).length, 1);
     assert.equal(tabs[0].props['aria-controls'], 'settings-panel-general');
 });
 test('desktop arrow/End/Home focus and select the expected categories', () => {
     const tree = renderNav('general'); const tabs = walk(tree, n => n.props?.role === 'tab');
     let focused;
     tabs.forEach((tab, index) => tab.props.ref({ focus: () => { focused = ids[index]; } }));
-    for (const [index, key, expected] of [[0, 'ArrowDown', 'quota'], [0, 'ArrowUp', 'autoSwitch'], [0, 'End', 'autoSwitch'], [2, 'Home', 'general']]) {
+    for (const [index, key, expected] of [[0, 'ArrowDown', 'quota'], [0, 'ArrowUp', 'experimental'], [0, 'End', 'experimental'], [2, 'Home', 'general']]) {
         let prevented = false; tabs[index].props.onKeyDown({ key, preventDefault: () => { prevented = true; } });
         assert.equal(prevented, true); assert.equal(selected.at(-1), expected); assert.equal(focused, expected);
     }
@@ -76,11 +77,11 @@ test('narrow navigation changes orientation and uses left/right keys', () => {
 });
 test('all category panels remain rendered while only one is visible', () => {
     const tree = renderSettings(); const panels = walk(tree, n => n.props?.role === 'tabpanel');
-    assert.equal(panels.length, 3); assert.equal(panels.filter(p => !p.props.hidden).length, 1);
+    assert.equal(panels.length, 4); assert.equal(panels.filter(p => !p.props.hidden).length, 1);
     assert.equal(walk(tree, n => n.type === 'AutoSwitchSettings').length, 1);
     const navigation = walk(tree, n => n.type === 'SettingsNavigation')[0]; navigation.props.onSelect('autoSwitch');
     const next = renderSettings(); const nextPanels = walk(next, n => n.props?.role === 'tabpanel');
-    assert.equal(nextPanels.length, 3); assert.equal(nextPanels.find(p => !p.props.hidden).props.id, 'settings-panel-autoSwitch');
+    assert.equal(nextPanels.length, 4); assert.equal(nextPanels.find(p => !p.props.hidden).props.id, 'settings-panel-autoSwitch');
     assert.equal(walk(next, n => n.type === 'AutoSwitchSettings').length, 1);
     assert.equal(saves.length, 0); assert.equal(calls.length, 0);
 });

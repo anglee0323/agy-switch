@@ -16,6 +16,10 @@ name = "macos-desktop-check"
 path = "../scripts/fixtures/macos-desktop.rs"
 
 [[example]]
+name = "app-experiments-check"
+path = "../scripts/fixtures/app-experiments.rs"
+
+[[example]]
 name = "desktop-lifecycle-check"
 path = "../scripts/fixtures/desktop-lifecycle.rs"
 required-features = ["native-gui-test"]
@@ -69,6 +73,7 @@ rquest-util = "2.2.1"
 crossterm = "0.29.0"
 tauri-plugin-updater = "~2.12.0"
 tempfile = "3.10"
+tungstenite = "0.28"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

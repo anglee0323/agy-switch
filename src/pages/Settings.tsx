@@ -10,6 +10,7 @@ import UpdateSettings from '../components/settings/UpdateSettings';
 import DesktopSettings from '../components/settings/DesktopSettings';
 import DashboardSettings from '../components/settings/DashboardSettings';
 import ModelDisplaySettings from '../components/settings/ModelDisplaySettings';
+import ExperimentalSettings from '../components/settings/ExperimentalSettings';
 import { AutoSwitchSettings } from '../components/autoSwitch/AutoSwitch';
 import SettingsNavigation, { SETTINGS_SECTIONS, SettingsSection } from '../components/settings/SettingsNavigation';
 import '../components/settings/SettingsLayout.css';
@@ -360,6 +361,7 @@ function Settings() {
             </div>
         ),
         autoSwitch: <AutoSwitchSettings />,
+        experimental: <ExperimentalSettings active={section === 'experimental'} />,
     };
 
     return (
