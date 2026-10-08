@@ -7,7 +7,8 @@
 | [Release checklist](release-checklist.md) | Build, verify, publish and update Homebrew |
 | [Native GUI acceptance](native-gui-acceptance.md) | Hosted Windows/Linux window tests and their boundaries |
 | [Account data contract](account-dashboard-data-contract.md) | Read-only account, identity and quota projections |
-| [4.9.4 package verification](4.9.4-public-acceptance.md) | Current public packages, hashes, update signatures and desktop lifecycle checks |
+| [4.10.0 package verification](4.10.0-public-acceptance.md) | Current public packages, experimental App settings, hashes and update signatures |
+| [4.9.4 package verification](4.9.4-public-acceptance.md) | Previous desktop lifecycle baseline |
 | [4.9.3 package verification](4.9.3-public-acceptance.md) | Previous native quota-refresh baseline |
 | [4.9.2 package verification](4.9.2-public-acceptance.md) | Previous dashboard and menu baseline |
 | [4.9.1 package verification](4.9.1-public-acceptance.md) | Previous packaging and update baseline |
