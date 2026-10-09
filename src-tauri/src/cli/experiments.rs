@@ -19,8 +19,8 @@ pub(super) fn configure(root: &Path, enabled: bool) -> Result<()> {
 
 pub(super) fn description(lang: Lang) -> &'static str {
     match lang {
-        Lang::Zh => "仅对 Windows/macOS Antigravity App 生效。通过现有本机连接注入翻译脚本，只替换已知界面文字，不修改 App 安装文件或源文件，不改权限或账号设置，也不上传聊天内容。脚本在 App 页面中执行，会观察界面变化；这不代表注入毫无风险。关闭后恢复原文，停止续期后最迟 15 秒恢复。持续汉化需保持 Switch 桌面进程运行，或运行 agy-switch experiments run。",
-        Lang::En => "Applies only to Antigravity App on Windows/macOS. A translation script is injected through its existing local connection to replace known UI labels. It does not modify App installation/source files, permissions or accounts, or upload conversations. The script runs inside App pages and observes UI changes; injection is not risk-free. Turning it off restores the original text; stopping renewals restores it within 15 seconds. Keep Switch desktop running or use agy-switch experiments run.",
+        Lang::Zh => "仅对 Windows/macOS Antigravity App 生效；Antigravity IDE、agy CLI、VS Code 和 JetBrains 插件不受影响。通过现有本机连接注入翻译脚本，只替换已知界面文字，不修改 App 安装文件或源文件，不改权限或账号设置，也不上传聊天内容。脚本在 App 页面中执行，会观察界面变化；这不代表注入毫无风险。关闭后恢复原文，停止续期后最迟 15 秒恢复。持续汉化需保持 Switch 桌面进程运行，或运行 agy-switch experiments run。",
+        Lang::En => "Applies only to Antigravity App on Windows/macOS. Antigravity IDE, agy CLI, VS Code and JetBrains plugins are unaffected. A translation script is injected through its existing local connection to replace known UI labels. It does not modify App installation/source files, permissions or accounts, or upload conversations. The script runs inside App pages and observes UI changes; injection is not risk-free. Turning it off restores the original text; stopping renewals restores it within 15 seconds. Keep Switch desktop running or use agy-switch experiments run.",
     }
 }
 

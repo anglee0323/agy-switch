@@ -496,7 +496,7 @@
     }
   },
   "app_experiments": {
-    "scope": "汉化仅作用于 Windows 和 macOS 的 Antigravity App，不影响 agy CLI、Antigravity IDE、Codex、Claude Code 或 Pi Agent。",
+    "scope": "汉化仅作用于 Windows 和 macOS 的 Antigravity App；Antigravity IDE、agy CLI、VS Code 和 JetBrains 插件不受影响。",
     "connected": "已连接 Antigravity App {{version}}",
     "reload": "重新读取",
     "failed": "操作失败：{{error}}",
