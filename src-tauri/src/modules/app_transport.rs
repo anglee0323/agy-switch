@@ -574,61 +574,6 @@ impl CdpTransport {
             (_, Err(e)) => Err(e),
         }
     }
-
-    /// Fixed native storage keys only. No whole storage snapshot or arbitrary
-    /// JavaScript can be supplied by a frontend caller.
-    pub(crate) fn app_preferences(
-        &mut self,
-        target: &PageTarget,
-        patch: Option<&Value>,
-    ) -> Result<Value, TransportError> {
-        let patch = patch.cloned().unwrap_or(json!({}));
-        let object = patch.as_object().ok_or(TransportError::RuntimeError)?;
-        if object.iter().any(|(k, v)| {
-            !["keepComputerAwake", "runInBackground"].contains(&k.as_str()) || !v.is_boolean()
-        }) {
-            return Err(TransportError::RuntimeError);
-        }
-        let expected = serde_json::to_string(&target.origin.0).unwrap();
-        let expression = format!("(async()=>{{if(location.origin!=={expected} || !window.nativeStorage) throw new Error('unsupported_app');const patch={patch};if(Object.keys(patch).length)await window.nativeStorage.updateItems(Object.fromEntries(Object.entries(patch).map(([k,v])=>[k,String(v)])));const v=await window.nativeStorage.getItems();return {{keepComputerAwake:v.keepComputerAwake==='true',runInBackground:v.runInBackground==='true'}};}})()");
-        self.verify_identity()?;
-        let info = self.call("Target.getTargetInfo", json!({"targetId":target.id}), None)?;
-        verified_pages(
-            &json!({"targetInfos":[info.get("targetInfo").ok_or(TransportError::WrongTarget)?]}),
-            &target.origin,
-        )?;
-        let attached = self.call(
-            "Target.attachToTarget",
-            json!({"targetId":target.id,"flatten":true}),
-            None,
-        )?;
-        let session = attached["sessionId"]
-            .as_str()
-            .filter(|s| safe_id(s))
-            .ok_or(TransportError::ProtocolError)?
-            .to_string();
-        let result = self.call("Runtime.evaluate",json!({"expression":expression,"returnByValue":true,"awaitPromise":true,"timeout":1500}),Some(&session));
-        let detached = self.call(
-            "Target.detachFromTarget",
-            json!({"sessionId":session}),
-            None,
-        );
-        let result = result?;
-        detached?;
-        if result.get("exceptionDetails").is_some() {
-            return Err(TransportError::RuntimeError);
-        }
-        let value = &result["result"]["value"];
-        if !value["keepComputerAwake"].is_boolean() || !value["runInBackground"].is_boolean() {
-            return Err(TransportError::RuntimeError);
-        }
-        if object.iter().any(|(key, expected)| value[key] != *expected) {
-            return Err(TransportError::RuntimeError);
-        }
-        Ok(
-            json!({"keepComputerAwake":value["keepComputerAwake"],"runInBackground":value["runInBackground"]}),
-        )
-    }
 }
 
 impl Drop for CdpTransport {

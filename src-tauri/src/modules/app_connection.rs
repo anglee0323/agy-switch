@@ -113,7 +113,56 @@ pub(crate) fn connect() -> Result<
     Ok((connection, pages, installation.version))
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
+pub(crate) fn connect() -> Result<
+    (
+        super::app_transport::CdpTransport,
+        Vec<super::app_transport::PageTarget>,
+        String,
+    ),
+    String,
+> {
+    use super::{app_metadata_windows as metadata, app_transport::*};
+    let configured = super::config::load_app_config()?.antigravity_executable;
+    let processes = metadata::processes()?;
+    let installation = metadata::installed(configured.as_deref(), &processes)?;
+    if !processes
+        .iter()
+        .any(|p| p.same_user && p.executable == installation.executable)
+    {
+        return Err("not_running".into());
+    }
+    let contents = metadata::active_port_file()?;
+    let port = contents
+        .lines()
+        .next()
+        .and_then(|v| v.parse::<u16>().ok())
+        .ok_or("no_debug_port")?;
+    let rows = metadata::listeners()?;
+    // The browser owns the debugging socket, whereas renderer/utility children
+    // share its executable. Select by the socket owner, then verify its identity.
+    let browser = metadata::browser(&processes, &installation.executable, port, &rows)?;
+    let observed = rows
+        .iter()
+        .filter(|r| r.address.port() == port)
+        .cloned()
+        .collect::<Vec<_>>();
+    let endpoint = BrowserEndpoint::from_active_port_file(
+        &contents,
+        VerifiedListener::from_complete_observation(port, browser.pid, &observed)
+            .map_err(|_| "no_debug_port")?,
+    )
+    .map_err(|_| "no_debug_port")?;
+    let origins = metadata::server_origins(&processes, browser, &installation.server, &rows)?;
+    metadata::recheck(browser)?;
+    let mut connection = CdpTransport::connect(endpoint).map_err(|_| "app_connection_failed")?;
+    let pages = connection
+        .pages_for_origins(&origins)
+        .map_err(|_| "app_page_unavailable")?;
+    Ok((connection, pages, installation.version))
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub(crate) fn connect() -> Result<
     (
         super::app_transport::CdpTransport,

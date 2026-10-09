@@ -1,4 +1,4 @@
-//! Explicitly requested App preferences and opt-in runtime translation.
+//! Opt-in, reversible App interface translation.
 use super::app_transport::RuntimeAction;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -15,7 +15,9 @@ static TRANSLATED: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::
 #[serde(default, deny_unknown_fields)]
 struct Preferences {
     translation_enabled: bool,
-    preset_signature: Option<String>,
+    // Read the old quick-setup marker for upgrade compatibility; never write it.
+    #[serde(rename = "preset_signature", skip_serializing)]
+    _legacy_preset_signature: Option<String>,
 }
 fn save(prefs: &Preferences) -> Result<(), String> {
     let bytes = serde_json::to_vec_pretty(prefs).map_err(|_| "experimental_preferences_invalid")?;
@@ -24,14 +26,6 @@ fn save(prefs: &Preferences) -> Result<(), String> {
         &bytes,
     )
     .map_err(|_| "experimental_preferences_write_failed".into())
-}
-fn signature(settings: &Value, native: &Value) -> String {
-    use std::hash::{Hash, Hasher};
-    let mut hash = std::collections::hash_map::DefaultHasher::new();
-    json!({"settings":settings,"native":native})
-        .to_string()
-        .hash(&mut hash);
-    format!("{:016x}", hash.finish())
 }
 fn read() -> Result<Preferences, String> {
     let path = super::account::get_data_dir()?.join("app_experiments.json");
@@ -84,36 +78,12 @@ pub async fn get_app_experiments() -> Result<Value, String> {
         let prefs = read()?;
         let connected = super::app_connection::connect();
         match connected {
-            Ok((mut connection,pages,version)) => {
-                let native = connection.app_preferences(&pages[0],None).map_err(|_| "app_preferences_unavailable")?;
-                let settings = super::app_preferences::current()?;
-                let preset = prefs.preset_signature.as_deref()==Some(signature(&settings,&native).as_str());
-                Ok(json!({"available":true,"version":version,"translation_enabled":prefs.translation_enabled,
-                    "translated":TRANSLATED.load(Ordering::Relaxed),"native":native,"settings":settings,"recommended":preset,"state":"connected"}))
-            },
+            Ok((_, _, version)) => Ok(json!({"available":true,"version":version,"translation_enabled":prefs.translation_enabled,
+                "translated":TRANSLATED.load(Ordering::Relaxed),"state":"connected"})),
             Err(reason) => Ok(json!({"available":false,"translation_enabled":prefs.translation_enabled,
-                "translated":0,"native":{},"state":reason})),
+                "translated":0,"state":reason})),
         }
-    }).await.map_err(|_| "app_preferences_unavailable".to_string())?
-}
-
-#[tauri::command]
-pub async fn set_app_native_preferences(patch: Value) -> Result<Value, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let _guard = CONTROL
-            .lock()
-            .map_err(|_| "experimental_preferences_unavailable")?;
-        let (mut connection, pages, _) = super::app_connection::connect()?;
-        let result = connection
-            .app_preferences(&pages[0], Some(&patch))
-            .map_err(|_| "app_preferences_write_failed")?;
-        let mut prefs = read()?;
-        prefs.preset_signature = None;
-        save(&prefs)?;
-        Ok(result)
-    })
-    .await
-    .map_err(|_| "app_preferences_write_failed".to_string())?
+    }).await.map_err(|_| "app_connection_failed".to_string())?
 }
 
 #[tauri::command]
@@ -146,49 +116,6 @@ pub async fn set_app_translation(enabled: bool) -> Result<bool, String> {
     .map_err(|_| "app_translation_failed".to_string())?
 }
 
-#[tauri::command]
-pub async fn set_app_shared_preferences(patch: Value) -> Result<Value, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let _guard = CONTROL
-            .lock()
-            .map_err(|_| "experimental_preferences_unavailable")?;
-        let result = super::app_preferences::write(patch)?;
-        let mut prefs = read()?;
-        prefs.preset_signature = None;
-        save(&prefs)?;
-        Ok(result)
-    })
-    .await
-    .map_err(|_| "app_settings_write_failed".to_string())?
-}
-
-#[tauri::command]
-pub async fn set_app_preset(recommended: bool) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let _guard = CONTROL
-            .lock()
-            .map_err(|_| "experimental_preferences_unavailable")?;
-        let mut prefs = read()?;
-        prefs.preset_signature = None;
-        if recommended {
-            let current = super::app_preferences::current()?;
-            let settings =
-                super::app_preferences::write(super::app_preferences::recommended_patch(&current))?;
-            let (mut connection, pages, _) = super::app_connection::connect()?;
-            let native = connection
-                .app_preferences(
-                    &pages[0],
-                    Some(&json!({"keepComputerAwake":true,"runInBackground":true})),
-                )
-                .map_err(|_| "app_preferences_write_failed")?;
-            prefs.preset_signature = Some(signature(&settings, &native));
-        }
-        save(&prefs)
-    })
-    .await
-    .map_err(|_| "app_settings_write_failed".to_string())?
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -200,5 +127,18 @@ mod tests {
                 .translation_enabled
         );
         assert!(serde_json::from_str::<Preferences>(r#"{"token":"must-not-be-saved"}"#).is_err());
+    }
+
+    #[test]
+    fn existing_translation_survives_removing_quick_setup() {
+        let prefs: Preferences = serde_json::from_str(
+            r#"{"translation_enabled":true,"preset_signature":"legacy-marker"}"#,
+        )
+        .unwrap();
+        assert!(prefs.translation_enabled);
+        assert_eq!(
+            serde_json::to_value(prefs).unwrap(),
+            json!({"translation_enabled":true})
+        );
     }
 }

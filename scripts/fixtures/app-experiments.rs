@@ -36,20 +36,17 @@ mod modules {
             "en".into()
         }
     }
-    pub use crate::{agent_activity, app_experiments, app_preferences};
+    pub use crate::app_experiments;
 }
-#[path = "../../src-tauri/src/modules/agent_activity.rs"]
-pub mod agent_activity;
 #[path = "../../src-tauri/src/modules/app_connection.rs"]
 pub mod app_connection;
 #[path = "../../src-tauri/src/modules/app_experiments.rs"]
 pub mod app_experiments;
-#[path = "../../src-tauri/src/modules/app_identity.rs"]
-pub mod app_identity;
 #[path = "../../src-tauri/src/modules/app_metadata_macos.rs"]
 pub mod app_metadata_macos;
-#[path = "../../src-tauri/src/modules/app_preferences.rs"]
-pub mod app_preferences;
+#[cfg(target_os = "windows")]
+#[path = "../../src-tauri/src/modules/app_metadata_windows.rs"]
+pub mod app_metadata_windows;
 #[path = "../../src-tauri/src/modules/app_transport.rs"]
 pub mod app_transport;
 pub use modules::{account, config};
@@ -57,60 +54,13 @@ fn main() {
     tauri::async_runtime::block_on(async {
         let status = modules::app_experiments::get_app_experiments()
             .await
-            .expect("App preferences must be readable");
+            .expect("App connection status must be readable");
         assert_eq!(status["available"], true, "App must be connected");
-        let native = status["native"].clone();
-        let awake = native["keepComputerAwake"].as_bool().unwrap();
-        let changed = modules::app_experiments::set_app_native_preferences(
-            serde_json::json!({"keepComputerAwake":!awake}),
-        )
-        .await;
-        let restored = modules::app_experiments::set_app_native_preferences(native.clone())
-            .await
-            .expect("Native preferences must restore");
-        assert_eq!(restored, native);
-        assert_eq!(changed.unwrap()["keepComputerAwake"], !awake);
-        // Send the same saved value through the actual core-settings patch RPC.
-        // No account, keyring, migration flag or plugin write is requested.
-        let core = modules::app_preferences::current().unwrap();
-        let same = core["artifactReviewMode"].clone();
-        let confirmed = tauri::async_runtime::spawn_blocking(move || {
-            modules::app_preferences::write(serde_json::json!({"artifactReviewMode":same}))
-        })
-        .await
-        .unwrap()
-        .expect("Core setting patch must confirm");
-        assert_eq!(confirmed, core, "Unrelated preferences must remain intact");
-        let restore_patch = serde_json::json!({"conversationWidth":core["conversationWidth"],"verboseAgentChat":core["verboseAgentChat"]});
-        let changed_patch = serde_json::json!({"conversationWidth":if core["conversationWidth"]==3 {1} else {3},"verboseAgentChat":!core["verboseAgentChat"].as_bool().unwrap()});
-        let changed = tauri::async_runtime::spawn_blocking(move || {
-            modules::app_preferences::write(changed_patch)
-        })
-        .await
-        .unwrap();
-        let restored = tauri::async_runtime::spawn_blocking(move || {
-            modules::app_preferences::write(restore_patch)
-        })
-        .await
-        .unwrap()
-        .expect("Shared display preferences must restore");
-        assert!(
-            changed.is_ok(),
-            "Shared display preferences must confirm changes"
-        );
-        assert_eq!(restored, core, "Shared preferences must restore exactly");
-        #[cfg(target_os = "macos")]
-        let app_activity = tauri::async_runtime::spawn_blocking(|| {
-            crate::app_identity::with_running_connection(None, crate::agent_activity::observe)
-        })
-        .await
-        .unwrap()
-        .expect("App task observations must be available");
-        #[cfg(not(target_os = "macos"))]
-        let app_activity: Option<crate::agent_activity::Activity> = None;
+        assert!(status.get("settings").is_none());
+        assert!(status.get("native").is_none());
         println!(
             "{}",
-            serde_json::json!({"stage":"preferences","version":status["version"],"native_patch_and_restore":true,"core_noop_confirmed":true,"app_task_state":format!("{:?}",app_activity),"combined_task_state":format!("{:?}",tauri::async_runtime::spawn_blocking(modules::agent_activity::running).await.unwrap())})
+            serde_json::json!({"stage":"connected","version":status["version"]})
         );
         modules::app_experiments::set_app_translation(true)
             .await
@@ -135,9 +85,23 @@ fn main() {
         modules::app_experiments::set_app_translation(false)
             .await
             .expect("Translation must restore");
+        let (mut connection, pages, version) = crate::app_connection::connect().unwrap();
+        for page in pages {
+            let report = connection
+                .run(&page, &version, crate::app_transport::RuntimeAction::Probe)
+                .unwrap();
+            assert!(
+                !report.active,
+                "The translation controller must be disposed"
+            );
+        }
+        assert!(
+            status["translated"].as_u64().unwrap() > 0,
+            "At least one label must translate"
+        );
         println!(
             "{}",
-            serde_json::json!({"stage":"translation_restored","translated":status["translated"]})
+            serde_json::json!({"stage":"translation_restored","translated":status["translated"],"controller_disposed":true})
         );
     });
 }

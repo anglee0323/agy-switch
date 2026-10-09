@@ -44,5 +44,6 @@ pub(crate) mod agent_activity;
 pub(crate) mod app_transport;
 pub(crate) mod app_connection;
 pub mod app_experiments;
-pub(crate) mod app_preferences;
+#[cfg(any(target_os = "windows", test))]
+pub(crate) mod app_metadata_windows;
 pub mod updater;
