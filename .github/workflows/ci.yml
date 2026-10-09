@@ -108,6 +108,11 @@ jobs:
       - name: Test menu-bar quota snapshots
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib menu_bar_projection::tests
 
+      - name: Test official price parsing and native cost matching
+        run: |
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib api_pricing::tests
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib menu_bar_usage::tests
+
       - name: Test local usage and response performance
         run: "cargo test --locked --manifest-path src-tauri/Cargo.toml --lib native_token_stats::"
 

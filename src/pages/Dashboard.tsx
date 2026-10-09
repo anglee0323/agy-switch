@@ -275,7 +275,7 @@ function TokenCard({
     icon: typeof Cpu;
     displayValue?: string;
     unit?: string;
-    detail?: string | null;
+    detail?: ReactNode;
     hint?: string;
     locale: string;
     children?: ReactNode;
@@ -297,7 +297,7 @@ function TokenCard({
             {detail !== null && <div
                 data-card-detail
                 className="mt-1 break-words text-xs leading-5 text-gray-500 dark:text-gray-400"
-                title={hint || detail || `${formatTokens(value, locale)} Token`}
+                title={hint || (typeof detail === 'string' ? detail : undefined) || `${formatTokens(value, locale)} Token`}
             >
                 {detail || `${formatTokens(value, locale)} Token`}
             </div>}
@@ -550,12 +550,11 @@ function Dashboard() {
             label={t('local_dashboard.api_cost')}
             value={apiCost.usd}
             displayValue={apiCost.unpricedModels && !apiCost.pricedModels ? t('local_dashboard.unpriced') : formatUsd(apiCost.usd)}
-            detail={t('local_dashboard.api_requests', {
-                requestCount: formatTokens(totals.request_count, locale),
-                pricing: pricingLabel,
-                unpriced: apiCost.unpricedModels ? t('local_dashboard.pricing_unavailable') : '',
-            })}
-            hint={t('local_dashboard.api_cost_hint')}
+            detail={<div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span>{t('local_dashboard.api_requests', { requestCount: formatTokens(totals.request_count, locale) })}</span>
+                {apiCost.unpricedModels > 0 && <span className="text-amber-700 dark:text-amber-400">{t('local_dashboard.unpriced_count', { count: apiCost.unpricedModels })}</span>}
+            </div>}
+            hint={`${pricingLabel}\n${t('local_dashboard.api_cost_hint')}`}
             color="bg-amber-50 text-amber-600 dark:bg-amber-900/20 dark:text-amber-300"
             icon={DollarSign}
             locale={locale}

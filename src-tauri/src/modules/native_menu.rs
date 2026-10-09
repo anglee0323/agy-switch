@@ -13,7 +13,8 @@ use objc2_foundation::{MainThreadMarker, NSObject, NSObjectProtocol, NSPoint, NS
 use std::{cell::{Cell, RefCell}, sync::{Mutex, mpsc, atomic::{AtomicBool, AtomicU64, Ordering}}, time::Instant};
 use tauri::Emitter;
 
-const WIDTH: f64 = 380.0;
+const WIDTH: f64 = 424.0;
+const FAMILY_GAP: f64 = 24.0;
 const BRAND: &str = "AntiGravity Switch";
 const GITHUB: &str = "https://github.com/anglee0323/agy-switch";
 static OPEN: AtomicBool = AtomicBool::new(false);
@@ -135,21 +136,25 @@ impl QuotaBar {
 }
 // Lay out quota columns according to the family selected in Settings.
 struct QuotaRow { cells: Vec<(Retained<QuotaBar>, Retained<NSTextField>)>, y: f64 }
+fn quota_column(scope: MenuBarQuotaScope, family: usize) -> (f64, f64) {
+    let gap = if scope == MenuBarQuotaScope::All { FAMILY_GAP } else { 0.0 };
+    // Each family owns its period label, meter/reset time and percentage.
+    let width = (WIDTH - 40.0 - gap) / if scope == MenuBarQuotaScope::All { 2.0 } else { 1.0 } - 50.0;
+    (70.0 + if scope == MenuBarQuotaScope::All { family as f64 * (width + 50.0 + gap) } else { 0.0 }, width)
+}
 impl QuotaRow {
     fn apply(&self, scope: MenuBarQuotaScope) {
-        let gap = if scope == MenuBarQuotaScope::All { 12.0 } else { 0.0 };
-        let width = (WIDTH - 90.0 - gap) / if scope == MenuBarQuotaScope::All { 2.0 } else { 1.0 };
         for (family, (progress, text)) in self.cells.iter().enumerate() {
             let visible = scope == MenuBarQuotaScope::All || (scope == MenuBarQuotaScope::Gemini && family == 0) || (scope == MenuBarQuotaScope::Other && family == 1);
             progress.setHidden(!visible); text.setHidden(!visible);
-            let x = 70.0 + if scope == MenuBarQuotaScope::All { family as f64 * (width + gap) } else { 0.0 };
+            let (x, width) = quota_column(scope, family);
             progress.setFrame(rect(x, self.y + 3.0, width - 49.0, 4.0)); progress.setNeedsDisplay(true);
             text.setFrame(rect(x + width - 44.0, self.y - 3.0, 46.0, 18.0));
         }
     }
 }
 #[derive(Default)]
-struct AccountRowState { resets: RefCell<Vec<HoverQuota>>, mode: MenuBarResetTimeDisplay }
+struct AccountRowState { resets: RefCell<Vec<HoverQuota>>, mode: MenuBarResetTimeDisplay, divider: Option<NSRect> }
 struct HoverQuota { bar: Retained<QuotaBar>, reset: Retained<SectionView>, full: NSRect, compact: NSRect }
 define_class!(
     #[unsafe(super = NSView)]
@@ -166,6 +171,10 @@ define_class!(
             let bounds = self.bounds();
             NSColor::separatorColor().colorWithAlphaComponent(0.45).setFill();
             NSBezierPath::bezierPathWithRect(rect(20.0, bounds.size.height - 2.0, bounds.size.width - 40.0, 0.5)).fill();
+            if let Some(divider) = self.ivars().divider {
+                NSColor::separatorColor().setFill();
+                NSBezierPath::bezierPathWithRect(divider).fill();
+            }
         }
     }
 );
@@ -424,15 +433,23 @@ impl MenuSession {
 }
 fn account_item(menu: &NSMenu, app: &tauri::AppHandle, account: &DashboardEntry, windows: [[Option<f64>; 2]; 2], preferences: &MenuBarPreferences, busy: bool, zh: bool, targets: &mut Vec<Retained<MenuAction>>, marker: MainThreadMarker) -> (Option<AccountControls>, AccountQuotaWidgets) {
     let (primary, secondary) = projection::identity_parts(account, preferences);
-    let title = if secondary.is_empty() { primary.clone() } else { format!("{primary}   {secondary}") };
+    let title = if preferences.display_scope == MenuBarQuotaScope::All || secondary.is_empty() { primary.clone() } else { format!("{primary}   {secondary}") };
     let periods: Vec<_> = (0..2).filter(|period| if *period == 0 { preferences.show_session } else { preferences.show_weekly }).collect();
     let mode = preferences.reset_time_mode();
-    let view = AccountRow::alloc(marker).set_ivars(AccountRowState { mode, ..Default::default() });
+    let (_, column_width) = quota_column(preferences.display_scope, 0);
+    let divider = (preferences.display_scope == MenuBarQuotaScope::All && !periods.is_empty())
+        .then(|| rect(70.0 + column_width + FAMILY_GAP / 2.0, 43.0, 0.5, periods.len() as f64 * 18.0 - 2.0));
+    let view = AccountRow::alloc(marker).set_ivars(AccountRowState { mode, divider, ..Default::default() });
     let view: Retained<AccountRow> = unsafe { msg_send![super(view), initWithFrame: rect(0.0, 0.0, WIDTH, 48.0 + periods.len() as f64 * 18.0)] };
     let action_width = if zh { 64.0 } else { 72.0 };
     let action_frame = rect(WIDTH - 20.0 - action_width, 8.0, action_width, 26.0);
     label(&view, &primary, 20.0, 7.0, WIDTH - action_width - 48.0, 12.0, true, false, marker);
-    if !secondary.is_empty() { label(&view, &secondary, 20.0, 25.0, WIDTH - action_width - 48.0, 10.0, false, true, marker); }
+    if preferences.display_scope == MenuBarQuotaScope::All {
+        for (family, name) in ["Gemini", "Claude / GPT"].iter().enumerate() {
+            let (x, width) = quota_column(preferences.display_scope, family);
+            label(&view, name, x - 50.0, 25.0, width + 50.0, 10.0, false, true, marker);
+        }
+    } else if !secondary.is_empty() { label(&view, &secondary, 20.0, 25.0, WIDTH - action_width - 48.0, 10.0, false, true, marker); }
     let controls = if account.disabled {
         status_badge(&view, if zh { "禁用" } else { "Disabled" }, "nosign", &NSColor::systemRedColor(), action_frame, marker);
         None
@@ -449,10 +466,20 @@ fn account_item(menu: &NSMenu, app: &tauri::AppHandle, account: &DashboardEntry,
     let mut widgets = AccountQuotaWidgets { id: account.id.clone(), rows: Vec::new(), resets: Vec::new() };
     for (row, &period) in periods.iter().enumerate() {
         let y = 46.0 + row as f64 * 18.0;
-        label(&view, if period == 0 { if zh { "5 小时" } else { "5 hours" } } else { if zh { "每周" } else { "Weekly" } }, 20.0, y - 3.0, 48.0, 11.0, false, true, marker);
         let cells = (0..2).map(|family| {
+            let visible = preferences.display_scope == MenuBarQuotaScope::All || (preferences.display_scope == MenuBarQuotaScope::Gemini && family == 0) || (preferences.display_scope == MenuBarQuotaScope::Other && family == 1);
+            let period_name = if period == 0 { if zh { "5 小时" } else { "5 hours" } } else { if zh { "每周" } else { "Weekly" } };
+            let family_name = if family == 0 { "Gemini" } else { "Claude / GPT" };
+            let tooltip = NSString::from_str(&format!("{family_name} · {period_name}"));
+            if visible {
+                let (x, _) = quota_column(preferences.display_scope, family);
+                let period_label = label(&view, period_name, x - 50.0, y - 3.0, 48.0, 11.0, false, true, marker);
+                period_label.setToolTip(Some(&tooltip));
+            }
             let progress = bar(&view, windows[period][family], preferences, rect(70.0, y + 3.0, 100.0, 4.0), account.disabled, marker);
+            progress.setToolTip(Some(&tooltip));
             let field = label(&view, &projection::percent(windows[period][family]), 180.0, y - 3.0, 42.0, 11.0, false, true, marker);
+            field.setToolTip(Some(&tooltip));
             let color = NSColor::labelColor();
             field.setTextColor(Some(&color)); field.setAlignment(objc2_app_kit::NSTextAlignment::Right);
             (progress, field)
