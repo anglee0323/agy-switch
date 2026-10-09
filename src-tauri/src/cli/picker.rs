@@ -1255,6 +1255,7 @@ pub fn run_interactive_dashboard(root: &Path) -> Result<(), CliError> {
                     "5. 环境状态      关联应用与本地存储状态",
                     "6. 策略与排序    智能切换设置、候选顺序与账号排序",
                     "7. 检查更新      查询最新稳定版",
+                    "8. 实验功能      Antigravity App 界面汉化",
                     "0. 退出控制台    退出当前工具",
                 ],
             ),
@@ -1268,6 +1269,7 @@ pub fn run_interactive_dashboard(root: &Path) -> Result<(), CliError> {
                     "5. Status              Inspect linked applications and storage",
                     "6. Settings & Order    Smart switching, candidates and account order",
                     "7. Check for Updates   Query the latest stable release",
+                    "8. Experimental Features   Antigravity App Chinese interface",
                     "0. Exit                Quit agy-switch",
                 ],
             ),
@@ -1283,7 +1285,8 @@ pub fn run_interactive_dashboard(root: &Path) -> Result<(), CliError> {
             Some(4) => show_system_status(&snapshot, root, lang),
             Some(5) => super::workflows::show_settings(root, lang),
             Some(6) => super::workflows::show_updates(lang),
-            Some(7) | None => {
+            Some(7) => super::workflows::show_experiments(root, lang),
+            Some(8) | None => {
                 let exit_msg = match lang {
                     Lang::Zh => "\n已退出 agy-switch 控制台。\n",
                     Lang::En => "\nExited agy-switch.\n",

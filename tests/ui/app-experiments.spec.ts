@@ -3,49 +3,40 @@ import { setupSettingsFixture } from './settings-fixture';
 test.beforeEach(async ({ page }) => {
     await page.addInitScript(setupSettingsFixture);
     await page.goto('/settings');
+    await expect(page.getByRole('switch', { name: '界面汉化' })).toHaveCount(0);
     await page.getByRole('tab', { name: '实验功能', exact: true }).click();
 });
-test('recommended settings become custom after an edit and preserve permission rules', async ({ page }) => {
-    await expect(page.getByText(/懒人配置同时作用于 Antigravity App 和 agy CLI/)).toBeVisible();
-    await page.getByRole('button', { name: '推荐配置', exact: true }).click();
-    await expect(page.getByText('已应用推荐配置', { exact: true })).toBeVisible();
-    await expect(page.getByLabel('追问发送', { exact: true })).toHaveValue('1');
-    await expect(page.getByLabel('对话宽度', { exact: true })).toHaveValue('3');
-    await page.getByLabel('追问发送', { exact: true }).selectOption('2');
-    await expect(page.getByText('已自定义', { exact: true })).toBeVisible();
-    await expect(page.getByText('已应用推荐配置', { exact: true })).toHaveCount(0);
-    await page.getByRole('button', { name: '编辑权限规则 JSON', exact: true }).click();
-    const editor = page.getByRole('textbox', { name: '编辑权限规则 JSON' });
-    expect(JSON.parse(await editor.inputValue()).allow).toEqual(['read_url(https://example.invalid/*)']);
-    await editor.fill('{"allow":["read_url(https://new.invalid/*)"],"ask":[],"deny":["command(custom command)"]}');
-    await page.getByRole('button', { name: '保存规则' }).click();
-    await expect.poll(() => page.evaluate(() => (window as any).__settingsFixture.experiments().settings.globalPermissionGrants.allow)).toEqual(['read_url(https://new.invalid/*)']);
-    await editor.fill('{"allow": []}'); await page.getByRole('button', { name: '保存规则' }).click();
-    await expect(page.getByRole('alert')).toContainText('JSON 必须包含');
-    expect(await page.evaluate(() => (window as any).__settingsFixture.calls.filter((c: any) => c.command === 'set_app_shared_preferences' && c.args.patch.globalPermissionGrants).length)).toBe(1);
+test('experiments contain only App translation with the Windows and macOS scope', async ({ page }) => {
+    const panel = page.getByRole('tabpanel');
+    await expect(panel.getByText(/汉化仅作用于 Windows 和 macOS 的 Antigravity App/)).toBeVisible();
+    await expect(panel.getByText(/不修改 App 安装文件或源文件/)).toBeVisible();
+    await expect(panel.getByText(/agy-switch experiments run/)).toBeVisible();
+    await expect(panel.getByRole('switch')).toHaveCount(1);
+    await expect(panel.getByRole('combobox')).toHaveCount(0);
+    await expect(panel.getByRole('textbox')).toHaveCount(0);
+    await expect(panel.getByText(/懒人配置|推荐配置|编辑权限规则 JSON/)).toHaveCount(0);
+    await panel.getByRole('switch', { name: '界面汉化' }).click();
+    await expect(panel.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
+    expect(await page.evaluate(() => (window as any).__settingsFixture.calls.filter((c: any) => c.command.startsWith('set_app_')))).toEqual([{ command: 'set_app_translation', args: { enabled: true } }]);
 });
-test('external edits refresh state without replacing a permission draft', async ({ page }) => {
-    await page.getByRole('button', { name: '推荐配置', exact: true }).click();
-    await expect(page.getByText('已应用推荐配置', { exact: true })).toBeVisible();
-    await page.getByRole('button', { name: '编辑权限规则 JSON', exact: true }).click();
-    await page.getByRole('textbox', { name: '编辑权限规则 JSON' }).fill('unfinished draft');
+test('external translation changes refresh the confirmed state', async ({ page }) => {
     await page.evaluate(() => (window as any).__settingsFixture.externalExperimentEdit());
     await page.getByRole('button', { name: '重新读取', exact: true }).click();
-    await expect(page.getByText('已自定义', { exact: true })).toBeVisible();
-    await expect(page.getByLabel('对话宽度', { exact: true })).toHaveValue('2');
-    await expect(page.getByRole('textbox', { name: '编辑权限规则 JSON' })).toHaveValue('unfinished draft');
+    await expect(page.getByRole('switch', { name: '界面汉化' })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByText('已翻译 12 处界面文字')).toBeVisible();
 });
-test('pending writes disable competing controls and failed writes show confirmed state', async ({ page }) => {
+test('pending translation disables competing writes and failures retain confirmed state', async ({ page }) => {
     await page.evaluate(() => { (window as any).__settingsFixture.holdExperimentSave = true; });
-    await page.getByRole('button', { name: '推荐配置', exact: true }).click();
-    await expect(page.getByLabel('追问发送', { exact: true })).toBeDisabled();
-    await expect(page.getByRole('switch', { name: '界面汉化' })).toBeDisabled();
+    const translation = page.getByRole('switch', { name: '界面汉化' });
+    await translation.click();
+    await expect(translation).toBeDisabled();
+    await expect(page.getByRole('button', { name: '重新读取', exact: true })).toBeDisabled();
     await page.evaluate(() => (window as any).__settingsFixture.resolveExperimentSave());
-    await expect(page.getByText('已应用推荐配置', { exact: true })).toBeVisible();
+    await expect(translation).toHaveAttribute('aria-checked', 'true');
     await page.evaluate(() => { const f = (window as any).__settingsFixture; f.holdExperimentSave = false; f.failExperimentSave = true; });
-    await page.getByLabel('追问发送', { exact: true }).selectOption('2');
+    await translation.click();
     await expect(page.getByRole('alert')).toContainText('synthetic App write rejection');
-    await expect(page.getByLabel('追问发送', { exact: true })).toHaveValue('1');
+    await expect(translation).toHaveAttribute('aria-checked', 'true');
     await page.getByRole('button', { name: '重新读取', exact: true }).click();
     await expect(page.getByRole('alert')).toHaveCount(0);
 });
@@ -55,7 +46,6 @@ test('translation can be disabled while the App is closed', async ({ page }) => 
     const translation = page.getByRole('switch', { name: '界面汉化' });
     await expect(translation).toHaveAttribute('aria-checked','true');
     await expect(translation).toBeEnabled();
-    await expect(page.getByRole('button', { name: '推荐配置', exact: true })).toBeDisabled();
     await translation.click();
     await expect(translation).toHaveAttribute('aria-checked','false');
     await expect(translation).toBeDisabled();

@@ -81,6 +81,22 @@ try {
   await send('\x1b[B\x1b[1;2A\x1b', 'Settings & Order');
   assert.equal(readFileSync(join(data, 'accounts.json'), 'utf8'), savedIndex); checks++;
   await send('\x1b', 'Select a section:');
+  // Experimental Features is a primary section. Its secondary switch shares
+  // the GUI's file, while a foreground runner returns here after Ctrl+C.
+  await send('8', 'Chinese interface: Off');
+  assert.ok(output.includes('Experimental Features'));
+  assert.ok(output.includes('does not modify App installation/source files')); checks++;
+  await send('2', 'Turn on Chinese interface first.');
+  await send('\x1b', 'Chinese interface: Off');
+  await send('1', 'Settings saved.');
+  assert.equal(JSON.parse(readFileSync(join(data, 'app_experiments.json'), 'utf8')).translation_enabled, true); checks++;
+  await send('\x1b', 'Chinese interface: On');
+  if (process.platform === 'darwin' || process.platform === 'win32') {
+    await send('2', 'Maintaining translation; waiting for Antigravity App.');
+    await send('\x03', 'Foreground renewals stopped.');
+    await send('\x1b', 'Chinese interface: On');
+  }
+  await send('\x1b', 'Select a section:');
   await send('1', 'Accounts & Quotas Hub');
   await send('\x1b[C', 'Account actions');
   await send('\x1b[D', 'Accounts & Quotas Hub');
@@ -103,6 +119,12 @@ try {
   const chineseDone = new Promise(resolve => terminal.onExit(event => { exited = event; resolve(event); }));
   terminal.onData(chunk => { output += chunk; chineseOutput += chunk; });
   await until('选择功能:');
+  await send('8', '界面汉化: 开启');
+  assert.ok(output.includes('实验功能')); assert.ok(output.includes('不修改 App 安装文件或源文件')); checks++;
+  await send('1', '设置已保存。');
+  assert.equal(JSON.parse(readFileSync(join(data, 'app_experiments.json'), 'utf8')).translation_enabled, false); checks++;
+  await send('\x1b', '界面汉化: 关闭');
+  await send('\x1b', '选择功能:');
   await send('6', '策略与排序');
   await send('\r', '切换时机:');
   assert.ok(output.includes('账号选择顺序:')); checks++;
@@ -114,8 +136,8 @@ try {
   await Promise.race([chineseDone, delay(10000).then(() => { throw new Error('Chinese TUI did not exit'); })]);
   assert.equal(exited.exitCode, 0);
   assert.equal(readFileSync(join(data, 'auto_switch.json'), 'utf8'), policyBytes);
-  assert.doesNotMatch(chineseOutput, /Account selection order|Settings saved|Smart switching/); checks++;
-  console.log(`${checks} real ${process.platform === 'win32' ? 'ConPTY' : 'PTY'} checks passed: menus, policy editing, selection/order, cancel, masking, resize and exit; synthetic settings writes only, no network or credential changes`);
+  assert.doesNotMatch(chineseOutput, /Account selection order|Settings saved|Smart switching|Chinese interface|Experimental Features/); checks++;
+  console.log(`${checks} real ${process.platform === 'win32' ? 'ConPTY' : 'PTY'} checks passed: menus, experiments, foreground cancellation, policy editing, selection/order, cancel, masking, resize and exit; synthetic settings writes only, no credential changes`);
 } finally {
   clearTimeout(watchdog);
   if (terminal && !exited) terminal.kill();

@@ -292,10 +292,7 @@ pub fn run() {
         .on_window_event(modules::desktop::handle_window_event)
         .invoke_handler(tauri::generate_handler![
             modules::app_experiments::get_app_experiments,
-            modules::app_experiments::set_app_native_preferences,
             modules::app_experiments::set_app_translation,
-            modules::app_experiments::set_app_shared_preferences,
-            modules::app_experiments::set_app_preset,
             modules::auto_switch::get_auto_switch_config,
             modules::auto_switch::set_auto_switch_config,
             modules::auto_switch::get_auto_switch_status,

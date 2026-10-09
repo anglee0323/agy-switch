@@ -1,12 +1,12 @@
 //! Read-only installation, process and listener metadata for App identity.
 //! No debugging connection, script injection, launch or credential writes.
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 use serde_json::Value;
 #[cfg(any(target_os = "macos", test))]
 use std::collections::BTreeSet;
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 use std::fs::File;
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 use std::io::{Read, Seek, SeekFrom};
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 #[cfg(target_os = "macos")]
@@ -257,12 +257,12 @@ pub(crate) fn installed(configured: Option<&str>) -> Result<Option<Installation>
     Ok(None)
 }
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 const MAX_ASAR_HEADER: usize = 4 * 1024 * 1024;
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 const MAX_PACKAGE: usize = 16 * 1024;
 
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 fn package_version(package: &[u8]) -> Option<String> {
     let package: Value = serde_json::from_slice(package).ok()?;
     // Antigravity IDE also uses the Antigravity name. Require the standalone
@@ -287,7 +287,7 @@ fn package_version(package: &[u8]) -> Option<String> {
 
 /// Read only the bounded package.json entry from an ASAR; no extraction or code
 /// execution. Reject links, unpacked entries, oversized values and bad offsets.
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 pub(crate) fn read_asar_version(path: &std::path::Path) -> Option<String> {
     let mut file = File::open(path).ok()?;
     let file_size = file.metadata().ok()?.len();

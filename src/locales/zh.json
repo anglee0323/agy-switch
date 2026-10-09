@@ -432,7 +432,7 @@
   },
   "settings_sections": {
     "experimental": "实验功能",
-    "experimental_description": "Antigravity App 的快捷配置与界面汉化。",
+    "experimental_description": "Antigravity App 的界面汉化。",
     "navigation": "设置分类",
     "general": "常规偏好",
     "general_description": "管理界面主题、显示语言、开机启动与本地执行环境路径。",
@@ -496,60 +496,24 @@
     }
   },
   "app_experiments": {
-    "scope": "懒人配置同时作用于 Antigravity App 和 agy CLI；界面汉化仅作用于 Antigravity App。Codex、Claude Code、Pi Agent 不受影响。",
+    "scope": "汉化仅作用于 Windows 和 macOS 的 Antigravity App，不影响 agy CLI、Antigravity IDE、Codex、Claude Code 或 Pi Agent。",
     "connected": "已连接 Antigravity App {{version}}",
     "reload": "重新读取",
     "failed": "操作失败：{{error}}",
-    "preset_title": "懒人配置",
-    "preset_description": "将 Antigravity 调整到开箱可用的状态。这里的选项也可以在 Antigravity 原生设置中修改。",
-    "keepComputerAwake": "运行时防止电脑休眠",
-    "runInBackground": "关闭所有窗口后保持后台运行",
     "translation_title": "界面汉化",
-    "translation_description": "翻译 macOS Antigravity App 的侧边栏、设置和内置功能页面。关闭后恢复原文。使用期间需保持 AntiGravity Switch 开启；聊天、代码、插件正文和系统菜单保持原文。",
+    "translation_description": "翻译 Antigravity App 的侧边栏、设置和内置功能页面。关闭后恢复原文。使用期间需保持 Switch 桌面进程或 CLI 前台命令运行；聊天、代码、插件正文和系统菜单保持原文。",
     "translated": "已翻译 {{count}} 处界面文字",
     "states": {
       "loading": "正在读取 Antigravity App…",
       "not_running": "请先打开 Antigravity App",
       "app_not_installed": "未找到 Antigravity App",
-      "unsupported_platform": "本版实验功能暂支持 macOS Antigravity App",
-      "unavailable": "暂时无法连接 Antigravity App"
+      "unsupported_platform": "界面汉化支持 Windows 和 macOS 的 Antigravity App",
+      "unavailable": "暂时无法连接 Antigravity App",
+      "no_debug_port": "暂时无法连接，请确认 Antigravity App 已正常打开",
+      "unknown_installation": "当前安装不支持汉化，请使用独立 Antigravity App"
     },
-    "recommended": "推荐配置",
-    "custom": "自定义",
-    "recommended_applied": "已应用推荐配置",
-    "customized": "已自定义",
-    "unknown": "当前值未知",
-    "permission_note": "推荐配置会保留现有权限规则，并加入强制推送询问和根目录删除禁止。",
-    "rules_title": "编辑权限规则 JSON",
-    "rules_description": "编辑 allow、ask、deny 列表。网页读取用 read_url(...)，浏览器操作用 execute_url(...)，文件用 read_file(...)／write_file(...)，命令用 command(...)。",
-    "save_rules": "保存规则",
-    "rules_invalid": "JSON 必须包含 allow、ask、deny 三个字符串列表。",
-    "fields": {
-      "permissionPreset": "执行权限",
-      "artifactReviewMode": "计划审批",
-      "nonWorkspaceFileAccessPolicy": "项目外文件访问",
-      "internetAccessPolicy": "网页读取",
-      "browserJsExecutionPolicy": "浏览器自动化",
-      "queuedMessageDeliveryStrategy": "追问发送",
-      "conversationWidth": "对话宽度",
-      "verboseAgentChat": "显示思考过程",
-      "useAiCredits": "允许额外消耗 AI Credits"
-    },
-    "options": {
-      "turbo": "Turbo（直接执行）",
-      "default": "默认",
-      "review": "始终审批",
-      "proceed": "直接继续",
-      "model_decides": "模型判断",
-      "allow": "允许",
-      "ask": "询问",
-      "deny": "禁止",
-      "disabled": "关闭",
-      "immediately": "立即发送（中断当前执行）",
-      "queue": "排队（当前轮结束后发送）",
-      "wide": "宽",
-      "narrow": "窄"
-    },
-    "restore_pending": "汉化已关闭，暂时无法连接的页面将在 15 秒内恢复原文。"
+    "restore_pending": "汉化已关闭，暂时无法连接的页面将在 15 秒内恢复原文。",
+    "injection_description": "通过 App 现有的本机连接注入翻译脚本，只替换已知界面文字，不修改 App 安装文件或源文件，不调整权限和账号设置，也不上传聊天内容。脚本在 App 页面中运行并观察界面变化，运行时注入并不代表完全没有风险。关闭后恢复原文；停止续期后最迟 15 秒自动恢复。",
+    "cli_description": "桌面和 agy-switch CLI 共用同一个开关。仅用 CLI 时，开启后运行 agy-switch experiments run，并保持该命令运行。"
   }
 }

@@ -4,7 +4,7 @@ pub mod account_service;
 pub mod account_sync;
 pub mod api_pricing;
 pub(crate) mod app_identity;
-#[cfg(any(target_os = "macos", test))]
+#[cfg(any(target_os = "macos", target_os = "windows", test))]
 pub(crate) mod app_metadata_macos;
 pub mod cli_credentials;
 pub mod config;
@@ -44,5 +44,6 @@ pub(crate) mod agent_activity;
 pub(crate) mod app_transport;
 pub(crate) mod app_connection;
 pub mod app_experiments;
-pub(crate) mod app_preferences;
+#[cfg(any(target_os = "windows", test))]
+pub(crate) mod app_metadata_windows;
 pub mod updater;

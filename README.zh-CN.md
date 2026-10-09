@@ -104,7 +104,7 @@ agy-switch              # 命令行看板
 3. **切换账号**：先保存 Antigravity 中的工作，再点击切换。切换可能关闭并重新打开客户端，完成后请在 Antigravity 中确认当前账号。
 4. **调整偏好**：在设置中选择语言、主题和快捷看板的显示方式。如果需要自动选择备用账号，可以开启智能切换；它默认关闭。
 
-macOS 用户可在 **设置 → 实验功能** 使用 Antigravity 懒人配置和界面汉化。懒人配置同时配置 App 与 agy CLI；汉化仅作用于 App。[功能与兼容范围](docs/app-experiments.md)
+开发版本的 **设置 → 实验功能** 只保留“界面汉化”，作用于 Windows 和 macOS 的独立 Antigravity App。[功能与兼容范围](docs/app-experiments.md)
 
 ## 日常操作
 
