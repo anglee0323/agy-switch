@@ -1,13 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">
+<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 180 180">
   <defs>
-    <path id="wave" d="M2.3 16.8C4.1 16.2 4.6 7 7.4 6C10.1 5.1 10.6 14.5 13.4 16.6C14.1 17.1 13.5 17.7 12.8 17.3C10.1 16.3 10 11.1 7.4 11.2C5.1 11.2 4.4 16.6 2.7 17.2C2 17.4 1.7 17.1 2.3 16.8Z"/>
-    <mask id="overlap" maskUnits="userSpaceOnUse" x="0" y="0" width="22" height="22">
-      <rect width="22" height="22" fill="white"/>
-      <use href="#wave" transform="translate(6.2 -.4)" fill="black" stroke="black" stroke-width=".9" stroke-linejoin="round"/>
-    </mask>
+    <path id="antigravity-wave" d="M144.248 149.062C151.748 154.688 162.998 150.938 152.685 140.625C121.748 110.625 128.31 28.125 89.8727 28.125C51.4352 28.125 57.9977 110.625 27.0602 140.625C15.8102 151.875 27.9977 154.688 35.4977 149.062C64.5602 129.375 62.6852 94.6875 89.8727 94.6875C117.06 94.6875 115.185 129.375 144.248 149.062Z"/>
   </defs>
-  <g transform="translate(11 11.6) scale(1.15) translate(-11 -11.6)">
-    <use href="#wave" fill="currentColor" mask="url(#overlap)"/>
-    <use href="#wave" transform="translate(6.2 -.4)" fill="currentColor"/>
+  <g fill="currentColor">
+    <g transform="translate(0 -10)">
+      <use href="#antigravity-wave"/>
+    </g>
+    <g transform="translate(0 10)">
+      <g transform="rotate(180 90 90)">
+        <use href="#antigravity-wave"/>
+      </g>
+    </g>
   </g>
 </svg>
