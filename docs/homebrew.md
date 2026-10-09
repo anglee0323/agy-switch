@@ -1,6 +1,6 @@
 # macOS installation and upgrades
 
-AntiGravity Switch supports Apple Silicon Macs. The Homebrew cask installs the app and the `agy-switch` management command from the verified [4.10.1 release](https://github.com/anglee0323/agy-switch/releases/tag/v4.10.1). It does not install Google's `agy` client. Intel Mac and Linux Homebrew packages are not provided.
+AntiGravity Switch supports Apple Silicon Macs. The Homebrew cask installs the app and the `agy-switch` management command from the verified [4.10.2 release](https://github.com/anglee0323/agy-switch/releases/tag/v4.10.2). It does not install Google's `agy` client. Intel Mac and Linux Homebrew packages are not provided.
 
 ## Install with Homebrew
 
@@ -16,7 +16,7 @@ If a manually installed copy already occupies the destination, keep a backup and
 
 ## Install from the ZIP
 
-Download `agy-switch-4.10.1-macos-arm64.zip` from the release page, unzip it, and move **AntiGravity Switch.app** into Applications. The archive also includes a console executable:
+Download `agy-switch-4.10.2-macos-arm64.zip` from the release page, unzip it, and move **AntiGravity Switch.app** into Applications. The archive also includes a console executable:
 
 ```sh
 "/Applications/AntiGravity Switch.app/Contents/MacOS/agy-switch"
@@ -39,4 +39,4 @@ Saved accounts and preferences live outside the application bundle in `~/.antigr
 
 The root recipe at `Casks/agy-switch.rb` pins the exact public ZIP and its SHA-256. Package hashes are listed in `release-manifest.json`; the update feed includes cryptographic package signatures. The Mac app has a complete ad-hoc resource signature but no Apple Developer ID or notarization. Gatekeeper can reject launch, and Homebrew does not bypass these checks.
 
-See [4.10.1 package verification](maintainers/4.10.1-public-acceptance.md) and [in-app updates](software-updates.md). Generating and publishing the cask is covered by the [maintainer release checklist](maintainers/release-checklist.md).
+See [4.10.2 package verification](maintainers/4.10.2-public-acceptance.md) and [in-app updates](software-updates.md). Generating and publishing the cask is covered by the [maintainer release checklist](maintainers/release-checklist.md).
