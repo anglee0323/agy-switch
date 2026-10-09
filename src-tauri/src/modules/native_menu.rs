@@ -433,7 +433,7 @@ impl MenuSession {
 }
 fn account_item(menu: &NSMenu, app: &tauri::AppHandle, account: &DashboardEntry, windows: [[Option<f64>; 2]; 2], preferences: &MenuBarPreferences, busy: bool, zh: bool, targets: &mut Vec<Retained<MenuAction>>, marker: MainThreadMarker) -> (Option<AccountControls>, AccountQuotaWidgets) {
     let (primary, secondary) = projection::identity_parts(account, preferences);
-    let title = if secondary.is_empty() { primary.clone() } else { format!("{primary}   {secondary}") };
+    let title = if preferences.display_scope == MenuBarQuotaScope::All || secondary.is_empty() { primary.clone() } else { format!("{primary}   {secondary}") };
     let periods: Vec<_> = (0..2).filter(|period| if *period == 0 { preferences.show_session } else { preferences.show_weekly }).collect();
     let mode = preferences.reset_time_mode();
     let (_, column_width) = quota_column(preferences.display_scope, 0);
@@ -444,7 +444,12 @@ fn account_item(menu: &NSMenu, app: &tauri::AppHandle, account: &DashboardEntry,
     let action_width = if zh { 64.0 } else { 72.0 };
     let action_frame = rect(WIDTH - 20.0 - action_width, 8.0, action_width, 26.0);
     label(&view, &primary, 20.0, 7.0, WIDTH - action_width - 48.0, 12.0, true, false, marker);
-    if !secondary.is_empty() { label(&view, &secondary, 20.0, 25.0, WIDTH - action_width - 48.0, 10.0, false, true, marker); }
+    if preferences.display_scope == MenuBarQuotaScope::All {
+        for (family, name) in ["Gemini", "Claude / GPT"].iter().enumerate() {
+            let (x, width) = quota_column(preferences.display_scope, family);
+            label(&view, name, x - 50.0, 25.0, width + 50.0, 10.0, false, true, marker);
+        }
+    } else if !secondary.is_empty() { label(&view, &secondary, 20.0, 25.0, WIDTH - action_width - 48.0, 10.0, false, true, marker); }
     let controls = if account.disabled {
         status_badge(&view, if zh { "禁用" } else { "Disabled" }, "nosign", &NSColor::systemRedColor(), action_frame, marker);
         None

@@ -55,7 +55,7 @@ async function calls(page: Page, command: string) { return page.evaluate(command
 test('overview shows both independent windows and account labels do not navigate or switch', async ({ page }, info) => {
   await expect(page.locator('.mb-aggregate strong')).toHaveText(['51%', '51%']);
   await expect(page.locator('.mb-availability')).toHaveText(['可用 1/5', '可用 1/5']);
-  await expect(page.locator('.mb-account-row.current')).toContainText('账号 B');
+  await expect(page.locator('.mb-account-row.current')).toContainText('b@example.invalid');
   expect(await calls(page, 'list_accounts')).toEqual([]); expect(await calls(page, 'get_current_account')).toEqual([]);
   await bounded(page); await page.screenshot({ path: info.outputPath('menubar-overview-light-browser.png') });
   await expect(page.getByRole('button', { name: /^查看 账号/ })).toHaveCount(0);
@@ -63,7 +63,7 @@ test('overview shows both independent windows and account labels do not navigate
   await expect(page.getByRole('heading', { name: '剩余额度' })).toBeVisible(); await expect(page.getByRole('button', { name: '返回总览' })).toHaveCount(0);
   expect(await calls(page, 'switch_account')).toEqual([]); await bounded(page);
   await page.getByRole('button', { name: '切换到 账号 A' }).click();
-  await expect(page.locator('.mb-account-row.current')).toContainText('账号 A'); await expect(page.getByText(/已切换到/)).toHaveCount(0);
+  await expect(page.locator('.mb-account-row.current')).toContainText('a@example.invalid'); await expect(page.getByText(/已切换到/)).toHaveCount(0);
   expect((await calls(page, 'switch_account')).map(call => call.args.accountId)).toEqual(['A']);
 });
 test('responsive pagination reaches every account without clipping', async ({ page }) => {
@@ -86,7 +86,7 @@ test('unknown live identity never chooses the first account and read failures cl
   await page.evaluate(() => (window as any).__menuFixture.setIdentity('B', 'tools_record')); await expect(page.getByRole('button', { name: '切换到 账号 B' })).toHaveAttribute('title', 'Tools 保存的账号');
   await expect(page.getByRole('status')).toHaveCount(0);
   await page.evaluate(() => (window as any).__menuFixture.failRead()); await expect(page.getByRole('alert')).toContainText('账号读取失败'); await expect(page.locator('.mb-account-row.current')).toHaveCount(0);
-  await page.evaluate(() => (window as any).__menuFixture.recover()); await expect(page.locator('.mb-account-row.selected')).toContainText('账号 B');
+  await page.evaluate(() => (window as any).__menuFixture.recover()); await expect(page.locator('.mb-account-row.selected')).toContainText('b@example.invalid');
   await page.evaluate(() => (window as any).__menuFixture.empty()); await expect(page.getByText('添加账号后显示额度')).toBeVisible(); await bounded(page);
 });
 test('a saved selection is not a verified login and can be reapplied in either language', async ({ page }) => {
@@ -106,12 +106,12 @@ test('English unknown identity stays explicit in the compact menu', async ({ pag
   await page.evaluate(() => { (window as any).__menuFixture.setPreferences({ language: 'en' }); (window as any).__menuFixture.setIdentity(null, 'unavailable'); });
   await expect(page.getByRole('status')).toHaveText('Current unknown'); await bounded(page);
   await page.evaluate(() => (window as any).__menuFixture.setIdentity('A'));
-  await expect(page.locator('.mb-account-row.current')).toContainText('账号 A');
+  await expect(page.locator('.mb-account-row.current')).toContainText('a@example.invalid');
   await expect(page.getByRole('status')).toHaveCount(0);
 });
 test('switch locks and coordinator cancellation preserve safety; partial refresh remains explicit', async ({ page }) => {
   await page.evaluate(() => (window as any).__menuFixture.holdSwitch()); await page.getByRole('button', { name: '切换到 账号 A' }).click(); await expect(page.getByRole('button', { name: '切换到 账号 A' })).toBeDisabled(); expect(await calls(page, 'switch_account')).toHaveLength(1);
-  await page.locator('.mb-account-label').filter({ hasText: '账号 B' }).click(); await page.evaluate(() => (window as any).__menuFixture.releaseSwitch()); await expect.poll(() => page.evaluate(() => (window as any).__menuFixture.current())).toBe('A'); await expect(page.getByText('b@example.invalid', { exact: true })).toBeVisible();
+  await page.locator('.mb-account-label').filter({ hasText: 'b@example.invalid' }).click(); await page.evaluate(() => (window as any).__menuFixture.releaseSwitch()); await expect.poll(() => page.evaluate(() => (window as any).__menuFixture.current())).toBe('A'); await expect(page.getByText('b@example.invalid', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '返回总览' })).toHaveCount(0);
   await page.evaluate(() => (window as any).__menuFixture.setStatus({ phase: 'pending', reason: 'clients_running', pending_id: 'fixture-request' })); await page.getByRole('button', { name: '查看低额度换号详情' }).click();
   await expect(page.getByText(/读取实时任务状态/)).toBeVisible(); await page.getByRole('button', { name: '取消本次换号', exact: true }).click(); await expect.poll(async () => (await calls(page, 'cancel_auto_switch'))[0]?.args.pendingId).toBe('fixture-request');
@@ -197,6 +197,12 @@ test('platform dashboard labels its quota columns and honors icon visibility', a
   await page.evaluate(() => (window as any).__menuFixture.setPreferences({ language: 'en', menu_bar: { show_icons: false } }));
   await expect(page.locator('.mb-family-heading')).toHaveCount(0);
   const row = page.locator('.mb-account-row').first();
+  await expect(row.locator('.mb-account-label > span')).toHaveText('a@example.invalid');
+  await expect(row.locator('.mb-account-label small')).toHaveCount(0);
+  await expect(row.locator('.mb-account-families > span')).toHaveText(['Gemini', 'Claude / GPT']);
+  await page.evaluate(() => (window as any).__menuFixture.setPreferences({ menu_bar: { label_style: 'label_then_email' } }));
+  await expect(row.locator('.mb-account-label > span')).toHaveText('账号 A');
+  await expect(row.locator('.mb-account-label small')).toHaveCount(0);
   await expect(row.locator('.mb-period')).toHaveText(['5 hours', '5 hours', 'Weekly', 'Weekly']);
   await expect(row.locator('.mb-period').nth(0)).toHaveAttribute('title', 'Gemini · 5 hours');
   await expect(row.locator('.mb-period').nth(1)).toHaveAttribute('title', 'Claude / GPT · 5 hours');
@@ -209,6 +215,8 @@ test('platform dashboard labels its quota columns and honors icon visibility', a
   await page.evaluate(() => (window as any).__menuFixture.setPreferences({ menu_bar: { show_icons: true, display_scope: 'other' } }));
   await expect(row.locator('.mb-period')).toHaveText(['5 hours', 'Weekly']);
   await expect(row.locator('.mb-period').first()).toHaveAttribute('title', 'Claude / GPT · 5 hours');
+  await expect(row.locator('.mb-account-families')).toHaveCount(0);
+  await expect(row.locator('.mb-account-label small')).toHaveText('a@example.invalid');
   await expect(page.locator('.mb-brand img')).toBeVisible();
   await expect(page.locator('.mb-footer-actions svg')).toHaveCount(4);
   await bounded(page);
