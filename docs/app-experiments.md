@@ -1,6 +1,6 @@
 # Antigravity App translation / Antigravity App 汉化
 
-Development builds expose only **Chinese interface** under **Settings → Experimental Features**. Quick setup, individual client preferences and the permission-rule JSON editor have been removed. Existing Antigravity preferences are retained; removing these controls does not reset them. The published 4.10.0 package still has its original features.
+From 4.10.1, **Settings → Experimental Features** exposes only **Chinese interface**. Quick setup, individual client preferences and the permission-rule JSON editor have been removed. Existing Antigravity preferences are retained; removing these controls does not reset them.
 
 ## Using translation
 
@@ -14,7 +14,7 @@ Turn off the switch to restore the original text. You can turn it off even after
 
 ## CLI controls
 
-Development builds also expose a primary **Experimental Features → Chinese interface** terminal menu, matching the desktop's **Settings → Experimental Features → Chinese interface** hierarchy. Both interfaces share `app_experiments.json` in Switch's data directory.
+The CLI also exposes a primary **Experimental Features → Chinese interface** terminal menu, matching the desktop's **Settings → Experimental Features → Chinese interface** hierarchy. Both interfaces share `app_experiments.json` in Switch's data directory.
 
 ```sh
 agy-switch experiments show --json
@@ -38,7 +38,7 @@ UI scopes use semantic controls and page structure rather than sidebar column po
 
 ## 简体中文
 
-开发版本的 **设置 → 实验功能** 只保留“界面汉化”。懒人配置、单项配置和权限规则 JSON 编辑已移除；此前修改的 Antigravity 设置会保留，不会自动恢复默认值。已发布的 4.10.0 安装包仍保留原有功能。
+从 4.10.1 起，**设置 → 实验功能** 只保留“界面汉化”。懒人配置、单项配置和权限规则 JSON 编辑已移除；此前修改的 Antigravity 设置会保留，不会自动恢复默认值。
 
 先打开 Windows 或 macOS 的独立 Antigravity App，再打开汉化开关。侧边栏、设置及内置嵌套页面会随切页翻译；关闭后恢复原文，使用期间需保持 AntiGravity Switch 开启。停止续期后，页面会在 15 秒内恢复。
 
