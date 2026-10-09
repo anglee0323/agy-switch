@@ -6,7 +6,7 @@ Development builds expose only **Chinese interface** under **Settings → Experi
 
 Open the standalone **Antigravity App** on Windows or macOS, then turn on Chinese interface. Keep AntiGravity Switch running while using it. Translation covers built-in sidebars, settings and nested pages, controls, hints, menus, and known labels on history, automation and customization pages. Unknown labels retain their original wording. Conversation/code bodies, user input, project names, plugin Readmes, embedded third-party pages and operating-system menus are excluded.
 
-**Only Antigravity App is affected.** This feature does not configure the App or agy CLI, and does not translate Antigravity IDE, Codex, Claude Code or Pi Agent.
+**Only Antigravity App is affected.** Antigravity IDE, agy CLI, VS Code and JetBrains plugins are unaffected. This feature does not change client preferences.
 
 **Installation and source files are not modified.** A translation script runs inside verified App pages through the existing local connection, observes UI changes and replaces known interface labels. It does not change permissions or accounts, or upload conversation content. Runtime injection still executes code in App pages and is not a guarantee of zero risk.
 
@@ -42,7 +42,7 @@ UI scopes use semantic controls and page structure rather than sidebar column po
 
 先打开 Windows 或 macOS 的独立 Antigravity App，再打开汉化开关。侧边栏、设置及内置嵌套页面会随切页翻译；关闭后恢复原文，使用期间需保持 AntiGravity Switch 开启。停止续期后，页面会在 15 秒内恢复。
 
-**汉化仅对 Antigravity App 生效**，不调整 App 或 agy CLI 的配置，也不影响 Antigravity IDE、Codex、Claude Code 或 Pi Agent。聊天、代码、项目名称、插件正文、第三方嵌入页面和系统菜单保持原文。
+**汉化仅对 Antigravity App 生效**；Antigravity IDE、agy CLI、VS Code 和 JetBrains 插件不受影响，不调整客户端配置。聊天、代码、项目名称、插件正文、第三方嵌入页面和系统菜单保持原文。
 
 **不修改 Antigravity 的安装文件或源文件**，通过 App 现有本机连接在页面中注入翻译脚本，观察界面变化并替换已知标签。不修改权限或账号设置，不上传聊天内容。运行时注入仍会在 App 页面中执行代码，因此不能承诺完全没有风险。
 

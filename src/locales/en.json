@@ -496,7 +496,7 @@
     }
   },
   "app_experiments": {
-    "scope": "Translation applies only to Antigravity App on Windows and macOS. agy CLI, Antigravity IDE, Codex, Claude Code and Pi Agent are unaffected.",
+    "scope": "Translation applies only to Antigravity App on Windows and macOS. Antigravity IDE, agy CLI, VS Code and JetBrains plugins are unaffected.",
     "connected": "Connected to Antigravity App {{version}}",
     "reload": "Reload",
     "failed": "Operation failed: {{error}}",
