@@ -195,7 +195,11 @@ test('daily usage distinguishes empty records from unknown API pricing', async (
 
 test('platform dashboard labels its quota columns and honors icon visibility', async ({ page }) => {
   await page.evaluate(() => (window as any).__menuFixture.setPreferences({ language: 'en', menu_bar: { show_icons: false } }));
-  await expect(page.locator('.mb-family-heading > span')).toHaveText(['Gemini', 'Claude & GPT']);
+  await expect(page.locator('.mb-family-heading')).toHaveCount(0);
+  const row = page.locator('.mb-account-row').first();
+  await expect(row.locator('.mb-period')).toHaveText(['5 hours', '5 hours', 'Weekly', 'Weekly']);
+  await expect(row.locator('.mb-period').nth(0)).toHaveAttribute('title', 'Gemini · 5 hours');
+  await expect(row.locator('.mb-period').nth(1)).toHaveAttribute('title', 'Claude / GPT · 5 hours');
   await expect(page.locator('.mb-brand img')).toHaveCount(0);
   await expect(page.locator('.mb-footer-actions svg')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'GitHub', exact: true })).toHaveText('GitHub');
@@ -203,7 +207,8 @@ test('platform dashboard labels its quota columns and honors icon visibility', a
   await expect(page.locator('.mb-account-switch svg').first()).toBeVisible();
   await bounded(page);
   await page.evaluate(() => (window as any).__menuFixture.setPreferences({ menu_bar: { show_icons: true, display_scope: 'other' } }));
-  await expect(page.locator('.mb-family-heading > span')).toHaveText(['Claude & GPT']);
+  await expect(row.locator('.mb-period')).toHaveText(['5 hours', 'Weekly']);
+  await expect(row.locator('.mb-period').first()).toHaveAttribute('title', 'Claude / GPT · 5 hours');
   await expect(page.locator('.mb-brand img')).toBeVisible();
   await expect(page.locator('.mb-footer-actions svg')).toHaveCount(4);
   await bounded(page);
@@ -238,6 +243,11 @@ test('hover reset times stay inside the row without moving percentages and can b
   expect(await meter.evaluate(el => el.getBoundingClientRect().width)).toBeLessThan(fullWidth);
   expect(await geometry()).toEqual(before); await control.hover(); await page.mouse.move(0, 0);
   await expect(row.locator('.mb-reset-label').first()).toBeVisible(); await bounded(page);
+  for (const width of [320, 424]) {
+    await page.setViewportSize({ width, height: 640 });
+    await bounded(page);
+    expect(await row.locator('.mb-meter').first().evaluate(el => el.getBoundingClientRect().width)).toBeGreaterThanOrEqual(18);
+  }
   await page.evaluate(() => (window as any).__menuFixture.setPreferences({ menu_bar: { reset_time_display: 'hidden' } }));
   await control.hover(); await expect(row.locator('.mb-reset-label')).toHaveCount(0); await expect(row.locator('.mb-meter').first()).toBeVisible();
   expect(await meter.evaluate(el => el.getBoundingClientRect().width)).toBe(fullWidth);

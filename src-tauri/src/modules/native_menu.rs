@@ -13,7 +13,7 @@ use objc2_foundation::{MainThreadMarker, NSObject, NSObjectProtocol, NSPoint, NS
 use std::{cell::{Cell, RefCell}, sync::{Mutex, mpsc, atomic::{AtomicBool, AtomicU64, Ordering}}, time::Instant};
 use tauri::Emitter;
 
-const WIDTH: f64 = 380.0;
+const WIDTH: f64 = 424.0;
 const FAMILY_GAP: f64 = 24.0;
 const BRAND: &str = "AntiGravity Switch";
 const GITHUB: &str = "https://github.com/anglee0323/agy-switch";
@@ -138,8 +138,9 @@ impl QuotaBar {
 struct QuotaRow { cells: Vec<(Retained<QuotaBar>, Retained<NSTextField>)>, y: f64 }
 fn quota_column(scope: MenuBarQuotaScope, family: usize) -> (f64, f64) {
     let gap = if scope == MenuBarQuotaScope::All { FAMILY_GAP } else { 0.0 };
-    let width = (WIDTH - 90.0 - gap) / if scope == MenuBarQuotaScope::All { 2.0 } else { 1.0 };
-    (70.0 + if scope == MenuBarQuotaScope::All { family as f64 * (width + gap) } else { 0.0 }, width)
+    // Each family owns its period label, meter/reset time and percentage.
+    let width = (WIDTH - 40.0 - gap) / if scope == MenuBarQuotaScope::All { 2.0 } else { 1.0 } - 50.0;
+    (70.0 + if scope == MenuBarQuotaScope::All { family as f64 * (width + 50.0 + gap) } else { 0.0 }, width)
 }
 impl QuotaRow {
     fn apply(&self, scope: MenuBarQuotaScope) {
@@ -460,10 +461,20 @@ fn account_item(menu: &NSMenu, app: &tauri::AppHandle, account: &DashboardEntry,
     let mut widgets = AccountQuotaWidgets { id: account.id.clone(), rows: Vec::new(), resets: Vec::new() };
     for (row, &period) in periods.iter().enumerate() {
         let y = 46.0 + row as f64 * 18.0;
-        label(&view, if period == 0 { if zh { "5 小时" } else { "5 hours" } } else { if zh { "每周" } else { "Weekly" } }, 20.0, y - 3.0, 48.0, 11.0, false, true, marker);
         let cells = (0..2).map(|family| {
+            let visible = preferences.display_scope == MenuBarQuotaScope::All || (preferences.display_scope == MenuBarQuotaScope::Gemini && family == 0) || (preferences.display_scope == MenuBarQuotaScope::Other && family == 1);
+            let period_name = if period == 0 { if zh { "5 小时" } else { "5 hours" } } else { if zh { "每周" } else { "Weekly" } };
+            let family_name = if family == 0 { "Gemini" } else { "Claude / GPT" };
+            let tooltip = NSString::from_str(&format!("{family_name} · {period_name}"));
+            if visible {
+                let (x, _) = quota_column(preferences.display_scope, family);
+                let period_label = label(&view, period_name, x - 50.0, y - 3.0, 48.0, 11.0, false, true, marker);
+                period_label.setToolTip(Some(&tooltip));
+            }
             let progress = bar(&view, windows[period][family], preferences, rect(70.0, y + 3.0, 100.0, 4.0), account.disabled, marker);
+            progress.setToolTip(Some(&tooltip));
             let field = label(&view, &projection::percent(windows[period][family]), 180.0, y - 3.0, 42.0, 11.0, false, true, marker);
+            field.setToolTip(Some(&tooltip));
             let color = NSColor::labelColor();
             field.setTextColor(Some(&color)); field.setAlignment(objc2_app_kit::NSTextAlignment::Right);
             (progress, field)
@@ -565,16 +576,10 @@ fn show(app: tauri::AppHandle, config: AppConfig, snapshot: Option<DashboardSnap
     }
     menu.addItem(&NSMenuItem::separatorItem(marker));
     }
-    let account_header = section(marker, 44.0);
+    let account_header = section(marker, 29.0);
     label(&account_header, if zh { "账号列表" } else { "Accounts" }, 20.0, 4.0, 160.0, 13.0, true, false, marker);
     let count = label(&account_header, &projection::account_heading_summary(accounts.len(), None, "checking", zh), 180.0, 5.0, WIDTH - 200.0, 11.0, false, true, marker);
     count.setAlignment(objc2_app_kit::NSTextAlignment::Right);
-    for (family, name) in ["Gemini", "Claude / GPT"].iter().enumerate() {
-        if preferences.display_scope == MenuBarQuotaScope::All || (preferences.display_scope == MenuBarQuotaScope::Gemini && family == 0) || (preferences.display_scope == MenuBarQuotaScope::Other && family == 1) {
-            let (x, width) = quota_column(preferences.display_scope, family);
-            label(&account_header, name, x, 24.0, width, 9.0, false, true, marker);
-        }
-    }
     custom_item(&menu, &account_header, "Accounts", marker);
     let busy = BUSY.load(Ordering::Acquire) || status.as_ref().is_none_or(|status| status.phase == "switching");
     if snapshot.is_none() { readonly_item(&menu, if zh { "账号读取失败，请重试" } else { "Could not read accounts. Retry." }, marker); }
