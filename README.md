@@ -50,7 +50,7 @@ Menu bar usage and quotas are example data. Account remarks retain the language 
 
 ## Installation
 
-Download the package for your platform from **[GitHub Releases](https://github.com/anglee0323/agy-switch/releases/latest)**. The current release is **4.10.0**. The application is called AntiGravity Switch; the repository and terminal command are `agy-switch`.
+Download the package for your platform from **[GitHub Releases](https://github.com/anglee0323/agy-switch/releases/latest)**. The current release is **4.10.1**. The application is called AntiGravity Switch; the repository and terminal command are `agy-switch`.
 
 | Platform | Desktop package | Terminal access |
 | --- | --- | --- |
@@ -88,14 +88,14 @@ For terminal use only, extract the **Windows x64 console ZIP**, open PowerShell 
 Download the **Linux AMD64 deb**, then install it using the actual filename:
 
 ```sh
-sudo apt install ./agy-switch-4.10.0-linux-amd64.deb
+sudo apt install ./agy-switch-4.10.1-linux-amd64.deb
 agy-switch-desktop       # desktop app
 agy-switch              # terminal dashboard
 ```
 
 For terminal use only, download the **Linux AMD64 console tarball**. Desktop tray support depends on your desktop environment. [Linux dependencies and setup](docs/linux.md)
 
-**System trust checks:** the current macOS release has no Developer ID signing or notarization, and the Windows installer has no Authenticode signing. Your system may block launch or display security prompts. Homebrew does not bypass these checks. Package SHA-256 values are listed in the release manifest; update signatures are included in the update feed. [Package verification and current limitations](docs/maintainers/4.10.0-public-acceptance.md)
+**System trust checks:** the current macOS release has no Developer ID signing or notarization, and the Windows installer has no Authenticode signing. Your system may block launch or display security prompts. Homebrew does not bypass these checks. Package SHA-256 values are listed in the release manifest; update signatures are included in the update feed. [Package verification and current limitations](docs/maintainers/4.10.1-public-acceptance.md)
 
 ## First use
 
@@ -104,7 +104,7 @@ For terminal use only, download the **Linux AMD64 console tarball**. Desktop tra
 3. **Switch accounts** — Save your work in Antigravity, then select Switch. Switching may close and reopen the client. Confirm the active account in Antigravity afterward.
 4. **Set your preferences** — In Settings, choose your language, theme and quick-dashboard display. Enable smart switching if you want automatic backup selection; it is off by default.
 
-Development builds retain only **Chinese interface** in **Settings → Experimental Features**, for standalone Antigravity App on Windows and macOS. [Scope and compatibility](docs/app-experiments.md)
+From 4.10.1, **Settings → Experimental Features** offers **Chinese interface** for standalone Antigravity App on Windows and macOS. [Scope and compatibility](docs/app-experiments.md)
 
 ## Everyday use
 

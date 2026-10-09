@@ -50,7 +50,7 @@ AntiGravity Switch 把你的 Antigravity 账号集中到一个地方：查看哪
 
 ## 安装
 
-从 **[GitHub Releases](https://github.com/anglee0323/agy-switch/releases/latest)** 下载对应平台的安装包，当前版本为 **4.10.0**。应用全名是 AntiGravity Switch，仓库和命令行使用 `agy-switch`。
+从 **[GitHub Releases](https://github.com/anglee0323/agy-switch/releases/latest)** 下载对应平台的安装包，当前版本为 **4.10.1**。应用全名是 AntiGravity Switch，仓库和命令行使用 `agy-switch`。
 
 | 平台 | 桌面安装方式 | 命令行入口 |
 | --- | --- | --- |
@@ -88,14 +88,14 @@ brew install --cask anglee0323/agy-switch/agy-switch
 下载 **Linux AMD64 deb**，使用实际文件名安装：
 
 ```sh
-sudo apt install ./agy-switch-4.10.0-linux-amd64.deb
+sudo apt install ./agy-switch-4.10.1-linux-amd64.deb
 agy-switch-desktop       # 桌面应用
 agy-switch              # 命令行看板
 ```
 
 如果只用命令行，可以下载 **Linux AMD64 命令行 tar.gz**。桌面托盘是否可用取决于桌面环境。[Linux 依赖与安装](docs/linux.md)
 
-**系统信任检查：** 当前 macOS 安装包尚无 Developer ID 签名和公证，Windows 安装程序尚无 Authenticode 签名，系统可能阻止启动或提示安全确认。Homebrew 不会绕过这些检查。发布清单列出安装包的 SHA-256，更新源包含更新签名。[安装包验证与当前限制](docs/maintainers/4.10.0-public-acceptance.md)
+**系统信任检查：** 当前 macOS 安装包尚无 Developer ID 签名和公证，Windows 安装程序尚无 Authenticode 签名，系统可能阻止启动或提示安全确认。Homebrew 不会绕过这些检查。发布清单列出安装包的 SHA-256，更新源包含更新签名。[安装包验证与当前限制](docs/maintainers/4.10.1-public-acceptance.md)
 
 ## 第一次使用
 
@@ -104,7 +104,7 @@ agy-switch              # 命令行看板
 3. **切换账号**：先保存 Antigravity 中的工作，再点击切换。切换可能关闭并重新打开客户端，完成后请在 Antigravity 中确认当前账号。
 4. **调整偏好**：在设置中选择语言、主题和快捷看板的显示方式。如果需要自动选择备用账号，可以开启智能切换；它默认关闭。
 
-开发版本的 **设置 → 实验功能** 只保留“界面汉化”，作用于 Windows 和 macOS 的独立 Antigravity App。[功能与兼容范围](docs/app-experiments.md)
+从 4.10.1 起，**设置 → 实验功能** 只保留“界面汉化”，作用于 Windows 和 macOS 的独立 Antigravity App。[功能与兼容范围](docs/app-experiments.md)
 
 ## 日常操作
 
