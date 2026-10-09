@@ -1,9 +1,9 @@
 # Generated from a release archive; do not replace SHA-256 with :no_check.
 cask "agy-switch" do
-  version "4.10.0"
-  sha256 "02e8a42f02d3978826fa7f44ade3520584a5f70ac6627ecfb73547decb4d6781"
+  version "4.10.1"
+  sha256 "430d318de34e88621e503b12f8408658830ce55bb00964a0155eb4cf6eeca744"
 
-  url "https://github.com/anglee0323/agy-switch/releases/download/v4.10.0/agy-switch-4.10.0-macos-arm64.zip"
+  url "https://github.com/anglee0323/agy-switch/releases/download/v4.10.1/agy-switch-4.10.1-macos-arm64.zip"
   name "AntiGravity Switch"
   desc "Antigravity account manager, local usage dashboard and agy-switch CLI"
   homepage "https://github.com/anglee0323/agy-switch"
