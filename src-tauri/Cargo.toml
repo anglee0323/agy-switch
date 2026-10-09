@@ -1,6 +1,6 @@
 [package]
 name = "agy-switch"
-version = "4.10.0"
+version = "4.10.1"
 description = "Local Antigravity account switching and usage dashboard"
 authors = ["you"]
 license = "CC-BY-NC-SA-4.0"

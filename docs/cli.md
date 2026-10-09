@@ -94,7 +94,7 @@ Changing the policy clears its cancellation/failure state. The desktop coordinat
 
 ## Experimental Features
 
-The experimental commands above are available in development builds after 4.10.0. **Experimental Features** is a primary terminal menu; its secondary **Chinese interface** switch shares the desktop setting. `show` reads local saved state without connecting to the App; `on|off` saves only Switch's own flag. Keep Switch desktop running, or use the explicit foreground `experiments run` command for CLI-only use on Windows/macOS. Ctrl+C stops that runner without starting a background service or changing the saved switch. Without another runner, text restores when the last 15-second lease expires.
+The experimental commands above are available from 4.10.1. **Experimental Features** is a primary terminal menu; its secondary **Chinese interface** switch shares the desktop setting. `show` reads local saved state without connecting to the App; `on|off` saves only Switch's own flag. Keep Switch desktop running, or use the explicit foreground `experiments run` command for CLI-only use on Windows/macOS. Ctrl+C stops that runner without starting a background service or changing the saved switch. Without another runner, text restores when the last 15-second lease expires.
 
 Translation applies only to the standalone Antigravity App. Runtime injection replaces known UI labels without modifying installation/source files, client permissions or accounts, or uploading conversations; executing a script in App pages is not risk-free. Antigravity IDE, `agy` CLI, VS Code and JetBrains plugins are unaffected. See [App translation](app-experiments.md) for compatibility and scope.
 
