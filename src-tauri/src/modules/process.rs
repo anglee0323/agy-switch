@@ -510,8 +510,7 @@ pub fn close_antigravity(timeout_secs: u64, target_ide: Option<&str>) -> Result<
                         .join(" ");
 
                     crate::modules::logger::log_info(&format!(
-                        " - PID: {} | Name: {} | Args: {}",
-                        pid_u32, name, args_str
+                        " - PID: {} | Name: {}", pid_u32, name
                     ));
 
                     // 1. Priority to manual path matching

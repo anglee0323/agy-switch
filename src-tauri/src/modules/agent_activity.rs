@@ -154,8 +154,8 @@ pub(crate) fn running() -> Activity {
         };
         let mut system = sysinfo::System::new();
         system.refresh_processes(sysinfo::ProcessesToUpdate::All);
-        // Additional IDE/CLI executors cannot be declared idle using the App's
-        // state. Until their adapter is verified, pause instead of closing them.
+        // Observe App-data Hubs separately. Ordinary CLI/IDE tasks still need
+        // their own verified adapter and cannot be inferred from App inactivity.
         let servers = system
             .processes()
             .values()
@@ -166,21 +166,26 @@ pub(crate) fn running() -> Activity {
                     .contains("language_server")
             })
             .count();
-        if servers != 1
-            || system
-                .processes()
-                .values()
-                .any(|p| matches!(p.name().to_str(), Some("agy" | "agy.exe")))
-        {
+        let Ok(hubs) = super::app_hub::snapshot() else {
             return Activity::Unknown;
-        }
-        super::app_identity::with_running_connection(
+        };
+        if servers > 1 { return Activity::Unknown; }
+        let app = match super::app_identity::with_running_connection(
             config.antigravity_executable.as_deref(),
             observe,
-        )
-        .ok()
-        .flatten()
-        .unwrap_or(Activity::Unknown)
+        ) {
+            Ok(Some(activity)) if servers == 1 => activity,
+            Ok(None) if servers == 0 => Activity::Idle,
+            _ => Activity::Unknown,
+        };
+        if app != Activity::Idle { return app; }
+        for hub in &hubs {
+            match super::app_hub::observe(hub).unwrap_or(Activity::Unknown) {
+                Activity::Idle => {},
+                activity => return activity,
+            }
+        }
+        Activity::Idle
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -228,5 +233,72 @@ mod tests {
         ] {
             assert!(read_update(bytes.as_slice()).is_err());
         }
+    }
+
+    #[test]
+    fn mixed_model_conversations_wait_for_the_last_live_executor() {
+        use std::io::Write;
+        for (gemini_running, background_running, expected) in [
+            (true, false, Activity::Busy),
+            (false, true, Activity::Busy),
+            (false, false, Activity::Idle),
+        ] {
+            let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            let port = listener.local_addr().unwrap().port();
+            let worker = std::thread::spawn(move || {
+                let requests = if gemini_running { 2 } else { 3 };
+                for step in 0..requests {
+                    let (mut socket, _) = listener.accept().unwrap();
+                    socket.set_read_timeout(Some(std::time::Duration::from_secs(3))).unwrap();
+                    let mut header = Vec::new();
+                    let mut byte = [0];
+                    while !header.ends_with(b"\r\n\r\n") {
+                        socket.read_exact(&mut byte).unwrap(); header.push(byte[0]);
+                        assert!(header.len() < 8192);
+                    }
+                    let text = String::from_utf8(header).unwrap().to_ascii_lowercase();
+                    assert!(text.contains("x-codeium-csrf-token: fixture-csrf"));
+                    let length: usize = text.lines().find_map(|l| l.strip_prefix("content-length: "))
+                        .unwrap().trim().parse().unwrap();
+                    let mut request = vec![0; length]; socket.read_exact(&mut request).unwrap();
+                    let body = if step == 0 {
+                        assert!(text.contains("getallcascadetrajectories"));
+                        serde_json::to_vec(&serde_json::json!({"trajectorySummaries": {
+                            "claude": {"status":"CASCADE_RUN_STATUS_IDLE"},
+                            "gemini": {"status":if gemini_running { "CASCADE_RUN_STATUS_RUNNING" } else { "CASCADE_RUN_STATUS_IDLE" }}
+                        }})).unwrap()
+                    } else {
+                        assert!(text.contains("streamagentstateupdates"));
+                        let payload: Value = serde_json::from_slice(&request[5..]).unwrap();
+                        assert_eq!(payload["conversationId"], if step == 1 { "claude" } else { "gemini" });
+                        let busy = step == 2 && background_running;
+                        let update = serde_json::to_vec(&serde_json::json!({"update": {
+                            "status":"CASCADE_RUN_STATUS_IDLE", "executableStatus":"CASCADE_RUN_STATUS_IDLE",
+                            "executorLoopStatus":if busy { "CASCADE_RUN_STATUS_RUNNING" } else { "CASCADE_RUN_STATUS_IDLE" },
+                            "fullyIdle":!busy
+                        }})).unwrap();
+                        let mut frame = vec![0]; frame.extend_from_slice(&(update.len() as u32).to_be_bytes());
+                        frame.extend(update); frame
+                    };
+                    write!(socket,"HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",body.len()).unwrap();
+                    socket.write_all(&body).unwrap();
+                }
+            });
+            assert_eq!(observe(port, "fixture-csrf").unwrap(), expected);
+            worker.join().unwrap();
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    #[ignore = "explicit read-only live App/Hub observation; never closes or switches clients"]
+    fn live_activity_read_only() {
+        assert_eq!(std::env::var("AGY_LIVE_ACTIVITY_READ_ONLY").as_deref(), Ok("1"));
+        let hubs = super::super::app_hub::snapshot().unwrap();
+        println!("verified App-data Hub count: {}", hubs.len());
+        for hub in &hubs {
+            println!("Hub activity: {:?}", super::super::app_hub::observe(hub).unwrap());
+        }
+        println!("combined App/Hub activity: {:?}", running());
     }
 }

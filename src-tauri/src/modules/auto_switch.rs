@@ -148,12 +148,20 @@ impl Status {
     }
 }
 #[derive(Clone, Debug)]
+struct RestartPlan {
+    app: bool,
+    ide: bool,
+    hubs: Vec<crate::modules::app_hub::Hub>,
+}
+
+#[derive(Clone, Debug)]
 struct Pending {
     id: String,
     source_id: String,
     target_id: String,
     revision: u64,
     closed_since: Option<i64>,
+    restart: Option<RestartPlan>,
 }
 #[derive(Default)]
 struct RuntimeData {
@@ -617,12 +625,15 @@ fn advance_pending(
         .as_ref()
         .is_some_and(|p| p.source_id == source_id && p.target_id == target_id)
     {
+        let restart = d.pending.as_ref().filter(|p| p.source_id == source_id)
+            .and_then(|p| p.restart.clone());
         d.pending = Some(Pending {
             id: uuid::Uuid::new_v4().to_string(),
             source_id: source_id.into(),
             target_id: target_id.into(),
             revision: d.revision,
             closed_since: None,
+            restart,
         });
     }
     let p = d.pending.as_mut().unwrap();
@@ -715,6 +726,15 @@ trait Environment: Clone + Send + Sync + 'static {
     fn start_client(&self, _target_ide: Option<&str>) -> Result<(), String> {
         Ok(())
     }
+    fn restart_plan(&self, target: Target) -> Result<RestartPlan, &'static str> {
+        Ok(RestartPlan {
+            app: matches!(target, Target::App | Target::AppCli) && self.is_client_running(None),
+            ide: matches!(target, Target::App | Target::Ide) && self.is_client_running(Some("ide")),
+            hubs: vec![],
+        })
+    }
+    fn close_hubs(&self, _plan: &RestartPlan, _mode: Mode) -> Result<(), &'static str> { Ok(()) }
+    fn restart_hubs(&self, _plan: &RestartPlan) -> Result<(), String> { Ok(()) }
     fn fetch_quota<'a>(
         &'a self,
         account: &'a mut Account,
@@ -748,6 +768,21 @@ impl Environment for NativeEnvironment {
     }
     fn start_client(&self, target_ide: Option<&str>) -> Result<(), String> {
         crate::modules::process::start_antigravity(target_ide)
+    }
+    fn restart_plan(&self, target: Target) -> Result<RestartPlan, &'static str> {
+        Ok(RestartPlan {
+            app: matches!(target, Target::App | Target::AppCli) && self.is_client_running(None),
+            ide: matches!(target, Target::App | Target::Ide) && self.is_client_running(Some("ide")),
+            hubs: if matches!(target, Target::App | Target::AppCli) {
+                crate::modules::app_hub::snapshot()?
+            } else { vec![] },
+        })
+    }
+    fn close_hubs(&self, plan: &RestartPlan, mode: Mode) -> Result<(), &'static str> {
+        crate::modules::app_hub::close(&plan.hubs, mode == Mode::Wait)
+    }
+    fn restart_hubs(&self, plan: &RestartPlan) -> Result<(), String> {
+        crate::modules::app_hub::restart(&plan.hubs)
     }
     async fn fetch_quota(&self, account: &mut Account) -> Result<QuotaData, String> {
         account::fetch_quota_with_retry(account)
@@ -996,7 +1031,9 @@ async fn refresh<E: Environment>(
 fn update_status(runtime: &Runtime, revision: u64, status: Status) {
     if let Ok(mut d) = runtime.data.lock() {
         if d.revision == revision {
-            if status.phase == "blocked" {
+            let interrupted_close = d.pending.as_ref().is_some_and(|p| p.restart.is_some())
+                && matches!(status.reason.as_deref(), Some("process_unknown" | "client_close_failed" | "no_quota"));
+            if status.phase == "blocked" && !interrupted_close {
                 d.pending = None;
             }
             d.status = status;
@@ -1184,7 +1221,7 @@ async fn evaluate_core<E: Environment>(
     let is_vscode = config.target == Target::Vscode;
     if !is_vscode {
         if process_state != ProcessState::Closed {
-            status.set("pending", "clients_running");
+            status.set("pending", "closing_clients");
             update_status(runtime, revision, status.clone());
             // In automated mode, trigger close on running clients when safe:
             if matches!(config.mode, Mode::Stop | Mode::Wait) {
@@ -1206,8 +1243,9 @@ async fn evaluate_core<E: Environment>(
                     {
                         return Err("source_changed");
                     }
-                    {
-                        let d = close_data.lock().map_err(|_| "request_changed")?;
+                    let observed = close_environment.restart_plan(close_config.target)?;
+                    let plan = {
+                        let mut d = close_data.lock().map_err(|_| "request_changed")?;
                         if d.revision != revision
                             || d.pending.is_none()
                             || d.canceled_source.as_deref() == Some(close_source.id.as_str())
@@ -1215,7 +1253,11 @@ async fn evaluate_core<E: Environment>(
                         {
                             return Err("request_changed");
                         }
-                    }
+                        // Capture before shutdown. At credential commit these
+                        // processes are intentionally gone; probing then loses
+                        // the information needed to reopen them.
+                        d.pending.as_mut().unwrap().restart.get_or_insert(observed).clone()
+                    };
                     // The task can resume during identity/configuration checks.
                     if close_config.mode == Mode::Wait {
                         match close_environment.agent_activity() {
@@ -1226,7 +1268,12 @@ async fn evaluate_core<E: Environment>(
                     }
                     close_environment
                         .close_client(20, close_config.target.argument())
-                        .map_err(|_| "clients_running")
+                        .map_err(|_| "client_close_failed")?;
+                    if close_config.target == Target::App && plan.ide {
+                        close_environment.close_client(20, Some("ide"))
+                            .map_err(|_| "client_close_failed")?;
+                    }
+                    close_environment.close_hubs(&plan, close_config.mode)
                 })
                 .await
                 .unwrap_or(Err("process_unknown"));
@@ -1270,14 +1317,14 @@ async fn evaluate_core<E: Environment>(
         Ok(()) => {
             d.pending = None;
             d.status.pending_id = None;
-            let final_reason = if d.status.reason.as_deref() == Some("restarted") {
-                "restarted"
+            let final_reason = if matches!(d.status.reason.as_deref(), Some("restarted" | "restart_failed")) {
+                d.status.reason.clone().unwrap()
             } else if config.mode == Mode::Stop && config.target == Target::Vscode {
-                "paused_and_updated"
+                "paused_and_updated".into()
             } else {
-                "credentials_updated"
+                "credentials_updated".into()
             };
-            d.status.set("completed", final_reason);
+            d.status.set("completed", &final_reason);
             tracing::info!(
                 source_account_id = source_id.as_str(), target_account_id = candidate.id.as_str(),
                 remaining_percentage = low, reserve_percentage = config.reserve_percentage,
@@ -1376,57 +1423,30 @@ impl<E: Environment> integration::SystemIntegration for AutoSwitchIntegration<E>
                 d.status.set("switching", "checking");
             }
 
-            // 1. Process detection and graceful close
-            let is_vscode = target_ide.as_deref() == Some("vscode");
-            let is_ide = target_ide.as_deref() == Some("ide");
-            let is_app = target_ide.as_deref() == Some("app");
-            let is_all = target_ide.is_none();
-
-            let app_running = if is_ide || is_vscode { false } else { environment.is_client_running(None) };
-            let ide_running = if is_app || is_vscode { false } else { environment.is_client_running(Some("ide")) };
-
-            if is_ide {
-                if ide_running {
-                    let _ = environment.close_client(20, Some("ide"));
-                }
-            } else if is_app {
-                if app_running {
-                    let _ = environment.close_client(20, None);
-                }
-            } else if is_all {
-                if app_running {
-                    let _ = environment.close_client(20, None);
-                }
-                if ide_running {
-                    let _ = environment.close_client(20, Some("ide"));
-                }
-            }
-
-            // 2. Write credentials
+            // Client exit was already verified by commit_guard. Retain the
+            // pre-close plan through the credential boundary and relaunch.
             environment.write_credentials(&latest_target, target_ide.as_deref())?;
-
-            // 3. Smart relaunch
-            if is_ide {
-                if ide_running {
-                    let _ = environment.start_client(Some("ide"));
+            let mut restarted = false;
+            let mut restart_failed = false;
+            if let Some(plan) = &p.restart {
+                if plan.app {
+                    restarted = true;
+                    restart_failed |= environment.start_client(None).is_err();
                 }
-            } else if is_app {
-                if app_running {
-                    let _ = environment.start_client(None);
+                if plan.ide {
+                    restarted = true;
+                    restart_failed |= environment.start_client(Some("ide")).is_err();
                 }
-            } else if is_all {
-                if app_running {
-                    let _ = environment.start_client(None);
-                }
-                if ide_running {
-                    let _ = environment.start_client(Some("ide"));
-                }
+                restarted |= !plan.hubs.is_empty();
+                restart_failed |= environment.restart_hubs(plan).is_err();
             }
 
             // 4. Update status in memory
             if let Ok(mut d) = data.lock() {
                 if d.revision == p.revision {
-                    let reason = if app_running || ide_running {
+                    let reason = if restart_failed {
+                        "restart_failed"
+                    } else if restarted {
                         "restarted"
                     } else {
                         "credentials_updated"
@@ -1796,6 +1816,12 @@ mod tests {
         writes: Arc<std::sync::atomic::AtomicUsize>,
         source_checks: Arc<std::sync::atomic::AtomicUsize>,
         closes: Arc<std::sync::atomic::AtomicUsize>,
+        starts: Arc<std::sync::atomic::AtomicUsize>,
+        auto_close: Arc<std::sync::atomic::AtomicBool>,
+        fail_start: Arc<std::sync::atomic::AtomicBool>,
+        hub_present: Arc<std::sync::atomic::AtomicBool>,
+        hub_closes: Arc<std::sync::atomic::AtomicUsize>,
+        hub_starts: Arc<std::sync::atomic::AtomicUsize>,
         activity: Arc<std::sync::atomic::AtomicU8>,
         fail_save: Arc<std::sync::atomic::AtomicBool>,
         low_backup: Arc<std::sync::atomic::AtomicBool>,
@@ -1810,6 +1836,12 @@ mod tests {
                 writes: Arc::default(),
                 source_checks: Arc::default(),
                 closes: Arc::default(),
+                starts: Arc::default(),
+                auto_close: Arc::default(),
+                fail_start: Arc::default(),
+                hub_present: Arc::default(),
+                hub_closes: Arc::default(),
+                hub_starts: Arc::default(),
                 activity: Arc::default(),
                 fail_save: Arc::default(),
                 low_backup: Arc::default(),
@@ -1838,6 +1870,40 @@ mod tests {
         }
         fn close_client(&self, _timeout: u64, _target_ide: Option<&str>) -> Result<(), String> {
             self.closes.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if self.auto_close.load(std::sync::atomic::Ordering::SeqCst) {
+                self.process.store(0, std::sync::atomic::Ordering::SeqCst);
+            }
+            Ok(())
+        }
+        fn is_client_running(&self, target_ide: Option<&str>) -> bool {
+            target_ide.is_none() && self.process.load(std::sync::atomic::Ordering::SeqCst) == 1
+        }
+        fn start_client(&self, target_ide: Option<&str>) -> Result<(), String> {
+            assert!(target_ide.is_none());
+            assert_eq!(self.writes.load(std::sync::atomic::Ordering::SeqCst), 1);
+            self.starts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if self.fail_start.load(std::sync::atomic::Ordering::SeqCst) {
+                Err("injected relaunch failure".into())
+            } else { Ok(()) }
+        }
+        fn restart_plan(&self, target: Target) -> Result<RestartPlan, &'static str> {
+            Ok(RestartPlan {
+                app: matches!(target, Target::App | Target::AppCli) && self.is_client_running(None),
+                ide: false,
+                hubs: if self.hub_present.load(std::sync::atomic::Ordering::SeqCst) {
+                    vec![crate::modules::app_hub::fixture()]
+                } else { vec![] },
+            })
+        }
+        fn close_hubs(&self, plan: &RestartPlan, _mode: Mode) -> Result<(), &'static str> {
+            if !plan.hubs.is_empty() { self.hub_closes.fetch_add(1, std::sync::atomic::Ordering::SeqCst); }
+            Ok(())
+        }
+        fn restart_hubs(&self, plan: &RestartPlan) -> Result<(), String> {
+            if !plan.hubs.is_empty() {
+                assert_eq!(self.writes.load(std::sync::atomic::Ordering::SeqCst), 1);
+                self.hub_starts.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            }
             Ok(())
         }
         async fn fetch_quota(&self, a: &mut Account) -> Result<QuotaData, String> {
@@ -1984,7 +2050,9 @@ mod tests {
                 assert_eq!(env.source_checks.load(SeqCst), 2);
                 assert_eq!(env.closes.load(SeqCst), 1);
                 assert_eq!(env.writes.load(SeqCst), 1);
+                assert_eq!(env.starts.load(SeqCst), 1);
                 assert_eq!(r.data.lock().unwrap().status.phase, "completed");
+                assert_eq!(r.data.lock().unwrap().status.reason.as_deref(), Some("restarted"));
                 assert!(!read_pause().unwrap().failed);
                 assert!(!evaluate_core(&r, env.clone(), false).await.unwrap());
                 assert_eq!(env.writes.load(SeqCst), 1);
@@ -2007,6 +2075,56 @@ mod tests {
             assert!(!evaluate_core(&r, env.clone(), false).await.unwrap());
             assert_eq!(env.closes.load(SeqCst), 0);
             assert_eq!(r.data.lock().unwrap().status.reason.as_deref(), Some("waiting_task_finish"));
+
+            // Claude's quota triggers a pending switch while Gemini is still
+            // generating. When both conversations become idle, the production
+            // coordinator closes, commits and reopens without a manual exit.
+            for fail_start in [false, true] {
+                let r = fixture_setup(Mode::Wait);
+                for (id, remaining) in [("A", 0.08), ("B", 0.8)] {
+                    let mut account = account::load_account(id).unwrap();
+                    let mut q = quota(remaining, remaining);
+                    q.models[0].name = "claude-test".into();
+                    let mut value = serde_json::to_value(q).unwrap();
+                    value["quota_groups"][0]["buckets"][0]["bucket_id"] = "3p-weekly".into();
+                    value["quota_groups"][0]["buckets"][1]["bucket_id"] = "3p-5h".into();
+                    account.quota = Some(serde_json::from_value(value).unwrap());
+                    account::save_account(&account).unwrap();
+                }
+                {
+                    let mut d = r.data.lock().unwrap();
+                    d.config.monitored_model = "claude".into();
+                    crate::utils::fs::write_atomic(&config_path().unwrap(), &serde_json::to_vec(&d.config).unwrap()).unwrap();
+                }
+                let env = FixtureEnvironment::default();
+                env.auto_close.store(true, SeqCst);
+                env.fail_start.store(fail_start, SeqCst);
+                env.hub_present.store(true, SeqCst);
+                env.activity.store(1, SeqCst);
+                assert!(!evaluate_core(&r, env.clone(), false).await.unwrap());
+                let pending_id = r.data.lock().unwrap().status.pending_id.clone();
+                assert!(pending_id.is_some());
+                assert_eq!(r.data.lock().unwrap().status.reason.as_deref(), Some("waiting_task_finish"));
+                assert_eq!(env.closes.load(SeqCst), 0);
+                assert_eq!(env.writes.load(SeqCst), 0);
+                env.activity.store(0, SeqCst);
+                env.now.store(NOW + 5, SeqCst);
+                assert!(!evaluate_core(&r, env.clone(), false).await.unwrap());
+                assert_eq!(r.data.lock().unwrap().status.pending_id, pending_id);
+                assert_eq!(env.closes.load(SeqCst), 1);
+                assert_eq!(env.hub_closes.load(SeqCst), 1);
+                assert_eq!(env.starts.load(SeqCst), 0);
+                env.now.store(NOW + 10, SeqCst);
+                assert!(!evaluate_core(&r, env.clone(), false).await.unwrap());
+                env.now.store(NOW + 15, SeqCst);
+                assert!(evaluate_core(&r, env.clone(), false).await.unwrap());
+                assert_eq!(env.writes.load(SeqCst), 1);
+                assert_eq!(env.starts.load(SeqCst), 1);
+                assert_eq!(env.hub_starts.load(SeqCst), 1);
+                assert_eq!(account::get_current_account_id().unwrap().as_deref(), Some("B"));
+                assert_eq!(r.data.lock().unwrap().status.reason.as_deref(), Some(if fail_start { "restart_failed" } else { "restarted" }));
+                assert!(!read_pause().unwrap().failed);
+            }
 
             // Exercise production selection, including wraparound, configured priority,
             // an absent source, disabled candidates, and forbidden candidates.

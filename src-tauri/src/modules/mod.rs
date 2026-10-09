@@ -4,6 +4,7 @@ pub mod account_service;
 pub mod account_sync;
 pub mod api_pricing;
 pub(crate) mod app_identity;
+pub(crate) mod app_hub;
 #[cfg(any(target_os = "macos", target_os = "windows", test))]
 pub(crate) mod app_metadata_macos;
 pub mod cli_credentials;

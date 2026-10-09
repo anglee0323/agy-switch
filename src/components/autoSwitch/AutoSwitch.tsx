@@ -53,11 +53,11 @@ function StatusBody({ status, compact = false }: { status: AutoSwitchStatus; com
                     {t(`auto_switch.reasons.${reason}`, { defaultValue: t('auto_switch.reasons.switch_failed') })}
                 </p>
                 {status.target_email && <p className="break-all text-xs text-slate-500 dark:text-slate-400">{t('auto_switch.next_account', { email: status.target_email })}</p>}
-                {status.reason === 'clients_running' && <p className="max-w-3xl text-xs leading-relaxed text-slate-500 dark:text-slate-400">{t(`auto_switch.${status.mode}_instructions`)}</p>}
+                {['clients_running', 'closing_clients', 'client_close_failed'].includes(status.reason || '') && <p className="max-w-3xl text-xs leading-relaxed text-slate-500 dark:text-slate-400">{t(`auto_switch.${status.mode}_instructions`)}</p>}
                 {status.phase === 'completed' && <p className="text-xs text-slate-500 dark:text-slate-400">{t('auto_switch.manual_continue')}</p>}
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">
-                {status.mode === 'stop' && status.reason === 'clients_running' && <button ref={guideTrigger} onClick={() => setGuide(true)} className={SECONDARY_BUTTON}>{t('auto_switch.stop_guide')}</button>}
+                {status.mode === 'stop' && ['clients_running', 'closing_clients', 'client_close_failed'].includes(status.reason || '') && <button ref={guideTrigger} onClick={() => setGuide(true)} className={SECONDARY_BUTTON}>{t('auto_switch.stop_guide')}</button>}
                 {status.pending_id && <button disabled={busy || status.phase === 'switching'} onClick={() => action(true)} className={SECONDARY_BUTTON}>{t('auto_switch.cancel')}</button>}
                 <button disabled={busy || status.phase === 'switching'} onClick={() => action(false)} className={SECONDARY_BUTTON}><RefreshCw size={14} className={busy ? 'animate-spin' : ''} />{t('auto_switch.check_now')}</button>
             </div>
