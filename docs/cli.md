@@ -42,6 +42,10 @@ agy-switch policy set --enabled true --candidates ACCOUNT_B ACCOUNT_C
 agy-switch policy order ACCOUNT_C ACCOUNT_B --json
 agy-switch accounts order ACCOUNT_B ACCOUNT_A ACCOUNT_C --json
 agy-switch update check --json
+agy-switch experiments show --json
+agy-switch experiments translation on
+agy-switch experiments translation off
+agy-switch experiments run             # keep App translation active in foreground
 ```
 
 `accounts current`, `accounts quota` and `accounts switch` are also accepted. Selectors are exact account IDs or case-insensitive exact emails; duplicate emails require an ID. There is no fuzzy selection. Bare `agy-switch` opens the dashboard in an interactive terminal on all three platforms.
@@ -88,6 +92,12 @@ Changing the policy clears its cancellation/failure state. The desktop coordinat
 
 `update check` contacts this project's public GitHub release metadata with a 12-second timeout. It reports the compiled CLI version, latest stable version, update availability and release link; `--json` adds `schema_version: 1` and `check_only: true`. It does not download, run an installer or open a browser. Use the desktop updater or the original installation method to upgrade.
 
+## Experimental Features
+
+The experimental commands above are available in development builds after 4.10.0. **Experimental Features** is a primary terminal menu; its secondary **Chinese interface** switch shares the desktop setting. `show` reads local saved state without connecting to the App; `on|off` saves only Switch's own flag. Keep Switch desktop running, or use the explicit foreground `experiments run` command for CLI-only use on Windows/macOS. Ctrl+C stops that runner without starting a background service or changing the saved switch. Without another runner, text restores when the last 15-second lease expires.
+
+Translation applies only to the standalone Antigravity App. Runtime injection replaces known UI labels without modifying installation/source files, client permissions or accounts, or uploading conversations; executing a script in App pages is not risk-free. It does not translate `agy`, IDE or other agent tools. See [App translation](app-experiments.md) for compatibility and scope.
+
 ## Verification
 
 ```sh
@@ -107,7 +117,7 @@ The smoke test uses a temporary data directory and synthetic tokens. It does not
 
 ## Interactive workflow and coverage
 
-The main menu groups Accounts & Quotas, Statistics, Refresh, Add Account, Status, Settings & Order, and Check for Updates. Use Up/Down or Tab/Shift+Tab to select, Enter/Right to open or confirm, and Esc/Left/0 to return or cancel. Home/End jump to the first/last item; numbers and j/k remain shortcuts. Enter on an account opens its action menu; `S` explicitly switches it, while `V`, `R`, `T` and `X` retain their detail/label/toggle/delete shortcuts. Text fields support Left/Right, Home/End, Delete and Backspace; Esc cancels. Secret fields stay masked while editing.
+The main menu groups Accounts & Quotas, Statistics, Refresh, Add Account, Status, Settings & Order, Check for Updates, and Experimental Features. Use Up/Down or Tab/Shift+Tab to select, Enter/Right to open or confirm, and Esc/Left/0 to return or cancel. Home/End jump to the first/last item; numbers and j/k remain shortcuts. Enter on an account opens its action menu; `S` explicitly switches it, while `V`, `R`, `T` and `X` retain their detail/label/toggle/delete shortcuts. Text fields support Left/Right, Home/End, Delete and Backspace; Esc cancels. Secret fields stay masked while editing.
 
 Settings separate **Switch timing** from **Account selection order**. Use Space to select backup candidates and Shift+Up/Down (or U/D) to reorder them. Enter applies the list to the policy draft; **Save changes** persists that draft. Back discards it, and **Reload settings** reads another client's changes. Account-list sorting has the same keys, with Enter saving and Esc discarding. Refresh and authorization use the network; switching can change credentials and restart clients. Read-only JSON commands are suitable for scripts.
 

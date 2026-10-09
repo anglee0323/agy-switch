@@ -65,6 +65,8 @@ export default function ExperimentalSettings({ active }: { active: boolean }) {
                 </button>
             </div>
             <p className="text-xs leading-relaxed text-gray-500">{t('app_experiments.translation_description')}</p>
+            <p className="text-xs leading-relaxed text-gray-500">{t('app_experiments.injection_description')}</p>
+            <p className="text-xs leading-relaxed text-gray-500">{t('app_experiments.cli_description')}</p>
             {status?.translation_enabled && <p className="text-xs text-blue-600 dark:text-blue-300">{t('app_experiments.translated', { count: status.translated })}</p>}
         </section>
     </div>;

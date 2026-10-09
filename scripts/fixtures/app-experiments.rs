@@ -50,6 +50,24 @@ pub mod app_metadata_windows;
 #[path = "../../src-tauri/src/modules/app_transport.rs"]
 pub mod app_transport;
 pub use modules::{account, config};
+fn controller_active() -> bool {
+    let (mut connection, pages, version) = crate::app_connection::connect().unwrap();
+    pages.into_iter().any(|page| {
+        connection
+            .run(&page, &version, crate::app_transport::RuntimeAction::Probe)
+            .unwrap()
+            .active
+    })
+}
+async fn wait_for_controller(active: bool) {
+    for _ in 0..30 {
+        if controller_active() == active {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+    }
+    panic!("Translation controller did not reach the expected state");
+}
 fn main() {
     tauri::async_runtime::block_on(async {
         let status = modules::app_experiments::get_app_experiments()
@@ -62,6 +80,33 @@ fn main() {
             "{}",
             serde_json::json!({"stage":"connected","version":status["version"]})
         );
+        if std::env::var("AGY_APP_FIXTURE_CLI").as_deref() == Ok("1") {
+            let root = modules::account::get_data_dir().unwrap();
+            modules::app_experiments::configure_translation_at(&root, true).unwrap();
+            let worker = modules::app_experiments::start_foreground(&root);
+            wait_for_controller(true).await;
+            let status = modules::app_experiments::get_app_experiments()
+                .await
+                .unwrap();
+            assert!(status["translated"].as_u64().unwrap() > 0);
+            modules::app_experiments::configure_translation_at(&root, false).unwrap();
+            wait_for_controller(false).await;
+            modules::app_experiments::configure_translation_at(&root, true).unwrap();
+            wait_for_controller(true).await;
+            drop(worker);
+            tokio::time::sleep(std::time::Duration::from_secs(17)).await;
+            assert!(
+                !controller_active(),
+                "Stopping the foreground runner must expire its lease"
+            );
+            assert!(modules::app_experiments::translation_enabled_at(&root).unwrap());
+            modules::app_experiments::configure_translation_at(&root, false).unwrap();
+            println!(
+                "{}",
+                serde_json::json!({"stage":"cli_translation_restored","translated":status["translated"],"external_off_observed":true,"foreground_lease_expired":true})
+            );
+            return;
+        }
         modules::app_experiments::set_app_translation(true)
             .await
             .expect("Translation must start");

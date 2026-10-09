@@ -501,7 +501,7 @@
     "reload": "Reload",
     "failed": "Operation failed: {{error}}",
     "translation_title": "Chinese interface",
-    "translation_description": "Translate the Antigravity App sidebar, settings and built-in pages. Turn off to restore the original text. Keep AntiGravity Switch running while using it; chats, code, plugin content and system menus retain their original text.",
+    "translation_description": "Translate the Antigravity App sidebar, settings and built-in pages. Turn off to restore the original text. Keep Switch desktop or the foreground CLI command running; chats, code, plugin content and system menus retain their original text.",
     "translated": "{{count}} interface labels translated",
     "states": {
       "loading": "Reading Antigravity App…",
@@ -512,6 +512,8 @@
       "no_debug_port": "Cannot connect yet. Make sure Antigravity App has opened successfully.",
       "unknown_installation": "This installation is unsupported. Use the standalone Antigravity App."
     },
-    "restore_pending": "Translation is off. Temporarily unreachable pages will restore their original text within 15 seconds."
+    "restore_pending": "Translation is off. Temporarily unreachable pages will restore their original text within 15 seconds.",
+    "injection_description": "A translation script is injected through the App’s existing local connection. It replaces known UI labels without changing installation/source files, permissions or accounts, or uploading conversations. It runs inside App pages and observes UI changes; runtime injection is not risk-free. Turning it off restores the original text; stopping renewals restores it within 15 seconds.",
+    "cli_description": "Desktop and agy-switch CLI share the same switch. For CLI-only use, enable translation, then keep agy-switch experiments run active."
   }
 }

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Mutex,
+    Arc, Mutex,
 };
 
 static CONTROL: Mutex<()> = Mutex::new(());
@@ -19,16 +19,14 @@ struct Preferences {
     #[serde(rename = "preset_signature", skip_serializing)]
     _legacy_preset_signature: Option<String>,
 }
-fn save(prefs: &Preferences) -> Result<(), String> {
+fn save_at(root: &std::path::Path, prefs: &Preferences) -> Result<(), String> {
     let bytes = serde_json::to_vec_pretty(prefs).map_err(|_| "experimental_preferences_invalid")?;
-    crate::utils::fs::write_atomic(
-        &super::account::get_data_dir()?.join("app_experiments.json"),
-        &bytes,
-    )
-    .map_err(|_| "experimental_preferences_write_failed".into())
+    std::fs::create_dir_all(root).map_err(|_| "experimental_preferences_write_failed")?;
+    crate::utils::fs::write_atomic(&root.join("app_experiments.json"), &bytes)
+        .map_err(|_| "experimental_preferences_write_failed".into())
 }
-fn read() -> Result<Preferences, String> {
-    let path = super::account::get_data_dir()?.join("app_experiments.json");
+fn read_at(root: &std::path::Path) -> Result<Preferences, String> {
+    let path = root.join("app_experiments.json");
     match std::fs::read(&path) {
         Ok(bytes) => {
             serde_json::from_slice(&bytes).map_err(|_| "experimental_preferences_invalid".into())
@@ -37,10 +35,44 @@ fn read() -> Result<Preferences, String> {
         Err(_) => Err("experimental_preferences_unavailable".into()),
     }
 }
+fn read() -> Result<Preferences, String> {
+    read_at(&super::account::get_data_dir()?)
+}
+
+pub(crate) fn translation_enabled_at(root: &std::path::Path) -> Result<bool, String> {
+    read_at(root).map(|prefs| prefs.translation_enabled)
+}
+
+/// GUI and CLI share one saved switch. This only edits Switch's own preferences;
+/// the desktop worker or an explicit foreground CLI runner handles injection.
+pub(crate) fn configure_translation_at(
+    root: &std::path::Path,
+    enabled: bool,
+) -> Result<(), String> {
+    let _guard = CONTROL
+        .lock()
+        .map_err(|_| "experimental_preferences_unavailable")?;
+    let mut prefs = read_at(root)?;
+    prefs.translation_enabled = enabled;
+    save_at(root, &prefs)
+}
 fn reconcile(enabled: bool) -> Result<(String, u64), String> {
+    reconcile_until_stopped(enabled, None)
+}
+fn reconcile_until_stopped(
+    enabled: bool,
+    stop: Option<&AtomicBool>,
+) -> Result<(String, u64), String> {
+    let cancelled = || stop.is_some_and(|flag| flag.load(Ordering::Acquire));
+    if cancelled() {
+        return Err("app_translation_stopped".into());
+    }
     let (mut connection, pages, version) = super::app_connection::connect()?;
     let mut count = 0;
     for page in pages {
+        if cancelled() {
+            return Err("app_translation_stopped".into());
+        }
         let report = connection
             .run(
                 &page,
@@ -58,16 +90,45 @@ fn reconcile(enabled: bool) -> Result<(String, u64), String> {
     Ok((version, count))
 }
 pub fn initialize() {
+    let Ok(root) = super::account::get_data_dir() else {
+        return;
+    };
     if STARTED.swap(true, Ordering::SeqCst) {
         return;
     }
-    std::thread::spawn(|| loop {
-        if let Ok(_guard) = CONTROL.lock() {
-            if read().is_ok_and(|p| p.translation_enabled) {
-                let _ = reconcile(true);
+    spawn_worker(root, Arc::new(AtomicBool::new(false)));
+}
+
+/// The CLI runner owns this lifetime, including when it returns to the TUI.
+/// Stopping one runner lets its lease expire without disposing another runner's
+/// translations or changing the shared saved switch.
+pub(crate) struct ForegroundWorker(Arc<AtomicBool>);
+impl Drop for ForegroundWorker {
+    fn drop(&mut self) {
+        self.0.store(true, Ordering::Release);
+    }
+}
+pub(crate) fn start_foreground(root: &std::path::Path) -> ForegroundWorker {
+    let stop = Arc::new(AtomicBool::new(false));
+    spawn_worker(root.to_path_buf(), Arc::clone(&stop));
+    ForegroundWorker(stop)
+}
+fn spawn_worker(root: std::path::PathBuf, stop: Arc<AtomicBool>) {
+    std::thread::spawn(move || {
+        let mut was_enabled = false;
+        while !stop.load(Ordering::Acquire) {
+            if let Ok(_guard) = CONTROL.lock() {
+                if stop.load(Ordering::Acquire) {
+                    break;
+                }
+                let enabled = read_at(&root).is_ok_and(|p| p.translation_enabled);
+                if enabled || was_enabled {
+                    let _ = reconcile_until_stopped(enabled, Some(&stop));
+                }
+                was_enabled = enabled;
             }
+            std::thread::sleep(std::time::Duration::from_secs(3));
         }
-        std::thread::sleep(std::time::Duration::from_secs(3));
     });
 }
 
@@ -99,7 +160,7 @@ pub async fn set_app_translation(enabled: bool) -> Result<bool, String> {
         // Stop renewals even when a page becomes unavailable. Its existing
         // lease restores the original text instead of trapping the user on.
         prefs.translation_enabled = enabled;
-        save(&prefs)?;
+        save_at(&super::account::get_data_dir()?, &prefs)?;
         if !enabled {
             let result = reconcile(false);
             TRANSLATED.store(0, Ordering::Relaxed);
@@ -140,5 +201,21 @@ mod tests {
             serde_json::to_value(prefs).unwrap(),
             json!({"translation_enabled":true})
         );
+    }
+
+    #[test]
+    fn shared_switch_is_read_only_by_default_and_never_repairs_corrupt_preferences() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("data");
+        assert!(!translation_enabled_at(&root).unwrap());
+        assert!(!root.exists());
+        configure_translation_at(&root, true).unwrap();
+        assert!(translation_enabled_at(&root).unwrap());
+        configure_translation_at(&root, false).unwrap();
+        assert!(!translation_enabled_at(&root).unwrap());
+        let path = root.join("app_experiments.json");
+        std::fs::write(&path, "corrupt").unwrap();
+        assert!(configure_translation_at(&root, false).is_err());
+        assert_eq!(std::fs::read_to_string(path).unwrap(), "corrupt");
     }
 }

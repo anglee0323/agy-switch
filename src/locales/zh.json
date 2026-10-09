@@ -501,7 +501,7 @@
     "reload": "重新读取",
     "failed": "操作失败：{{error}}",
     "translation_title": "界面汉化",
-    "translation_description": "翻译 Antigravity App 的侧边栏、设置和内置功能页面。关闭后恢复原文。使用期间需保持 AntiGravity Switch 开启；聊天、代码、插件正文和系统菜单保持原文。",
+    "translation_description": "翻译 Antigravity App 的侧边栏、设置和内置功能页面。关闭后恢复原文。使用期间需保持 Switch 桌面进程或 CLI 前台命令运行；聊天、代码、插件正文和系统菜单保持原文。",
     "translated": "已翻译 {{count}} 处界面文字",
     "states": {
       "loading": "正在读取 Antigravity App…",
@@ -512,6 +512,8 @@
       "no_debug_port": "暂时无法连接，请确认 Antigravity App 已正常打开",
       "unknown_installation": "当前安装不支持汉化，请使用独立 Antigravity App"
     },
-    "restore_pending": "汉化已关闭，暂时无法连接的页面将在 15 秒内恢复原文。"
+    "restore_pending": "汉化已关闭，暂时无法连接的页面将在 15 秒内恢复原文。",
+    "injection_description": "通过 App 现有的本机连接注入翻译脚本，只替换已知界面文字，不修改 App 安装文件或源文件，不调整权限和账号设置，也不上传聊天内容。脚本在 App 页面中运行并观察界面变化，运行时注入并不代表完全没有风险。关闭后恢复原文；停止续期后最迟 15 秒自动恢复。",
+    "cli_description": "桌面和 agy-switch CLI 共用同一个开关。仅用 CLI 时，开启后运行 agy-switch experiments run，并保持该命令运行。"
   }
 }

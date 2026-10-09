@@ -3,11 +3,14 @@ import { setupSettingsFixture } from './settings-fixture';
 test.beforeEach(async ({ page }) => {
     await page.addInitScript(setupSettingsFixture);
     await page.goto('/settings');
+    await expect(page.getByRole('switch', { name: '界面汉化' })).toHaveCount(0);
     await page.getByRole('tab', { name: '实验功能', exact: true }).click();
 });
 test('experiments contain only App translation with the Windows and macOS scope', async ({ page }) => {
     const panel = page.getByRole('tabpanel');
     await expect(panel.getByText(/汉化仅作用于 Windows 和 macOS 的 Antigravity App/)).toBeVisible();
+    await expect(panel.getByText(/不修改 App 安装文件或源文件/)).toBeVisible();
+    await expect(panel.getByText(/agy-switch experiments run/)).toBeVisible();
     await expect(panel.getByRole('switch')).toHaveCount(1);
     await expect(panel.getByRole('combobox')).toHaveCount(0);
     await expect(panel.getByRole('textbox')).toHaveCount(0);

@@ -1,5 +1,5 @@
 //! Terminal workflows use the same setting/order operations as one-line commands.
-use super::{output::{terminal_text, Snapshot}, picker::{self, KeyAction, Lang, PromptResult, RawTerminal}, settings, CliError};
+use super::{experiments, output::{terminal_text, Snapshot}, picker::{self, KeyAction, Lang, PromptResult, RawTerminal}, settings, CliError};
 use crate::modules::auto_switch::{Mode, Strategy, Target};
 use std::{io::{self, Write}, path::Path};
 
@@ -35,6 +35,39 @@ pub(super) fn show_settings(root: &Path, lang: Lang) {
                     Ok(true)
                 });
                 match result { Ok(false) => {}, Ok(true) => report(lang, Ok(())), Err(e) => report(lang, Err(e)) }
+            }
+            _ => break,
+        }
+    }
+}
+
+pub(super) fn show_experiments(root: &Path, lang: Lang) {
+    loop {
+        let enabled = match experiments::read(root) {
+            Ok(value) => value,
+            Err(e) => { report(lang, Err(e)); return; }
+        };
+        print!("\x1b[2J\x1b[H");
+        println!("{}\n", experiments::description(lang));
+        let items = [
+            format!("1. {}: {}", text(lang, "界面汉化", "Chinese interface"), if enabled { text(lang, "开启", "On") } else { text(lang, "关闭", "Off") }),
+            text(lang, "2. 在当前终端维持汉化", "2. Maintain translation in this terminal").into(),
+            text(lang, "0. 返回", "0. Back").into(),
+        ];
+        match menu(lang, text(lang, "实验功能", "Experimental Features"), &items, 0) {
+            Some(0) => report(lang, experiments::configure(root, !enabled)),
+            Some(1) => {
+                if !enabled {
+                    println!("{}", text(lang, "请先开启界面汉化。", "Turn on Chinese interface first."));
+                } else if !cfg!(any(target_os = "macos", target_os = "windows")) {
+                    println!("{}", text(lang, "App 汉化仅支持 Windows 和 macOS。", "App translation is available only on Windows/macOS."));
+                } else {
+                    match experiments::run_foreground(root, lang) {
+                        Ok(message) => println!("{message}"),
+                        Err(e) => println!("{}", text(lang, "无法启动汉化续期，请检查实验功能设置。", e.message)),
+                    }
+                }
+                picker::wait_for_key(lang);
             }
             _ => break,
         }

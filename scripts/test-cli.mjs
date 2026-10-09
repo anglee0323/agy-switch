@@ -24,10 +24,16 @@ try {
   assert.deepEqual(JSON.parse(run(['accounts', 'list', '--json']).stdout).accounts, []);
   assert.equal(JSON.parse(run(['policy', 'show', '--json']).stdout).policy.enabled, false);
   assert.deepEqual(JSON.parse(run(['accounts', 'order', '--json']).stdout).account_ids, []);
+  const experiments = JSON.parse(run(['experiments', 'show', '--json']).stdout);
+  assert.equal(experiments.experiments.translation_enabled, false);
+  assert.equal(experiments.experiments.scope, 'antigravity_app');
+  assert.equal(experiments.runtime_checked, false);
   assert.deepEqual(readdirSync(root), []); // Not even a log/data directory is created.
   run(['current'], 3);
   run(['quota', '--refresh'], 2);
   run(['switch', 'unused', '--target', 'cli', '--json'], 2);
+  run(['experiments', 'run', '--json'], 2);
+  run(['experiments', 'translation', 'maybe'], 2);
   assert.deepEqual(readdirSync(root), []); // Unsupported target must fail before any state access.
   assert.equal(JSON.parse(run(['--unknown', '--json'], 2).stderr).error.code, 2);
   mkdirSync(join(data, 'accounts'), { recursive: true });
@@ -71,6 +77,23 @@ try {
   assert.equal(readFileSync(join(data, 'accounts.json'), 'utf8'), orderedIndex);
   assert.equal(readFileSync(join(data, 'accounts/test-1.json'), 'utf8'), JSON.stringify(noQuota));
   assert.equal(readFileSync(join(data, 'accounts/test-2.json'), 'utf8'), second);
+  // The experimental switch belongs to Switch. It must not read an account,
+  // contact the App, alter client preferences or require a desktop session.
+  const savedGui = JSON.stringify({ language: 'en', theme: 'light' });
+  writeFileSync(join(data, 'gui_config.json'), savedGui);
+  assert.equal(JSON.parse(run(['experiments', 'translation', 'on', '--json']).stdout).experiments.translation_enabled, true);
+  assert.deepEqual(JSON.parse(readFileSync(join(data, 'app_experiments.json'), 'utf8')), { translation_enabled: true });
+  assert.match(run(['experiments', 'show']).stdout, /does not modify App installation\/source files/);
+  assert.equal(JSON.parse(run(['experiments', 'translation', 'off', '--json']).stdout).experiments.translation_enabled, false);
+  run(['experiments', 'run'], 1);
+  assert.equal(readFileSync(join(data, 'gui_config.json'), 'utf8'), savedGui);
+  assert.equal(readFileSync(join(data, 'auto_switch.json'), 'utf8'), beforePolicy);
+  assert.equal(readFileSync(join(data, 'accounts.json'), 'utf8'), orderedIndex);
+  assert.equal(readFileSync(join(data, 'accounts/test-2.json'), 'utf8'), second);
+  writeFileSync(join(data, 'app_experiments.json'), 'corrupt');
+  run(['experiments', 'translation', 'off'], 1);
+  run(['experiments', 'show'], 1);
+  assert.equal(readFileSync(join(data, 'app_experiments.json'), 'utf8'), 'corrupt');
   writeFileSync(join(data, 'auto_switch.json'), JSON.stringify({ ...policy, candidate_account_ids: ['removed-account'] }));
   assert.equal(JSON.parse(run(['policy', 'set', '--enabled', 'false', '--json']).stdout).policy.enabled, false);
   writeFileSync(join(data, 'auto_switch.json'), 'corrupt');

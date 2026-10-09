@@ -1,4 +1,5 @@
 //! agy-switch local CLI. Never initializes Tauri, a logger, or OAuth for reads.
+mod experiments;
 mod output;
 mod picker;
 mod switch_lock;
@@ -8,7 +9,7 @@ mod workflows;
 use output::{AccountView, Snapshot};
 use std::path::{Path, PathBuf};
 
-const HELP: &str = "agy-switch - Antigravity account management CLI\n\nUsage:\n  agy-switch                         Interactive dashboard / menu (TUI)\n  agy-switch accounts list [--json]\n  agy-switch current [--json]\n  agy-switch quota [ACCOUNT_ID|EMAIL] [--json]\n  agy-switch switch [ACCOUNT_ID|EMAIL] [--target app|ide] [--json]\n  agy-switch stats [--json]\n  agy-switch refresh [ACCOUNT_ID|EMAIL] [--json]\n  agy-switch policy show [--json]\n  agy-switch policy set [OPTIONS] [--json]\n    --enabled true|false --mode wait|stop --strategy priority|round-robin\n    --reserve 1..98 --minimum 2..100 --model all|gemini|claude|MODEL_ID\n    --target app|app-cli|ide|vscode --candidates ID|EMAIL...\n    --clear-candidates\n  agy-switch policy order [ID|EMAIL...] [--json]\n  agy-switch accounts order [ID|EMAIL...] [--json]\n  agy-switch update check [--json]\n  agy-switch --help\n  agy-switch --version\n\nRead commands use local cached data only and never open the GUI or refresh tokens.\n'current' is agy-switch's recorded account, not a live credential-store check.\n'switch' may refresh tokens, close/restart Antigravity, and update credentials.\nDefault target 'app' synchronizes APP credentials and an initialized agy session.\nThere is no CLI-only target: APP and agy may share the same credential store.\nPolicy edits configure the desktop scheduler; they do not start a CLI daemon.\nUpdate checks contact GitHub but never download or install.\nOrdering requires every account (or selected candidate) exactly once.\nAccounts can be managed interactively via TUI or through the GUI. ABV_DATA_DIR overrides the data directory.\n";
+const HELP: &str = "agy-switch - Antigravity account management CLI\n\nUsage:\n  agy-switch                         Interactive dashboard / menu (TUI)\n  agy-switch accounts list [--json]\n  agy-switch current [--json]\n  agy-switch quota [ACCOUNT_ID|EMAIL] [--json]\n  agy-switch switch [ACCOUNT_ID|EMAIL] [--target app|ide] [--json]\n  agy-switch stats [--json]\n  agy-switch refresh [ACCOUNT_ID|EMAIL] [--json]\n  agy-switch policy show [--json]\n  agy-switch policy set [OPTIONS] [--json]\n    --enabled true|false --mode wait|stop --strategy priority|round-robin\n    --reserve 1..98 --minimum 2..100 --model all|gemini|claude|MODEL_ID\n    --target app|app-cli|ide|vscode --candidates ID|EMAIL...\n    --clear-candidates\n  agy-switch policy order [ID|EMAIL...] [--json]\n  agy-switch accounts order [ID|EMAIL...] [--json]\n  agy-switch update check [--json]\n  agy-switch experiments show [--json]\n  agy-switch experiments translation on|off [--json]\n  agy-switch experiments run          Maintain App translation in foreground\n  agy-switch --help\n  agy-switch --version\n\nRead commands use local cached data only and never open the GUI or refresh tokens.\n'current' is agy-switch's recorded account, not a live credential-store check.\n'switch' may refresh tokens, close/restart Antigravity, and update credentials.\nDefault target 'app' synchronizes APP credentials and an initialized agy session.\nThere is no CLI-only target: APP and agy may share the same credential store.\nPolicy edits configure the desktop scheduler; they do not start a CLI daemon.\nUpdate checks contact GitHub but never download or install.\nExperimental translation affects only Antigravity App on Windows/macOS.\nKeep Switch desktop or experiments run active; injection never changes App files.\nOrdering requires every account (or selected candidate) exactly once.\nAccounts can be managed interactively via TUI or through the GUI. ABV_DATA_DIR overrides the data directory.\n";
 
 #[derive(Debug, PartialEq)]
 enum Command {
@@ -27,6 +28,9 @@ enum Command {
     PolicyOrder(Vec<String>),
     AccountOrder(Vec<String>),
     UpdateCheck,
+    ExperimentsShow,
+    TranslationSet(bool),
+    ExperimentsRun,
 }
 
 #[derive(Debug)]
@@ -96,6 +100,10 @@ fn parse(args: &[String], interactive: bool) -> Result<(Command, bool)> {
         ["policy", "order", rest @ ..] if rest.iter().all(|s| !s.starts_with('-')) => Command::PolicyOrder(rest.iter().map(|s| (*s).into()).collect()),
         ["order", rest @ ..] if rest.iter().all(|s| !s.starts_with('-')) => Command::AccountOrder(rest.iter().map(|s| (*s).into()).collect()),
         ["update", "check"] => Command::UpdateCheck,
+        ["experiments"] | ["experiments", "show"] => Command::ExperimentsShow,
+        ["experiments", "translation", "on"] => Command::TranslationSet(true),
+        ["experiments", "translation", "off"] => Command::TranslationSet(false),
+        ["experiments", "run"] if !json => Command::ExperimentsRun,
         ["switch"] if interactive && !json => Command::InteractiveSwitch {
             target: "app".into(),
         },
@@ -212,6 +220,9 @@ fn execute(command: Command, json: bool) -> Result<String> {
                 format!("agy-switch {}", env!("CARGO_PKG_VERSION"))
             })
         }
+        Command::ExperimentsShow => return experiments::show(&data_dir()?, json),
+        Command::TranslationSet(enabled) => return experiments::set(&data_dir()?, enabled, json),
+        Command::ExperimentsRun => return experiments::run_foreground(&data_dir()?, picker::Lang::current(&data_dir()?)),
         Command::PolicyShow => return settings::show_policy(&data_dir()?, json),
         Command::PolicySet(patch) => return settings::set_policy(&data_dir()?, patch, json),
         Command::PolicyOrder(selectors) => return settings::order_policy(&data_dir()?, &selectors, json),
@@ -511,9 +522,20 @@ mod tests {
             &["list", "--json", "--json"],
             &["switch", "a", "extra"],
             &["--wat"],
+            &["experiments", "translation", "maybe"],
+            &["experiments", "run", "--json"],
+            &["experiments", "show", "extra"],
         ] {
             assert_eq!(parse_test(input).unwrap_err().code, 2);
         }
+    }
+    #[test]
+    fn experimental_commands_share_the_switch_and_require_explicit_foreground_run() {
+        assert_eq!(parse_test(&["experiments", "show", "--json"]).unwrap(), (Command::ExperimentsShow, true));
+        assert_eq!(parse_test(&["experiments"]).unwrap(), (Command::ExperimentsShow, false));
+        assert_eq!(parse_test(&["experiments", "translation", "on", "--json"]).unwrap(), (Command::TranslationSet(true), true));
+        assert_eq!(parse_test(&["experiments", "translation", "off"]).unwrap(), (Command::TranslationSet(false), false));
+        assert_eq!(parse_test(&["experiments", "run"]).unwrap(), (Command::ExperimentsRun, false));
     }
     #[test]
     fn missing_app_cannot_fall_back_to_file_only_switch() {
