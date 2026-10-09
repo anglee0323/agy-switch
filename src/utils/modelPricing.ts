@@ -9,7 +9,10 @@ export interface ModelPricing {
 // Other versions and variants retain their own pricing identities.
 const normalize = (model: string) => {
     const name = model.toLowerCase().replace(/-n$/, '');
-    return (name === 'gemini-3.8-flash-exp-a' ? 'gemini-3.8-flash' : name).replace(/[^a-z0-9]/g, '');
+    return (name === 'gemini-3.8-flash-exp-a' ? 'gemini-3.8-flash' : name)
+        .replace(/[^a-z0-9]/g, '')
+        // Thinking uses the same model's token rates, not a separate price tier.
+        .replace(/^(claude(?:opus|sonnet|haiku)\d+)thinking$/, '$1');
 };
 
 export function findModelPricing(model: string, snapshot: { prices: ModelPricing[] } | null) {

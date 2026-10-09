@@ -21,6 +21,16 @@ test('ambiguous and invalid rates are unpriced',()=>{
  assert.equal(findModelPricing(price.model,{prices:[price,{...price}]}),undefined);
  for(const input of [-1,NaN,Infinity])assert.equal(findModelPricing(price.model,{prices:[{...price,input}]}),undefined);
 });
+test('Claude thinking aliases match only their exact model rates',()=>{
+ const opus={model:'Claude Opus 4.6',input:5,output:25,cached:.5};
+ const prices={prices:[opus]};
+ for(const name of ['claude-opus-4-6-thinking','Claude Opus 4.6 Thinking-n','claude-opus-4.6']){
+  assert.equal(findModelPricing(name,prices),opus);
+  assert.deepEqual(estimateApiCost([model(name)],prices),{usd:30.5,pricedModels:1,unpricedModels:0});
+ }
+ for(const name of ['claude-opus-4-5-thinking','claude-opus-4-6-fast','claude-opus-4-6-thinking-exp','claude-sonnet-4-6-thinking'])assert.equal(findModelPricing(name,prices),undefined);
+ assert.equal(findModelPricing('claude-opus-4-6-thinking',{prices:[opus,{...opus,model:'claude-opus-4-6-thinking'}]}),undefined);
+});
 test('input, output and cache are charged once and partial estimates exclude unknown models',()=>{
  assert.deepEqual(estimateApiCost([model(price.model),model('unknown')],snapshot),{usd:2.83,pricedModels:1,unpricedModels:1});
 });

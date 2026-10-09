@@ -398,6 +398,23 @@ mod tests {
     }
 
     #[test]
+    fn parses_claude_global_rates_without_batch_or_regional_overrides() {
+        let html = r#"<table>
+            <tr><td>Claude Opus 4.6</td><td>Input</td><td>$5.00</td></tr>
+            <tr><td></td><td>Output</td><td>$25.00</td></tr>
+            <tr><td></td><td>Batch Input</td><td>$2.50</td></tr>
+            <tr><td></td><td>5m Cache Write</td><td>$6.25</td></tr>
+            <tr><td></td><td>Cache Hit</td><td>$0.50</td></tr>
+            </table><table>
+            <tr><td>Claude Opus 4.6</td><td>Input</td><td>$5.50</td></tr>
+            <tr><td></td><td>Output</td><td>$27.50</td></tr>
+            <tr><td></td><td>Cache Hit</td><td>$0.55</td></tr>
+            </table>"#;
+        let prices = parse_agent_platform_prices(html, NaiveDate::from_ymd_opt(2026, 10, 9).unwrap());
+        assert_eq!(prices.len(), 1);
+        assert_eq!((prices[0].input, prices[0].output, prices[0].cached), (5.0, 25.0, 0.5));
+    }
+    #[test]
     fn parses_gemini_model_sections() {
         let html = r#"
             <h2 id="gemini-3.9-flash">Gemini 3.9 Flash</h2>

@@ -214,7 +214,12 @@ test('hover reset times stay inside the row without moving percentages and can b
   const geometry = () => numbers.evaluateAll(fields => fields.map(field => { const rect = field.getBoundingClientRect(); return { top: rect.top, right: rect.right }; }));
   const before = await geometry(); const values = await numbers.allTextContents();
   const columnGap = () => row.locator('.mb-account-window').first().evaluate(el => el.querySelector('.mb-mini.other .mb-meter')!.getBoundingClientRect().left - el.querySelector('.mb-mini.gemini strong')!.getBoundingClientRect().right);
-  expect(await columnGap()).toBeGreaterThanOrEqual(12);
+  expect(await columnGap()).toBeGreaterThanOrEqual(24);
+  const divider = () => row.locator('.mb-mini.other').first().evaluate(el => {
+    const style = getComputedStyle(el, '::before');
+    return { content: style.content, width: style.width, left: style.left };
+  });
+  expect(await divider()).toEqual({ content: '""', width: '1px', left: '-12px' });
   const meter = row.locator('.mb-meter').first(); const fullWidth = await meter.evaluate(el => el.getBoundingClientRect().width);
   const control = row.locator('.mb-account-switch');
   const initialBackground = await control.evaluate(el => getComputedStyle(el).backgroundColor);
@@ -224,7 +229,7 @@ test('hover reset times stay inside the row without moving percentages and can b
   await expect(meter).toBeVisible(); expect(await meter.evaluate(el => el.getBoundingClientRect().width)).toBeLessThan(fullWidth);
   await expect.poll(() => control.evaluate(el => getComputedStyle(el).backgroundColor)).not.toBe(initialBackground);
   expect(await geometry()).toEqual(before); expect(await numbers.allTextContents()).toEqual(values);
-  expect(await columnGap()).toBeGreaterThanOrEqual(12);
+  expect(await columnGap()).toBeGreaterThanOrEqual(24);
   await bounded(page); await expect(page.getByRole('tooltip')).toHaveCount(0);
   await page.mouse.move(0, 0); await expect(row.locator('.mb-reset-label').first()).toBeHidden();
   expect(await meter.evaluate(el => el.getBoundingClientRect().width)).toBe(fullWidth);
@@ -236,5 +241,9 @@ test('hover reset times stay inside the row without moving percentages and can b
   await page.evaluate(() => (window as any).__menuFixture.setPreferences({ menu_bar: { reset_time_display: 'hidden' } }));
   await control.hover(); await expect(row.locator('.mb-reset-label')).toHaveCount(0); await expect(row.locator('.mb-meter').first()).toBeVisible();
   expect(await meter.evaluate(el => el.getBoundingClientRect().width)).toBe(fullWidth);
+  await page.evaluate(() => (window as any).__menuFixture.setPreferences({ menu_bar: { display_scope: 'other' } }));
+  await expect(row.locator('.mb-mini')).toHaveCount(2);
+  expect(await row.locator('.mb-mini').first().evaluate(el => getComputedStyle(el, '::before').content)).toBe('none');
+  await bounded(page);
   expect(await calls(page, 'switch_account')).toEqual([]);
 });

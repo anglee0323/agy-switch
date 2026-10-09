@@ -52,6 +52,14 @@ average request size, not an individual context length, model context limit or
 proof of the cause of response latency. It uses the existing local usage scan and
 does not require an account snapshot or a new benchmark request.
 
+**Estimated API cost** uses matched public Google API rates for Gemini and Claude.
+Claude thinking names match the same model version's rates, including
+`claude-opus-4-6-thinking` → `Claude Opus 4.6`; other variants stay separate.
+The card shows the request count, with pricing provenance and estimate scope in
+its tooltip. Missing prices produce a model count warning; the cost ring then
+labels its amount as a partial estimate. Unknown models are excluded, never
+treated as free. These API-equivalent amounts are not subscription charges.
+
 Verification uses synthetic accounts and mocked desktop IPC only:
 
 ```sh
