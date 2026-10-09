@@ -25,7 +25,7 @@ test.beforeEach(async ({ page }) => {
                 if (cmd === 'list_accounts') return accounts;
                 if (cmd === 'get_current_account') return accounts[0];
                 if (cmd === 'get_auto_switch_config') return config;
-                if (cmd === 'set_auto_switch_config') { config = args.config; status = { ...status, mode: config.mode, phase: config.enabled ? 'pending' : 'disabled', reason: 'clients_running', pending_id: config.enabled ? 'fixture-pending' : null }; return config; }
+                if (cmd === 'set_auto_switch_config') { config = args.config; status = { ...status, mode: config.mode, phase: config.enabled ? 'pending' : 'disabled', reason: 'closing_clients', pending_id: config.enabled ? 'fixture-pending' : null }; return config; }
                 if (cmd === 'get_auto_switch_status' || cmd === 'check_auto_switch_now') return status;
                 if (cmd === 'cancel_auto_switch') { if (args.pendingId !== status.pending_id) throw new Error('Stale request'); status = { ...status, phase: 'canceled', reason: 'canceled_until_recovery', pending_id: null }; return status; }
                 if (cmd === 'get_data_dir_path') return '/fixture/antigravity-tools';
@@ -51,7 +51,7 @@ async function enable(page: any, stop = false) {
     await page.getByLabel('backup@example.invalid', { exact: true }).check();
     if (stop) await page.getByRole('radio').nth(1).check();
     await expect(page.getByText('已自动保存', { exact: true })).toBeVisible();
-    await expect(page.getByText('客户端运行中，等待关闭').first()).toBeVisible();
+    await expect(page.getByText('正在自动关闭客户端，随后切号并重启').first()).toBeVisible();
 }
 
 test('switch timing and account selection order are separate labelled choices', async ({ page }, testInfo) => {
@@ -111,4 +111,16 @@ test('unknown blocks, completion says next launch, narrow layout has no horizont
     await page.setViewportSize({ width: 760, height: 1000 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath('completed-narrow.png'), fullPage: true });
+});
+
+test('wait mode reports automatic closing, restart and a distinct relaunch failure', async ({ page }) => {
+    await enable(page);
+    await page.evaluate(() => (window as any).__fixture.setStatus({ reason: 'waiting_task_finish' }));
+    await expect(page.getByText('任务仍在运行，等待结束后切换').first()).toBeVisible();
+    await page.evaluate(() => (window as any).__fixture.setStatus({ reason: 'closing_clients' }));
+    await expect(page.getByText('正在自动关闭客户端，随后切号并重启').first()).toBeVisible();
+    await page.evaluate(() => (window as any).__fixture.setStatus({ phase: 'completed', reason: 'restarted', pending_id: null }));
+    await expect(page.getByText('已切换账号并重启客户端').first()).toBeVisible();
+    await page.evaluate(() => (window as any).__fixture.setStatus({ reason: 'restart_failed' }));
+    await expect(page.getByText('账号已切换，客户端重启失败，请手动打开').first()).toBeVisible();
 });

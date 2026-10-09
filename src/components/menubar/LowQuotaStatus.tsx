@@ -183,7 +183,7 @@ export function MenuBarSwitchDetails({
                 </div>
               )}
           </dl>
-          {status.reason === "clients_running" && (
+          {["clients_running", "closing_clients", "client_close_failed"].includes(status.reason || "") && (
             <p className="mb-switch-detail-instructions">
               {t(`auto_switch.${status.mode}_instructions`)}
             </p>
@@ -219,7 +219,7 @@ export function MenuBarSwitchDetails({
         </>
       )}
       <button className="mb-switch-detail-link" onClick={openSettings}>
-        {status?.mode === "stop" && status.reason === "clients_running"
+        {status?.mode === "stop" && ["clients_running", "closing_clients", "client_close_failed"].includes(status.reason || "")
           ? t("auto_switch.stop_guide")
           : t("local_settings.title")}
       </button>

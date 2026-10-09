@@ -137,6 +137,27 @@ pub(crate) fn with_running_connection<T>(
     if parent.parse::<u32>().ok() != Some(app_pid) {
         return Err("running_app_identity_unavailable".into());
     }
+    let result = with_server_connection(*server, &executable, &mut operation)?;
+    metadata::verify_executable(app_pid, &installation.executable)?;
+    Ok(Some(result))
+}
+
+/// A verified App or Hub server; CSRF metadata is kept only in memory.
+#[cfg(target_os = "macos")]
+pub(crate) fn with_server_connection<T>(
+    server: u32,
+    executable: &std::path::Path,
+    mut operation: impl FnMut(u16, &str) -> Result<T, String>,
+) -> Result<T, String> {
+    use super::app_metadata_macos as metadata;
+    metadata::verify_executable(server, executable)?;
+    let owner = metadata::command(
+        "/bin/ps",
+        &["-p".into(), server.to_string(), "-o".into(), "uid=".into()],
+    )?;
+    if owner.parse::<u32>().ok() != Some(unsafe { libc::geteuid() }) {
+        return Err("running_app_identity_unavailable".into());
+    }
     let args = metadata::command(
         "/bin/ps",
         &[
@@ -169,11 +190,11 @@ pub(crate) fn with_running_connection<T>(
     }
     for port in ports {
         // Revalidate ownership before sending the in-memory CSRF value.
-        metadata::verify_executable(*server, &executable)?;
-        metadata::listener(port, *server)?;
+        metadata::verify_executable(server, executable)?;
+        metadata::listener(port, server)?;
         if let Ok(result) = operation(port, csrf) {
-            metadata::verify_executable(app_pid, &installation.executable)?;
-            return Ok(Some(result));
+            metadata::verify_executable(server, executable)?;
+            return Ok(result);
         }
     }
     Err("running_app_identity_unavailable".into())

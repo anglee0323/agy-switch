@@ -600,7 +600,14 @@ fn show(app: tauri::AppHandle, config: AppConfig, snapshot: Option<DashboardSnap
     if let Ok(mut notice) = NOTICE.lock() { if let Some(notice) = notice.take() { readonly_item(&menu, &notice, marker); } }
     if BUSY.load(Ordering::Acquire) { readonly_item(&menu, if zh { "正在执行，请稍候…" } else { "Working…" }, marker); }
     if let Some(status) = status.filter(|status| status.pending_id.is_some()) {
-        readonly_item(&menu, if zh { "智能换号：等待客户端关闭" } else { "Auto switch: waiting for clients" }, marker);
+        let message = match status.reason.as_deref() {
+            Some("waiting_task_finish") => if zh { "智能换号：等待所有任务结束" } else { "Auto switch: waiting for all tasks" },
+            Some("task_state_unknown") => if zh { "智能换号：正在确认任务状态" } else { "Auto switch: verifying task state" },
+            Some("client_close_failed") => if zh { "智能换号：自动关闭失败，将重试" } else { "Auto switch: close failed; retrying" },
+            Some("closing_clients" | "clients_running") => if zh { "智能换号：正在自动关闭客户端" } else { "Auto switch: closing clients automatically" },
+            _ => if zh { "智能换号：正在准备切换" } else { "Auto switch: preparing to switch" },
+        };
+        readonly_item(&menu, message, marker);
         standard_item(&menu, &app, if zh { "取消待切换操作" } else { "Cancel pending switch" }, Action::Cancel(status.pending_id.unwrap()), !busy, "", preferences.show_icons, zh, &mut targets, marker);
     }
     standard_item(&menu, &app, if zh { "刷新全部额度" } else { "Refresh All Quotas" }, Action::Refresh, !busy, "r", preferences.show_icons, zh, &mut targets, marker);
