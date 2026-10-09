@@ -62,7 +62,12 @@ fn controller_active() -> bool {
 async fn wait_for_controller(active: bool) {
     for _ in 0..30 {
         if controller_active() == active {
-            return;
+            let status = modules::app_experiments::get_app_experiments()
+                .await
+                .unwrap();
+            if !active || status["translated"].as_u64().unwrap() > 0 {
+                return;
+            }
         }
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
     }
@@ -89,6 +94,23 @@ fn main() {
                 .await
                 .unwrap();
             assert!(status["translated"].as_u64().unwrap() > 0);
+            // A maintainer's already-running Switch can keep renewing the same
+            // App controller. Never stop that process or change its real flag
+            // merely to manufacture an isolated lease-expiry test.
+            if std::env::var("AGY_APP_FIXTURE_OTHER_RUNNER").as_deref() == Ok("1") {
+                drop(worker);
+                tokio::time::sleep(std::time::Duration::from_secs(17)).await;
+                assert!(
+                    controller_active(),
+                    "The other runner must retain its translation"
+                );
+                modules::app_experiments::configure_translation_at(&root, false).unwrap();
+                println!(
+                    "{}",
+                    serde_json::json!({"stage":"cli_coexisting_runner","translated":status["translated"],"other_runner_remains_active":true,"isolated_switch_restored":true})
+                );
+                return;
+            }
             modules::app_experiments::configure_translation_at(&root, false).unwrap();
             wait_for_controller(false).await;
             modules::app_experiments::configure_translation_at(&root, true).unwrap();

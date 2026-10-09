@@ -30,6 +30,7 @@ agy-switch experiments run
 The adapter uses the App's existing local debugging connection after checking its installed package identity, executable, process and complete listener ownership. It does not launch or restart the App, replace its bundle, change client preferences, or install a Hook.
 
 - macOS: the standalone Apps 2.21.1 and 2.22.0 have received live acceptance.
+- CLI: synthetic executable/PTY checks cover the shared switch and Ctrl+C returning to the terminal menu. Live macOS acceptance can check coexistence when another Switch process is already renewing the App; it does not establish isolated lease expiry in that environment. Lease expiry has separate browser coverage.
 - Windows: the native standalone App adapter follows the official 2.21.1 package layout, verifies the current Windows user and parent language-server process, and reads TCP ownership through Windows APIs. Windows WSL mode is currently unavailable because its server ownership cannot be verified by this adapter. Native Windows API and build checks are distinct from a live signed-in App test; a Windows App session has not been tested locally.
 - Linux and Antigravity IDE: this integration is unavailable.
 
