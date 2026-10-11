@@ -534,12 +534,14 @@ mod tests {
             ])
             .env("ABV_DATA_DIR", temp.path())
             .env("AGY_PROXY_FIXTURE", &second)
-            .env("HTTP_PROXY", first)
-            .env("HTTPS_PROXY", &second)
+            // Windows environment names are case-insensitive. Clear inherited
+            // variants before setting the fixture, or removal deletes it too.
             .env_remove("ALL_PROXY")
             .env_remove("http_proxy")
             .env_remove("https_proxy")
             .env_remove("all_proxy")
+            .env("HTTP_PROXY", first)
+            .env("HTTPS_PROXY", &second)
             .env("NO_PROXY", "")
             .env("no_proxy", "")
             .output()
