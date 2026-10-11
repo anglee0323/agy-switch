@@ -292,9 +292,8 @@
       "refresh_msg": "Are you sure you want to refresh the quota for the current account?",
       "batch_refresh_msg": "Are you sure you want to refresh quotas for the selected {{count}} accounts? This may take some time."
     },
-    "switch_target": "Switch target",
-    "target_app_cli": "App and CLI",
-    "switch_scope_hint": "App and agy switch together; IDE switches independently",
+    "select_account": "Select account {{email}}",
+    "select_page": "Select accounts on this page",
     "export_account": "Export account",
     "export_selected": "Export {{count}} selected accounts",
     "export_success": "Exported {{count}} accounts",

@@ -21,24 +21,13 @@ test.beforeEach(async ({ page }) => {
     });
 });
 
-test('App/CLI and IDE switch choices use distinct shared service targets', async ({ page }, info) => {
-    await expect(page.getByLabel('切换目标')).toHaveValue('app');
+test('account page switches App/CLI directly without a client selector', async ({ page }) => {
+    await expect(page.getByLabel('切换目标')).toHaveCount(0);
     await page.getByTitle('切换到此账号', { exact: true }).first().click();
     await expect.poll(() => page.evaluate(() => (window as any).__transferCalls.filter((call: any) => call.command === 'switch_account').map((call: any) => call.args.targetIde))).toEqual(['app']);
-    await page.getByLabel('切换目标').selectOption('ide');
-    await page.getByTitle('切换到此账号', { exact: true }).nth(1).click();
-    await expect.poll(() => page.evaluate(() => (window as any).__transferCalls.filter((call: any) => call.command === 'switch_account').map((call: any) => call.args.targetIde))).toEqual(['app', 'ide']);
     await expect(page.getByText(/Unimplemented synthetic command/)).toHaveCount(0);
-    await expect(page.getByRole('row').filter({ hasText: 'backup@example.invalid' }).getByText('当前选择')).toBeVisible();
-    await page.getByLabel('切换目标').selectOption('app');
     await expect(page.getByRole('row').filter({ hasText: 'primary@example.invalid' }).getByText('当前选择')).toBeVisible();
-    await page.getByLabel('切换目标').selectOption('ide');
-    await expect(page.getByText('成功', { exact: true })).toHaveCount(0);
-    await page.screenshot({ path: info.outputPath('account-scopes.png') });
-    await page.setViewportSize({ width: 1024, height: 700 });
-    await expect(page.getByLabel('切换目标')).toBeVisible();
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.screenshot({ path: info.outputPath('account-scopes-1024.png') });
+    expect(await page.evaluate(() => (window as any).__transferCalls.some((call: any) => call.command === 'get_current_account' && call.args.targetIde === 'ide'))).toBe(false);
 });
 
 test('single and selected account exports reach the save command', async ({ page }) => {

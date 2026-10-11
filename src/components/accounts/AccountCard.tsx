@@ -7,6 +7,7 @@ import { useConfigStore } from '../../stores/useConfigStore';
 import { QuotaItem } from './QuotaItem';
 import { getDisplayQuotaModels } from '../../config/modelConfig';
 import { getValidationBlockedStatusLabel } from './accountValidationStatus';
+import AccountSelection from './AccountSelection';
 
 interface AccountCardProps {
     account: Account;
@@ -94,7 +95,7 @@ function AccountCard({
             (isRefreshing || isDisabled) && "opacity-70",
             isDragging && "shadow-xl ring-2 ring-blue-500/30"
         )}>
-            {/* Header: Grip Handle (left) + Column (Row 1: Checkbox + Full Email, Row 2: Badges + Date) */}
+            {/* Header: Grip Handle (left) + Column (Row 1: Selection + Full Email, Row 2: Badges + Date) */}
             <div className="flex-none flex items-start gap-1.5 mb-2.5">
                 {dragHandleProps && (
                     <div
@@ -107,14 +108,13 @@ function AccountCard({
                     </div>
                 )}
                 <div className="min-w-0 flex-1 flex flex-col gap-1.5">
-                    {/* Row 1: Checkbox + Email (占据整行，不再被时间戳挤压截断) */}
+                    {/* Row 1: Selection + Email (占据整行，不再被时间戳挤压截断) */}
                     <div className="flex items-center gap-1.5 min-w-0 w-full">
-                        <input
-                            type="checkbox"
-                            className="checkbox checkbox-xs rounded border-2 border-gray-400 dark:border-gray-500 checked:border-blue-600 checked:bg-blue-600 [--chkbg:theme(colors.blue.600)] [--chkfg:white] shrink-0"
+                        <AccountSelection
                             checked={selected}
-                            onChange={() => onSelect()}
-                            onClick={(e) => e.stopPropagation()}
+                            onChange={onSelect}
+                            disabled={isRefreshing}
+                            label={t('accounts.select_account', { email: account.email })}
                         />
                         <h3 className={cn(
                             "text-sm truncate flex-1 min-w-0",
@@ -127,7 +127,7 @@ function AccountCard({
                         )}
                     </div>
 
-                    {/* Row 2: Badges (左侧严格对齐上方方框选择框) + Last Used Date (靠右) */}
+                    {/* Row 2: Badges + Last Used Date (靠右) */}
                     <div className="flex items-center justify-between w-full gap-2">
                         <div className="flex items-center gap-1.5 flex-wrap">
                             {/* 1. 订阅类型徽章 (始终置前，上下对齐) */}
@@ -253,7 +253,6 @@ function AccountCard({
             {/* Footer: Actions Only */}
             <div className="flex-none flex items-center justify-center pt-2 pb-1 border-t border-gray-100 dark:border-base-200 mt-auto">
                 <div className="flex items-center justify-center gap-2 w-full">
-                    {onExport && <button className="p-1.5 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50" title={t('accounts.export_account')} aria-label={t('accounts.export_account')} onClick={event => { event.stopPropagation(); onExport(); }}><Download className="w-3.5 h-3.5" /></button>}
                     <button
                         className={cn(
                             "p-1.5 rounded-lg transition-all text-gray-400 dark:text-gray-500",
@@ -298,6 +297,16 @@ function AccountCard({
                     >
                         <Trash2 className="w-3.5 h-3.5" />
                     </button>
+                    {onExport && (
+                        <button
+                            className="p-1.5 rounded-lg transition-all text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                            title={t('accounts.export_account')}
+                            aria-label={t('accounts.export_account')}
+                            onClick={event => { event.stopPropagation(); onExport(); }}
+                        >
+                            <Download className="w-3.5 h-3.5" />
+                        </button>
+                    )}
                 </div>
             </div>
         </div >

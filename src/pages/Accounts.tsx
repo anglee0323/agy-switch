@@ -21,7 +21,7 @@ import { useAccountStore } from "../stores/useAccountStore";
 import { cn } from "../utils/cn";
 import { useTranslation } from "react-i18next";
 import { save } from "@tauri-apps/plugin-dialog";
-import { saveAccountExport, getCurrentAccount } from "../services/accountService";
+import { saveAccountExport } from "../services/accountService";
 import type { Account } from "../types/account";
 
 type FilterType = "all" | "pro" | "ultra" | "free";
@@ -33,7 +33,7 @@ function Accounts() {
   const { t } = useTranslation();
   const {
     accounts,
-    currentAccount: currentAppAccount,
+    currentAccount,
     fetchAccounts,
     fetchCurrentAccount,
     addAccount,
@@ -44,14 +44,6 @@ function Accounts() {
     reorderAccounts,
     updateAccountLabel,
   } = useAccountStore();
-  const [switchTarget, setSwitchTarget] = useState<'app' | 'ide'>('app');
-  const [currentIdeAccount, setCurrentIdeAccount] = useState<Account | null>(null);
-  const currentAccount = switchTarget === 'ide' ? currentIdeAccount : currentAppAccount;
-  useEffect(() => {
-    let active = true;
-    getCurrentAccount('ide').then(account => { if (active) setCurrentIdeAccount(account); }).catch(() => { if (active) setCurrentIdeAccount(null); });
-    return () => { active = false; };
-  }, [accounts, switchTarget]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
@@ -255,14 +247,12 @@ function Accounts() {
     null,
   );
 
-  const handleSwitch = async (accountId: string, targetIde?: string) => {
+  const handleSwitch = async (accountId: string) => {
     if (loading || switchingAccountId) return;
 
     setSwitchingAccountId(accountId);
-    console.log("[Accounts] handleSwitch called for:", accountId, "targetIde:", targetIde);
     try {
-      await switchAccount(accountId, targetIde || switchTarget);
-      if (switchTarget === 'ide') setCurrentIdeAccount(await getCurrentAccount('ide'));
+      await switchAccount(accountId, 'app');
       showToast(t("common.success"), "success");
     } catch (error) {
       console.error("[Accounts] Switch failed:", error);
@@ -646,13 +636,8 @@ function Accounts() {
 
         {/* 操作按钮组 */}
         <div className="flex items-center gap-1.5 shrink-0">
-          <select aria-label={t('accounts.switch_target')} title={t('accounts.switch_scope_hint')} value={switchTarget} disabled={!!switchingAccountId} onChange={event => setSwitchTarget(event.target.value as 'app' | 'ide')} className="w-40 shrink-0 rounded-lg border border-gray-200 bg-white px-2 py-2 text-xs dark:border-base-300 dark:bg-base-100">
-            <option value="app">{t('accounts.target_app_cli')}</option>
-            <option value="ide">Antigravity IDE</option>
-          </select>
           <AddAccountDialog onAdd={handleAddAccount} showText={false} />
 
-          {selectedIds.size > 0 && <button className="btn btn-sm btn-ghost px-2" onClick={() => handleExport([...selectedIds])} aria-label={t('accounts.export_selected', { count: selectedIds.size })} title={t('accounts.export_selected', { count: selectedIds.size })}><Download className="w-4 h-4" /></button>}
           {selectedIds.size > 0 && (
             <>
               <button
@@ -691,6 +676,17 @@ function Accounts() {
                   : t("accounts.refresh_all")}
             </span>
           </button>
+
+          {selectedIds.size > 0 && (
+            <button
+              className="px-2.5 py-2 bg-emerald-500 text-white text-xs font-medium rounded-lg hover:bg-emerald-600 transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap shrink-0"
+              onClick={() => handleExport([...selectedIds])}
+              aria-label={t('accounts.export_selected', { count: selectedIds.size })}
+              title={t('accounts.export_selected', { count: selectedIds.size })}
+            >
+              <Download className="w-3.5 h-3.5" />
+            </button>
+          )}
 
         </div>
       </div>
@@ -731,7 +727,7 @@ function Accounts() {
               onRefresh={handleRefresh}
               onEditLabel={handleEditLabel}
               onDelete={handleDelete}
-                onExport={id => handleExport([id])}
+              onExport={id => handleExport([id])}
               onReorder={reorderAccounts}
               quotaWindow={quotaWindow}
             />
