@@ -55,10 +55,20 @@ try {
   // and the current account must remain unchanged, including unknown index metadata.
   const second = JSON.stringify({ ...JSON.parse(account), id: 'test-2', email: 'second@example.invalid' });
   writeFileSync(join(data, 'accounts/test-2.json'), second);
-  writeFileSync(join(data, 'accounts.json'), JSON.stringify({ ...JSON.parse(index), accounts: [{ id: 'test-1', extra: 'retain' }, { id: 'test-2' }], extra: 'retain' }));
+  const separateIndex = { ...JSON.parse(index), accounts: [{ id: 'test-1', extra: 'retain' }, { id: 'test-2' }], current_ide_account_id: 'test-2', extra: 'retain' };
+  writeFileSync(join(data, 'accounts.json'), JSON.stringify(separateIndex));
+  assert.equal(JSON.parse(run(['current', '--target', 'app', '--json']).stdout).account.id, 'test-1');
+  assert.equal(JSON.parse(run(['current', '--target', 'ide', '--json']).stdout).account.id, 'test-2');
+  assert.equal(JSON.parse(run(['accounts', 'current', '--target', 'ide', '--json']).stdout).current_target, 'ide');
+  run(['current', '--target', 'cli', '--json'], 2);
+  writeFileSync(join(data, 'accounts.json'), JSON.stringify({ ...separateIndex, current_ide_account_id: undefined, current_target_ide: 'ide', current_account_id: 'test-2' }));
+  assert.equal(JSON.parse(run(['current', '--target', 'ide', '--json']).stdout).account.id, 'test-2');
+  run(['current', '--target', 'app', '--json'], 3);
+  writeFileSync(join(data, 'accounts.json'), JSON.stringify(separateIndex));
   assert.deepEqual(JSON.parse(run(['accounts', 'order', 'second@example.invalid', 'test-1', '--json']).stdout).account_ids, ['test-2', 'test-1']);
   const orderedIndex = readFileSync(join(data, 'accounts.json'), 'utf8');
   assert.equal(JSON.parse(orderedIndex).current_account_id, 'test-1');
+  assert.equal(JSON.parse(orderedIndex).current_ide_account_id, 'test-2');
   assert.equal(JSON.parse(orderedIndex).accounts[1].extra, 'retain');
   run(['accounts', 'order', 'test-1', '--json'], 2);
   run(['accounts', 'order', 'test-1', 'test-1'], 2);

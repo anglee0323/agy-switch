@@ -21,38 +21,42 @@ fn get_antigravity_path(target_ide: Option<&str>) -> Option<PathBuf> {
 
 /// Get all possible Antigravity database candidate paths
 pub fn get_all_candidate_db_paths(target_ide: Option<&str>) -> Vec<PathBuf> {
-    let mut paths = Vec::new();
-
-    if let Some(user_data_dir) = crate::modules::process::get_user_data_dir_from_process(target_ide)
-    {
-        paths.push(
-            user_data_dir
-                .join("User")
-                .join("globalStorage")
-                .join("state.vscdb"),
-        );
+    if matches!(target_ide, None | Some("all")) {
+        let mut paths = Vec::new();
+        for target in ["app", "ide", "vscode"] {
+            for path in get_all_candidate_db_paths(Some(target)) {
+                if !paths.contains(&path) { paths.push(path); }
+            }
+        }
+        return paths;
     }
-
-    if let Some(antigravity_path) = get_antigravity_path(target_ide) {
-        if let Some(parent_dir) = antigravity_path.parent() {
+    let mut paths = Vec::new();
+    if target_ide != Some("vscode") {
+        if let Some(user_data_dir) = crate::modules::process::get_user_data_dir_from_process(target_ide)
+        {
             paths.push(
-                PathBuf::from(parent_dir)
-                    .join("data")
-                    .join("user-data")
+                user_data_dir
                     .join("User")
                     .join("globalStorage")
                     .join("state.vscdb"),
             );
         }
+
+        if let Some(antigravity_path) = get_antigravity_path(target_ide) {
+            if let Some(parent_dir) = antigravity_path.parent() {
+                paths.push(
+                    PathBuf::from(parent_dir)
+                        .join("data")
+                        .join("user-data")
+                        .join("User")
+                        .join("globalStorage")
+                        .join("state.vscdb"),
+                );
+            }
+        }
     }
 
-    let folder_names: &[&str] = &[
-        "Antigravity IDE",
-        "Antigravity",
-        "Code",
-        "Code - Insiders",
-        "Cursor",
-    ];
+    let folder_names = data_folder_names(target_ide);
 
     #[cfg(target_os = "macos")]
     if let Some(home) = dirs::home_dir() {
@@ -88,11 +92,22 @@ pub fn get_all_candidate_db_paths(target_ide: Option<&str>) -> Vec<PathBuf> {
 
     let mut unique_paths = Vec::new();
     for p in paths {
+        let p = std::fs::canonicalize(&p).unwrap_or(p);
         if !unique_paths.contains(&p) {
             unique_paths.push(p);
         }
     }
     unique_paths
+}
+
+/// Discovery may scan all clients; writes must always pass a specific target.
+pub(crate) fn data_folder_names(target: Option<&str>) -> &'static [&'static str] {
+    match target {
+        Some("app" | "app_cli" | "agy") => &["Antigravity"],
+        Some("ide") => &["Antigravity IDE", "Antigravity-IDE", "Antigravity_IDE", "antigravity-ide", "antigravity_ide"],
+        Some("vscode" | "code" | "cursor") => &["Code", "Code - Insiders", "Cursor"],
+        _ => &["Antigravity", "Antigravity IDE", "Antigravity-IDE", "Antigravity_IDE", "antigravity-ide", "antigravity_ide", "Code", "Code - Insiders", "Cursor"],
+    }
 }
 
 /// Get Antigravity database path (cross-platform)

@@ -281,6 +281,8 @@ mod tests {
             ],
             current_account_id: Some("acc-1".to_string()),
             current_target_ide: None,
+            current_ide_account_id: None,
+            current_vscode_account_id: None,
         };
 
         // Save the index
@@ -344,6 +346,8 @@ mod tests {
             }],
             current_account_id: None,
             current_target_ide: None,
+            current_ide_account_id: None,
+            current_vscode_account_id: None,
         };
         save_account_index_in_dir(dir.path(), &index).unwrap();
 
@@ -625,6 +629,8 @@ fn rebuild_index_from_accounts_in_dir(data_dir: &PathBuf) -> Result<AccountIndex
         accounts: summaries,
         current_account_id,
         current_target_ide: None,
+        current_ide_account_id: None,
+        current_vscode_account_id: None,
     })
 }
 
@@ -908,6 +914,11 @@ pub fn upsert_account(
     add_account(email, name, token)
 }
 
+fn clear_target_selection(index: &mut AccountIndex, id: &str) {
+    if index.current_ide_account_id.as_deref() == Some(id) { index.current_ide_account_id = None; }
+    if index.current_vscode_account_id.as_deref() == Some(id) { index.current_vscode_account_id = None; }
+}
+
 /// Delete account
 pub fn delete_account(account_id: &str) -> Result<(), String> {
     let _lock = ACCOUNT_INDEX_LOCK
@@ -918,6 +929,7 @@ pub fn delete_account(account_id: &str) -> Result<(), String> {
     // Remove from index
     let original_len = index.accounts.len();
     index.accounts.retain(|s| s.id != account_id);
+    clear_target_selection(&mut index, account_id);
 
     if index.accounts.len() == original_len {
         return Err(format!("Account ID not found: {}", account_id));
@@ -954,6 +966,7 @@ pub fn delete_accounts(account_ids: &[String]) -> Result<(), String> {
     for account_id in account_ids {
         // Remove from index
         index.accounts.retain(|s| &s.id != account_id);
+        clear_target_selection(&mut index, account_id);
 
         // Clear current account if it's being deleted
         if index.current_account_id.as_deref() == Some(account_id) {
@@ -1009,6 +1022,11 @@ pub async fn switch_account(
     integration: &(impl modules::integration::SystemIntegration + ?Sized),
 ) -> Result<(), String> {
     use crate::modules::oauth;
+    // Omitted manual targets mean App + native agy. Global synchronization is explicit.
+    let target_ide = Some(match target_ide.unwrap_or("app") { "agy" | "app_cli" => "app", target => target });
+    if !matches!(target_ide, Some("app" | "ide" | "vscode" | "all")) {
+        return Err("Unknown account switch target.".into());
+    }
 
     // A switch spans external processes and multiple credential locations. Serialize
     // the whole operation so concurrent clicks cannot activate different accounts.
@@ -1121,8 +1139,7 @@ fn finish_switch_account(account_id: &str, target_ide: Option<&str>) -> Result<(
     let mut latest = load_account(account_id)?;
     latest.update_last_used();
     save_account(&latest)?;
-    index.current_account_id = Some(account_id.into());
-    index.current_target_ide = target_ide.map(str::to_owned);
+    index.record_selected(account_id, target_ide);
     save_account_index(&index)
 }
 
@@ -1306,8 +1323,12 @@ fn clear_validation_blocked(account: &mut Account) {
 
 /// Get current account ID
 pub fn get_current_account_id() -> Result<Option<String>, String> {
+    get_current_account_id_for_target(Some("app"))
+}
+
+pub fn get_current_account_id_for_target(target: Option<&str>) -> Result<Option<String>, String> {
     let index = load_account_index()?;
-    Ok(index.current_account_id)
+    Ok(index.selected(target))
 }
 
 /// Get currently active account details
@@ -1333,8 +1354,7 @@ pub fn set_current_account_id_with_target(
         .lock()
         .map_err(|e| format!("failed_to_acquire_lock: {}", e))?;
     let mut index = load_account_index()?;
-    index.current_account_id = Some(account_id.to_string());
-    index.current_target_ide = target_ide.map(|s| s.to_string());
+    index.record_selected(account_id, target_ide);
     save_account_index(&index)
 }
 
@@ -1448,9 +1468,15 @@ pub fn update_account_quota(account_id: &str, quota: QuotaData) -> Result<(), St
 pub fn export_accounts_by_ids(
     account_ids: &[String],
 ) -> Result<crate::models::AccountExportResponse, String> {
+    build_account_export(list_accounts()?, account_ids)
+}
+
+pub(crate) fn build_account_export(accounts: Vec<Account>, account_ids: &[String]) -> Result<crate::models::AccountExportResponse, String> {
     use crate::models::{AccountExportItem, AccountExportResponse};
 
-    let accounts = list_accounts()?;
+    if account_ids.is_empty() || account_ids.iter().any(|id| !accounts.iter().any(|account| &account.id == id)) {
+        return Err("Select existing accounts to export.".into());
+    }
 
     let export_items: Vec<AccountExportItem> = accounts
         .into_iter()
@@ -1458,12 +1484,29 @@ pub fn export_accounts_by_ids(
         .map(|acc| AccountExportItem {
             email: acc.email,
             refresh_token: acc.token.refresh_token,
+            name: acc.name,
+            oauth_client_key: acc.token.oauth_client_key,
+            is_gcp_tos: acc.token.is_gcp_tos,
+            project_id: acc.token.project_id,
+            custom_label: acc.custom_label,
         })
         .collect();
 
     Ok(AccountExportResponse {
+        schema_version: 2,
         accounts: export_items,
     })
+}
+
+pub fn save_account_export(account_ids: &[String], path: &std::path::Path) -> Result<usize, String> {
+    let export = export_accounts_by_ids(account_ids)?;
+    write_account_export(&export, path)
+}
+
+pub(crate) fn write_account_export(export: &crate::models::AccountExportResponse, path: &std::path::Path) -> Result<usize, String> {
+    let bytes = serde_json::to_vec_pretty(&export).map_err(|_| "Cannot encode account export.")?;
+    crate::utils::fs::write_atomic(path, &bytes).map_err(|_| "Cannot save account export. Choose a writable file location.")?;
+    Ok(export.accounts.len())
 }
 
 /// Reuse a cached project ID only after a subscription tier has been recorded.
@@ -1857,5 +1900,36 @@ mod ordering_tests {
         assert!(reorder_accounts_at(dir.path(), &["A".into(), "A".into()], None).is_err());
         assert!(reorder_accounts_at(dir.path(), &["missing".into()], None).is_err());
         assert_eq!(fs::read(&path).unwrap(), before);
+    }
+}
+
+#[cfg(test)]
+mod transfer_tests {
+    use super::*;
+
+    #[test]
+    fn selected_export_roundtrips_metadata_without_machine_or_access_data() {
+        let mut account = Account::new("A".into(), "a@example.test".into(), TokenData::new("fixture-access-not-exported".into(), "1//fixture-refresh".into(), 3600, None, Some("fixture-project".into()), None, true, None).with_oauth_client_key(Some("fixture-client".into())));
+        account.custom_label = Some("fixture remark".into());
+        account.device_profile = Some(modules::device::generate_profile());
+        let export = build_account_export(vec![account.clone()], &["A".into()]).unwrap();
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("export.json");
+        assert_eq!(write_account_export(&export, &path).unwrap(), 1);
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(!text.contains("fixture-access-not-exported"));
+        assert!(!text.contains("device_profile"));
+        let restored: crate::models::AccountExportResponse = serde_json::from_str(&text).unwrap();
+        assert_eq!(restored.schema_version, 2);
+        assert_eq!(restored.accounts[0].oauth_client_key.as_deref(), Some("fixture-client"));
+        assert_eq!(restored.accounts[0].custom_label.as_deref(), Some("fixture remark"));
+        assert!(restored.accounts[0].is_gcp_tos);
+        #[cfg(unix)] {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(fs::metadata(path).unwrap().permissions().mode() & 0o777, 0o600);
+        }
+        assert!(build_account_export(vec![account], &["missing".into()]).is_err());
+        let old: crate::models::AccountExportResponse = serde_json::from_str(r#"{"accounts":[{"email":"fixture@example.test","refresh_token":"1//fixture"}]}"#).unwrap();
+        assert!(old.accounts[0].oauth_client_key.is_none());
     }
 }

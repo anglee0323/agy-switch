@@ -52,6 +52,7 @@ fn load_config_at(path: &Path) -> Result<AppConfig, String> {
 }
 
 fn save_config_at(path: &Path, config: &AppConfig) -> Result<(), String> {
+    config.network.validate()?;
     let _guard = lock_config()?;
     let mut next = config.clone();
     // Dedicated setters manage desktop, menu and dashboard preferences. Ordinary

@@ -66,7 +66,7 @@ fn try_fetch_remote_version() -> Option<String> {
 
     std::thread::spawn(move || {
         let result = (|| -> Option<String> {
-            let client = reqwest::blocking::Client::builder()
+            let client = crate::utils::proxy::configure_blocking(reqwest::blocking::Client::builder()).ok()?
                 .timeout(std::time::Duration::from_secs(5))
                 .build()
                 .ok()?;

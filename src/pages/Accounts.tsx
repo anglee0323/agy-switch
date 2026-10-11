@@ -1,6 +1,7 @@
 
 
 import {
+  Download,
   Calendar,
   Clock,
   LayoutGrid,
@@ -19,6 +20,8 @@ import { showToast } from "../components/common/ToastContainer";
 import { useAccountStore } from "../stores/useAccountStore";
 import { cn } from "../utils/cn";
 import { useTranslation } from "react-i18next";
+import { save } from "@tauri-apps/plugin-dialog";
+import { saveAccountExport, getCurrentAccount } from "../services/accountService";
 import type { Account } from "../types/account";
 
 type FilterType = "all" | "pro" | "ultra" | "free";
@@ -30,7 +33,7 @@ function Accounts() {
   const { t } = useTranslation();
   const {
     accounts,
-    currentAccount,
+    currentAccount: currentAppAccount,
     fetchAccounts,
     fetchCurrentAccount,
     addAccount,
@@ -41,6 +44,14 @@ function Accounts() {
     reorderAccounts,
     updateAccountLabel,
   } = useAccountStore();
+  const [switchTarget, setSwitchTarget] = useState<'app' | 'ide'>('app');
+  const [currentIdeAccount, setCurrentIdeAccount] = useState<Account | null>(null);
+  const currentAccount = switchTarget === 'ide' ? currentIdeAccount : currentAppAccount;
+  useEffect(() => {
+    let active = true;
+    getCurrentAccount('ide').then(account => { if (active) setCurrentIdeAccount(account); }).catch(() => { if (active) setCurrentIdeAccount(null); });
+    return () => { active = false; };
+  }, [accounts, switchTarget]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
@@ -250,7 +261,8 @@ function Accounts() {
     setSwitchingAccountId(accountId);
     console.log("[Accounts] handleSwitch called for:", accountId, "targetIde:", targetIde);
     try {
-      await switchAccount(accountId, targetIde);
+      await switchAccount(accountId, targetIde || switchTarget);
+      if (switchTarget === 'ide') setCurrentIdeAccount(await getCurrentAccount('ide'));
       showToast(t("common.success"), "success");
     } catch (error) {
       console.error("[Accounts] Switch failed:", error);
@@ -261,6 +273,15 @@ function Accounts() {
         setSwitchingAccountId(null);
       }, 500);
     }
+  };
+
+  const handleExport = async (ids: string[]) => {
+    try {
+      const path = await save({ defaultPath: 'antigravity-accounts.json', filters: [{ name: 'JSON', extensions: ['json'] }], title: t('accounts.export_account') });
+      if (!path) return;
+      const count = await saveAccountExport(ids, path);
+      showToast(t('accounts.export_success', { count }), 'success');
+    } catch (error) { showToast(t('accounts.export_failed', { error: String(error) }), 'error'); }
   };
 
   const handleRefresh = async (accountId: string) => {
@@ -428,7 +449,7 @@ function Accounts() {
   return (
     <div className="h-full flex flex-col p-5 gap-4 max-w-7xl mx-auto w-full">
       {/* 顶部工具栏:搜索、过滤和操作按钮 */}
-      <div className="flex-none flex items-center gap-2">
+      <div className="flex-none flex flex-wrap items-center gap-2">
         {/* 搜索框 - 响应式:大屏显示输入框,小屏显示图标 */}
         <div className="hidden lg:block flex-none w-48 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -625,8 +646,13 @@ function Accounts() {
 
         {/* 操作按钮组 */}
         <div className="flex items-center gap-1.5 shrink-0">
+          <select aria-label={t('accounts.switch_target')} title={t('accounts.switch_scope_hint')} value={switchTarget} disabled={!!switchingAccountId} onChange={event => setSwitchTarget(event.target.value as 'app' | 'ide')} className="w-40 shrink-0 rounded-lg border border-gray-200 bg-white px-2 py-2 text-xs dark:border-base-300 dark:bg-base-100">
+            <option value="app">{t('accounts.target_app_cli')}</option>
+            <option value="ide">Antigravity IDE</option>
+          </select>
           <AddAccountDialog onAdd={handleAddAccount} showText={false} />
 
+          {selectedIds.size > 0 && <button className="btn btn-sm btn-ghost px-2" onClick={() => handleExport([...selectedIds])} aria-label={t('accounts.export_selected', { count: selectedIds.size })} title={t('accounts.export_selected', { count: selectedIds.size })}><Download className="w-4 h-4" /></button>}
           {selectedIds.size > 0 && (
             <>
               <button
@@ -645,7 +671,7 @@ function Accounts() {
           )}
 
           <button
-            className={`px-2.5 py-2 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-1.5 shadow-sm ${isRefreshing ? "opacity-70 cursor-not-allowed" : ""}`}
+            className={`px-2.5 py-2 bg-blue-500 text-white text-xs font-medium rounded-lg hover:bg-blue-600 transition-colors flex items-center gap-1.5 shadow-sm whitespace-nowrap shrink-0 ${isRefreshing ? "opacity-70 cursor-not-allowed" : ""}`}
             onClick={handleRefreshClick}
             disabled={isRefreshing}
             title={
@@ -686,6 +712,7 @@ function Accounts() {
                 onRefresh={handleRefresh}
                 onEditLabel={handleEditLabel}
                 onDelete={handleDelete}
+                onExport={id => handleExport([id])}
                 onReorder={reorderAccounts}
                 quotaWindow={quotaWindow}
               />
@@ -704,6 +731,7 @@ function Accounts() {
               onRefresh={handleRefresh}
               onEditLabel={handleEditLabel}
               onDelete={handleDelete}
+                onExport={id => handleExport([id])}
               onReorder={reorderAccounts}
               quotaWindow={quotaWindow}
             />

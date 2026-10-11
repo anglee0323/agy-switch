@@ -38,7 +38,7 @@ fn get_ide_exe_paths(system: &System) -> std::collections::HashSet<String> {
             .collect::<Vec<String>>()
             .join(" ");
 
-        if args_str.contains("antigravity ide") || args_str.contains("antigravity-ide") {
+        if is_ide_name(&args_str) {
             if let Some(exe_path) = process.exe().and_then(|p| p.to_str()) {
                 immune_exe_paths.insert(exe_path.to_lowercase());
             }
@@ -188,20 +188,16 @@ pub fn is_antigravity_running(target_ide: Option<&str>) -> bool {
 
         // Check if the process matches target_ide
         let is_ide_match = if target_ide == Some("ide") {
-            exe_path.contains("antigravity ide")
-                || exe_path.contains("antigravity-ide")
-                || name.contains("antigravity ide")
-                || name.contains("antigravity-ide")
+            is_ide_name(&exe_path)
+                || is_ide_name(&name)
                 || ide_exe_paths.contains(&exe_path)
         } else {
             if ide_exe_paths.contains(&exe_path) {
                 false // Explicitly immune (it is an IDE)
             } else {
                 (exe_path.contains("antigravity") || name.contains("antigravity"))
-                    && !exe_path.contains("antigravity ide")
-                    && !exe_path.contains("antigravity-ide")
-                    && !name.contains("antigravity ide")
-                    && !name.contains("antigravity-ide")
+                    && !is_ide_name(&exe_path)
+                    && !is_ide_name(&name)
             }
         };
 
@@ -420,20 +416,16 @@ fn get_antigravity_pids(target_ide: Option<&str>) -> Vec<u32> {
 
         // Check if the process matches target_ide
         let is_ide_match = if target_ide == Some("ide") {
-            exe_path.contains("antigravity ide")
-                || exe_path.contains("antigravity-ide")
-                || name.contains("antigravity ide")
-                || name.contains("antigravity-ide")
+            is_ide_name(&exe_path)
+                || is_ide_name(&name)
                 || ide_exe_paths.contains(&exe_path)
         } else {
             if ide_exe_paths.contains(&exe_path) {
                 false // Explicitly immune (it is an IDE)
             } else {
                 (exe_path.contains("antigravity") || name.contains("antigravity"))
-                    && !exe_path.contains("antigravity ide")
-                    && !exe_path.contains("antigravity-ide")
-                    && !name.contains("antigravity ide")
-                    && !name.contains("antigravity-ide")
+                    && !is_ide_name(&exe_path)
+                    && !is_ide_name(&name)
             }
         };
 
@@ -841,7 +833,7 @@ fn start_antigravity_with_stdio(target_ide: Option<&str>, detached: bool) -> Res
             .as_ref()
             .and_then(|c| c.antigravity_executable.clone())
     };
-    let args = config.and_then(|c| c.antigravity_args.clone());
+    let args = config.and_then(|c| if target_ide == Some("ide") { c.antigravity_ide_args } else { c.antigravity_args });
 
     if let Some(mut path_str) = manual_path {
         let mut path = std::path::PathBuf::from(&path_str);
@@ -878,6 +870,7 @@ fn start_antigravity_with_stdio(target_ide: Option<&str>, detached: bool) -> Res
 
                     // Add startup arguments
                     if let Some(ref args) = args {
+                        cmd.arg("--args");
                         for arg in args {
                             cmd.arg(arg);
                         }
@@ -949,6 +942,7 @@ fn start_antigravity_with_stdio(target_ide: Option<&str>, detached: bool) -> Res
 
         // Add startup arguments
         if let Some(ref args) = args {
+            cmd.arg("--args");
             for arg in args {
                 cmd.arg(arg);
             }
@@ -1028,17 +1022,15 @@ fn get_process_info(target_ide: Option<&str>) -> (Option<std::path::PathBuf>, Op
         // Get executable path and command line arguments
         if let Some(exe) = process.exe() {
             let mut args = process.cmd().iter();
-            let exe_path = args
-                .next()
-                .map_or(exe.to_string_lossy(), |arg| arg.to_string_lossy())
-                .to_lowercase();
+            let _ = args.next();
+            let exe_path = exe.to_string_lossy().to_lowercase();
 
             // Extract actual arguments from command line (skipping exe path)
             let args = args
-                .map(|arg| arg.to_string_lossy().to_lowercase())
+                .map(|arg| arg.to_string_lossy().into_owned())
                 .collect::<Vec<String>>();
 
-            let args_str = args.join(" ");
+            let args_str = args.join(" ").to_lowercase();
 
             // Common helper process exclusion logic
             let is_helper = args_str.contains("--type=")
@@ -1061,26 +1053,20 @@ fn get_process_info(target_ide: Option<&str>) -> (Option<std::path::PathBuf>, Op
 
             // Is the process a match for target_ide?
             let is_ide_match = if target_ide == Some("ide") {
-                exe_path.contains("antigravity ide")
-                    || exe_path.contains("antigravity-ide")
-                    || name.contains("antigravity ide")
-                    || name.contains("antigravity-ide")
+                is_ide_name(&exe_path)
+                    || is_ide_name(&name)
             } else {
                 (exe_path.contains("antigravity") || name.contains("antigravity"))
-                    && !exe_path.contains("antigravity ide")
-                    && !exe_path.contains("antigravity-ide")
-                    && !name.contains("antigravity ide")
-                    && !name.contains("antigravity-ide")
+                    && !is_ide_name(&exe_path)
+                    && !is_ide_name(&name)
             };
 
             if is_ide_match && !is_helper {
                 #[cfg(target_os = "macos")]
                 {
                     if !exe_path.contains("frameworks") {
-                        if let Some(app_idx) = exe_path.find(".app") {
-                            let app_path_str = &exe.to_string_lossy()[..app_idx + 4];
-                            let path = Some(std::path::PathBuf::from(app_path_str));
-                            return (path, args);
+                        if let Some(bundle) = exe.ancestors().find(|path| path.extension().is_some_and(|extension| extension.eq_ignore_ascii_case("app"))) {
+                            return (Some(bundle.to_path_buf()), args);
                         }
                     }
                     return (path, args);
@@ -1119,7 +1105,8 @@ pub fn get_args_from_running_process(target_ide: Option<&str>) -> Option<Vec<Str
 pub fn get_user_data_dir_from_process(target_ide: Option<&str>) -> Option<std::path::PathBuf> {
     // Prefer getting startup arguments from config
     if let Ok(config) = crate::modules::config::load_app_config() {
-        if let Some(args) = config.antigravity_args {
+        let args = if target_ide == Some("ide") { config.antigravity_ide_args } else { config.antigravity_args };
+        if let Some(args) = args {
             // Check arguments in config
             for i in 0..args.len() {
                 if args[i] == "--user-data-dir" && i + 1 < args.len() {
@@ -1211,7 +1198,7 @@ pub fn get_antigravity_executable_path(target_ide: Option<&str>) -> Option<std::
 /// Check standard installation locations
 fn check_standard_locations(target_ide: Option<&str>) -> Option<std::path::PathBuf> {
     let folder_names: &[&str] = if target_ide == Some("ide") {
-        &["Antigravity IDE"]
+        crate::modules::db::data_folder_names(Some("ide"))
     } else if target_ide == Some("code") || target_ide == Some("cursor") {
         &["Antigravity"]
     } else {
@@ -1278,7 +1265,7 @@ fn check_standard_locations(target_ide: Option<&str>) -> Option<std::path::PathB
     #[cfg(target_os = "linux")]
     {
         for folder_name in folder_names {
-            let exe_name = if *folder_name == "Antigravity IDE" {
+            let exe_name = if target_ide == Some("ide") {
                 "antigravity-ide"
             } else {
                 "antigravity"
@@ -1314,4 +1301,9 @@ fn check_standard_locations(target_ide: Option<&str>) -> Option<std::path::PathB
     }
 
     None
+}
+
+fn is_ide_name(value: &str) -> bool {
+    let value = value.to_lowercase().replace(['-', '_'], " ");
+    value.contains("antigravity ide")
 }

@@ -1493,8 +1493,8 @@ fn show_accounts_and_quotas_hub(root: &Path, lang: Lang) {
                 println!("{}", target_header);
 
                 let wait_msg = match lang {
-                    Lang::Zh => format!("\n正在切换至 \x1b[1;32m{}\x1b[0m 并全域同步会话...", target_acc.email),
-                    Lang::En => format!("\nSwitching to \x1b[1;32m{}\x1b[0m and synchronizing globally...", target_acc.email),
+                    Lang::Zh => format!("\n正在切换至 \x1b[1;32m{}\x1b[0m 并同步 App 与 agy 会话...", target_acc.email),
+                    Lang::En => format!("\nSwitching to \x1b[1;32m{}\x1b[0m and synchronizing App and agy...", target_acc.email),
                 };
                 println!("{}", wait_msg);
 
@@ -1512,7 +1512,7 @@ fn show_accounts_and_quotas_hub(root: &Path, lang: Lang) {
                     }
                 };
 
-                let target_ide = None;
+                let target_ide = Some("app");
 
                 match runtime.block_on(crate::modules::account::switch_account(
                     &target_acc.id,

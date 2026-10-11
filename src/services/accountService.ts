@@ -26,8 +26,8 @@ export async function getAccountDashboardSnapshot(): Promise<DashboardSnapshot> 
     return await invoke<DashboardSnapshot>('get_account_dashboard_snapshot');
 }
 
-export async function getCurrentAccount(): Promise<Account | null> {
-    return await invoke('get_current_account');
+export async function getCurrentAccount(targetIde?: string): Promise<Account | null> {
+    return await invoke('get_current_account', { targetIde });
 }
 
 export async function addAccount(email: string, refreshToken: string): Promise<Account> {
@@ -152,9 +152,15 @@ export async function reorderAccounts(accountIds: string[]): Promise<void> {
 export interface ExportAccountItem {
     email: string;
     refresh_token: string;
+    name?: string;
+    oauth_client_key?: string;
+    is_gcp_tos?: boolean;
+    project_id?: string;
+    custom_label?: string;
 }
 
 export interface ExportAccountsResponse {
+    schema_version?: number;
     accounts: ExportAccountItem[];
 }
 
@@ -167,3 +173,15 @@ export async function updateAccountLabel(accountId: string, label: string): Prom
     return await invoke('update_account_label', { accountId, label });
 }
 
+
+export async function saveAccountExport(accountIds: string[], path: string): Promise<number> {
+    return invoke('save_account_export', { accountIds, path });
+}
+export async function importAccountTransfer(item: ExportAccountItem): Promise<Account> {
+    return invoke('import_account_transfer', { item });
+}
+export interface LocalImportSource { source: string; status: string; }
+export interface LocalImportReport { accounts: Account[]; sources: LocalImportSource[]; }
+export async function importLocalAccountsReport(): Promise<LocalImportReport> {
+    return invoke('import_local_accounts_report');
+}

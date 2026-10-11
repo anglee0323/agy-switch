@@ -179,6 +179,7 @@ fn read_regular(path: &Path) -> Result<Vec<u8>, &'static str> {
 pub fn snapshot_in_dir(data_dir: &Path) -> Result<DashboardSnapshot, String> {
     let bytes = read_regular(&data_dir.join("accounts.json")).map_err(|e| format!("index_{e}"))?;
     let index: AccountIndex = serde_json::from_slice(&bytes).map_err(|_| "index_invalid_json")?;
+    let current_account_id = index.selected(Some("app"));
     let mut entries = Vec::new();
     let mut loaded = 0;
     for summary in index.accounts {
@@ -240,7 +241,7 @@ pub fn snapshot_in_dir(data_dir: &Path) -> Result<DashboardSnapshot, String> {
         indexed_total: entries.len(),
         loaded_count: loaded,
         failed_count: entries.len() - loaded,
-        current_account_id: index.current_account_id,
+        current_account_id,
         current_identity_source: "tools_record",
         accounts: entries,
     })

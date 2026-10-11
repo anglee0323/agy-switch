@@ -24,11 +24,11 @@ mod modules {
         pub fn log_warn(_: &str) {}
     }
     pub mod config {
-        pub struct Config { pub antigravity_executable: Option<String>, pub antigravity_ide_executable: Option<String>, pub antigravity_args: Option<Vec<String>> }
+        pub struct Config { pub antigravity_executable: Option<String>, pub antigravity_ide_executable: Option<String>, pub antigravity_args: Option<Vec<String>>, pub antigravity_ide_args: Option<Vec<String>> }
         pub fn load_app_config() -> Result<Config, ()> {
             let mode = std::env::var("PROBE_MODE").unwrap();
             let path = if mode == "auto" { None } else { Some(std::env::var("PROBE_APP").unwrap()) };
-            Ok(Config { antigravity_executable: path.clone(), antigravity_ide_executable: path, antigravity_args: Some(vec!["--child".into()]) })
+            Ok(Config { antigravity_executable: path.clone(), antigravity_ide_executable: path, antigravity_args: Some(vec!["--child".into(), "app".into()]), antigravity_ide_args: Some(vec!["--child".into(), "ide".into()]) })
         }
     }
 }
@@ -39,13 +39,15 @@ ${launch}
 fn main() {
     let args: Vec<_> = std::env::args().collect();
     if args.get(1).map(String::as_str) == Some("--child") {
+        if let Ok(path) = std::env::var("PROBE_ARGS_FILE") { std::fs::write(path, args.get(2).unwrap()).unwrap(); }
         println!("FAKE-APP-STDOUT"); eprintln!("FAKE-APP-STDERR");
         std::thread::sleep(std::time::Duration::from_secs(3));
         return;
     }
     // macOS fake 'open': model a short-lived launcher and a persistent APP.
     if args.get(1).map(String::as_str) == Some("-a") {
-        Command::new(std::env::var_os("PROBE_EXE").unwrap()).arg("--child").spawn().unwrap();
+        assert_eq!(args.get(3).map(String::as_str), Some("--args"));
+        Command::new(std::env::var_os("PROBE_EXE").unwrap()).args(&args[4..]).spawn().unwrap();
         return;
     }
     let target = if std::env::var("PROBE_TARGET").unwrap() == "ide" { Some("ide") } else { None };
@@ -63,12 +65,19 @@ try {
   let count = 0;
   function check(mode, target, app = exe) {
     const begin = performance.now();
-    const run = spawnSync(exe, [], { env: { ...env, PROBE_MODE: mode, PROBE_TARGET: target, PROBE_APP: app }, encoding: 'utf8', timeout: 8000 });
+    const argsFile = join(root, `args-${mode}-${target}-${count}`);
+    const run = spawnSync(exe, [], { env: { ...env, PROBE_MODE: mode, PROBE_TARGET: target, PROBE_APP: app, PROBE_ARGS_FILE: argsFile }, encoding: 'utf8', timeout: 8000 });
     const elapsed = performance.now() - begin;
     assert.equal(run.status, 0, run.stderr);
     assert.deepEqual(JSON.parse(run.stdout), { schema_version: 1, switched: true });
     assert.equal(run.stderr, '');
     assert.ok(elapsed < 2000, `Child kept CLI capture pipes open (${elapsed.toFixed(0)}ms)`);
+    const deadline = Date.now() + 2000;
+    while (Date.now() < deadline) {
+      try { if (readFileSync(argsFile, 'utf8') === target) break; } catch {}
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+    }
+    assert.equal(readFileSync(argsFile, 'utf8'), target, 'App and IDE launch arguments must stay separate');
     count++;
   }
   for (const mode of ['manual', 'auto']) for (const target of ['app', 'ide']) check(mode, target);

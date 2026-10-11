@@ -183,7 +183,7 @@
     "refresh_selected": "刷新 ({{count}})",
     "delete_selected": "删除 ({{count}})",
     "current": "当前",
-    "current_active": "当前生效",
+    "current_active": "当前选择",
     "disabled": "已禁用",
     "disabled_tooltip": "账号已停用：授权已失效或被撤销。重新登录后即可恢复。",
     "forbidden": "403",
@@ -194,7 +194,7 @@
       "risk_controlled": "触发限流",
       "oauth_reauth_required": "授权异常"
     },
-    "switch_account": "切换到此账号（全域智能同步）",
+    "switch_account": "切换到此账号",
     "refresh_quota": "刷新此账号配额",
     "delete_account": "删除此账号",
     "quota_window_5h": "5 小时配额",
@@ -236,20 +236,28 @@
       "token": {
         "label": "Refresh Token",
         "placeholder": "在此处粘贴您的 Refresh Token (支持批量)\n\n支持格式:\n1. 单个 Token (1//...)\n2. JSON 数组 (含 refresh_token 字段)\n3. 任意包含 Token 的文本 (自动提取)",
-        "hint": "提示: 支持一次性粘贴多个 Token 或 JSON 数组，系统将自动识别并批量导入。",
+        "hint": "支持 Refresh Token、JSON 数组或账号导出文件。导出文件包含登录凭据，请妥善保存。",
         "error_token": "请填写 Refresh Token",
         "batch_progress": "正在导入第 {{current}}/{{total}} 个账户...",
         "batch_success": "成功导入 {{count}} 个账户",
         "batch_partial": "导入完成: {{success}} 个成功, {{fail}} 个失败",
-        "batch_fail": "导入失败"
+        "batch_fail": "导入失败",
+        "choose_file": "选择账号导出文件"
       },
       "import": {
-        "scan_title": "自动扫描本机账号",
+        "scan_title": "扫描本机账号",
         "scan_desc": "读取系统钥匙串、Antigravity IDE、插件与 CLI 中已登录的账号，并批量导入。",
         "scan_btn": "扫描并导入本机账号",
         "file_title": "从数据库文件导入",
         "file_desc": "自动扫描没找到账号时，可以手动选择 Antigravity 的 state.vscdb 文件。",
-        "file_btn": "选择数据库文件…"
+        "file_btn": "选择数据库文件…",
+        "summary": "已导入 {{success}} 个账号，{{failed}} 个来源需要检查",
+        "failure_hint": "失败来源请检查登录状态、数据库路径及系统代理；失效凭据需重新登录。",
+        "status_imported": "已导入",
+        "status_duplicate": "重复账号",
+        "status_unavailable": "无法读取或未登录",
+        "status_missing_credentials": "缺少登录凭据",
+        "status_validation_failed": "凭据验证失败（网络或登录已失效）"
       },
       "btn_cancel": "取消",
       "btn_confirm": "确认添加",
@@ -283,7 +291,14 @@
       "batch_refresh_title": "批量刷新",
       "refresh_msg": "确定要刷新当前账号的配额吗？",
       "batch_refresh_msg": "确定要刷新选中的 {{count}} 个账号的配额吗？这可能需要一些时间。"
-    }
+    },
+    "switch_target": "切换目标",
+    "target_app_cli": "App 与 CLI",
+    "switch_scope_hint": "App 与 agy 同步切换；IDE 独立切换",
+    "export_account": "导出账号",
+    "export_selected": "导出所选 {{count}} 个账号",
+    "export_success": "已导出 {{count}} 个账号",
+    "export_failed": "导出失败：{{error}}"
   },
   "settings": {
     "general": {
@@ -317,8 +332,8 @@
     "wait_instructions": "读取实时任务状态，确认空闲后关闭相关客户端、切换账号并重新打开。状态未知时继续等待。",
     "stop_instructions": "达到阈值后尝试关闭相关客户端或中断 VS Code 任务，再切换账号。进行中的任务可能被中断。",
     "target": "生效客户端",
-    "target_all": "全域同步（推荐）",
-    "target_app": "全域同步（推荐）",
+    "target_all": "全域同步",
+    "target_app": "全域同步",
     "target_app_cli": "桌面应用与 CLI",
     "target_ide": "Antigravity IDE",
     "target_vscode": "VS Code 插件",
@@ -520,5 +535,16 @@
     "restore_pending": "汉化已关闭，暂时无法连接的页面将在 15 秒内恢复原文。",
     "injection_description": "通过 App 现有的本机连接注入翻译脚本，只替换已知界面文字，不修改 App 安装文件或源文件，不调整权限和账号设置，也不上传聊天内容。脚本在 App 页面中运行并观察界面变化，运行时注入并不代表完全没有风险。关闭后恢复原文；停止续期后最迟 15 秒自动恢复。",
     "cli_description": "桌面和 agy-switch CLI 共用同一个开关。仅用 CLI 时，开启后运行 agy-switch experiments run，并保持该命令运行。"
+  },
+  "network": {
+    "title": "网络代理",
+    "description": "默认跟随系统 HTTP/SOCKS 代理和代理环境变量，运行中会重新读取。Linux 支持 GNOME 与 KDE 固定代理；PAC 脚本请改用手动地址。",
+    "mode": "代理方式",
+    "system": "跟随系统（默认）",
+    "manual": "手动代理",
+    "direct": "直接连接",
+    "address": "代理地址",
+    "manual_hint": "支持 http://、https://、socks5://、socks5h://，无需开启 TUN。地址请勿包含用户名和密码。",
+    "save_failed": "保存失败，请检查代理地址或设置文件是否可写。"
   }
 }

@@ -40,7 +40,7 @@ pub enum Target {
 impl Target {
     pub fn argument(self) -> Option<&'static str> {
         match self {
-            Self::App => None,
+            Self::App => Some("all"),
             Self::AppCli => Some("app"),
             Self::Ide => Some("ide"),
             Self::Vscode => Some("vscode"),
@@ -70,7 +70,7 @@ impl Default for Config {
             candidate_min_percentage: 30,
             monitored_model: "all".into(),
             candidate_account_ids: vec![],
-            target: Target::App,
+            target: Target::AppCli,
         }
     }
 }
@@ -1083,7 +1083,7 @@ async fn evaluate_core<E: Environment>(
         update_status(runtime, revision, status);
         return Ok(false);
     }
-    let source_id = match account::get_current_account_id()? {
+    let source_id = match account::get_current_account_id_for_target(config.target.argument())? {
         Some(id) => id,
         None => {
             status.set("blocked", "no_current_account");
@@ -1236,7 +1236,7 @@ async fn evaluate_core<E: Environment>(
                     // A stale index must never cause the real client to exit.
                     // Recheck identity before closing, as well as before writing.
                     close_environment.verify_source(&close_source, close_config.target)?;
-                    if account::get_current_account_id()
+                    if account::get_current_account_id_for_target(close_config.target.argument())
                         .map_err(|_| "source_changed")?
                         .as_deref()
                         != Some(close_source.id.as_str())
@@ -1395,7 +1395,7 @@ impl<E: Environment> integration::SystemIntegration for AutoSwitchIntegration<E>
             if source.token.refresh_token != source_before.token.refresh_token {
                 return report("credentials_changed");
             }
-            let current = account::get_current_account_id()?;
+            let current = account::get_current_account_id_for_target(config.target.argument())?;
             {
                 let mut d = data.lock().map_err(|_| "state_unavailable")?;
                 if d.revision != p.revision {
@@ -1537,7 +1537,7 @@ mod tests {
         assert_eq!(serde_json::from_str::<Target>("\"desktop\"").unwrap(), Target::AppCli);
         assert_eq!(serde_json::from_str::<Target>("\"ide\"").unwrap(), Target::Ide);
         assert_eq!(serde_json::from_str::<Target>("\"vscode\"").unwrap(), Target::Vscode);
-        assert_eq!(Target::App.argument(), None);
+        assert_eq!(Target::App.argument(), Some("all"));
         assert_eq!(Target::AppCli.argument(), Some("app"));
         assert_eq!(Target::Ide.argument(), Some("ide"));
         assert_eq!(Target::Vscode.argument(), Some("vscode"));

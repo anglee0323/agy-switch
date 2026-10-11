@@ -69,43 +69,8 @@ impl DesktopIntegration {
         ));
 
         #[cfg(target_os = "linux")]
-        let cli_only = target_ide == Some("agy")
-            || (target_ide.is_none()
-                && process::get_antigravity_executable_path(target_ide).is_none()
-                && crate::modules::linux_paths::find_executable("agy").is_some()
-                && cli_session_path()?.is_some());
-        #[cfg(not(target_os = "linux"))]
-        let cli_only = target_ide == Some("agy");
-
-        if cli_only {
-            write_to_system_keyring(account, true)?;
-
-            if let Ok(storage_path) = device::get_storage_path(target_ide) {
-                if let Some(ref profile) = account.device_profile {
-                    let _ = device::write_profile(&storage_path, profile);
-                }
-            }
-
-            let is_running = process::is_process_running_by_name("agy");
-            let msg = if is_running {
-                format!(
-                    "Account {} activated. Agy is running; start a new CLI command to use the updated session.",
-                    account.email
-                )
-            } else {
-                format!(
-                    "Account {} activated. Token is ready for your next CLI command.",
-                    account.email
-                )
-            };
-            integration.show_notification("Antigravity CLI", &msg);
-            integration.update_tray();
-
-            return Ok(());
-        }
-
-        #[cfg(target_os = "linux")]
-        if process::get_antigravity_executable_path(target_ide).is_none() {
+        if process::get_antigravity_executable_path(target_ide).is_none()
+            && !(matches!(target_ide, Some("app" | "agy")) && cli_session_path()?.is_some()) {
             return Err("Cannot find Antigravity. Set its executable path in Settings, or install and initialize agy before switching accounts.".into());
         }
 
@@ -113,6 +78,19 @@ impl DesktopIntegration {
         let is_ide_mode = target_ide == Some("ide");
         let is_app_cli_mode = target_ide == Some("app");
         let is_vscode_mode = target_ide == Some("vscode");
+        let candidate_dbs = if matches!(target_ide, None | Some("all")) {
+            db::get_all_candidate_db_paths(None)
+        } else {
+            db::get_all_candidate_db_paths(target_ide)
+        };
+        let candidate_dbs: Vec<_> = candidate_dbs.into_iter().filter(|path| path.is_file()).collect();
+        if is_ide_mode || is_app_cli_mode {
+            let other = db::get_all_candidate_db_paths(Some(if is_ide_mode { "app" } else { "ide" }));
+            reject_shared_databases(&candidate_dbs, &other)?;
+        }
+        if (is_ide_mode || is_vscode_mode) && candidate_dbs.is_empty() {
+            return Err("No initialized database found for the selected client. Open and sign in to it first, or configure its executable path in Settings.".into());
+        }
         let app_running = if is_ide_mode || is_vscode_mode { false } else { process::is_antigravity_running(None) };
         let ide_running = if is_app_cli_mode || is_vscode_mode { false } else { process::is_antigravity_running(Some("ide")) };
 
@@ -124,97 +102,36 @@ impl DesktopIntegration {
             }
         } else if is_app_cli_mode {
             if app_running {
-                let _ = process::close_antigravity(20, None);
+                process::close_antigravity(20, None)?;
             }
         } else {
             if app_running {
-                let _ = process::close_antigravity(20, None);
+                process::close_antigravity(20, None)?;
             }
             if ide_running {
-                let _ = process::close_antigravity(20, Some("ide"));
+                process::close_antigravity(20, Some("ide"))?;
             }
         }
 
-        // 2. 凭据全域同步写入（Keychain + CLI + VS Code 插件文件 + SQLite 数据库）
-        // 2.1 写入系统 Keychain (macOS / Windows / Linux) 与 CLI 会话
-        if !is_ide_mode && !is_vscode_mode {
-            write_to_system_keyring(account, false)?;
-        }
-
-        // 2.2 写入 VS Code 插件专用凭据文件 (~/.gemini/jetski-standalone-oauth-token)
-        if !is_app_cli_mode {
-            if let Some(home) = dirs::home_dir() {
-                let gemini_dir = home.join(".gemini");
-                if gemini_dir.is_dir() {
-                    let jetski_file = gemini_dir.join("jetski-standalone-oauth-token");
-                    if let Ok(payload) = cli_credentials::payload(&account.token) {
-                        let _ = cli_credentials::write_session(&jetski_file, &payload);
-                    }
-                }
-            }
-        }
-
-        // 2.3 写入设备 Profile（如果有）
-        if let Ok(storage_path) = device::get_storage_path(target_ide) {
-            if let Some(ref profile) = account.device_profile {
-                let _ = device::write_profile(&storage_path, profile);
-            }
-        }
-
-        // 2.4 注入对应 state.vscdb 数据库
-        let candidate_dbs = if is_app_cli_mode {
-            let mut paths = Vec::new();
-            #[cfg(target_os = "macos")]
-            if let Some(home) = dirs::home_dir() {
-                paths.push(home.join("Library/Application Support/Antigravity/User/globalStorage/state.vscdb"));
-            }
-            #[cfg(target_os = "windows")]
-            if let Ok(appdata) = std::env::var("APPDATA") {
-                paths.push(std::path::PathBuf::from(appdata).join("Antigravity\\User\\globalStorage\\state.vscdb"));
-            }
-            #[cfg(target_os = "linux")]
-            if let Some(config_home) = crate::modules::linux_paths::config_home() {
-                paths.push(config_home.join("Antigravity/User/globalStorage/state.vscdb"));
-            }
-            paths
-        } else {
-            db::get_all_candidate_db_paths(target_ide)
-        };
-        for db_path in candidate_dbs {
-            if db_path.exists() {
-                let backup_path = db_path.with_extension("vscdb.backup");
-                let _ = fs::copy(&db_path, &backup_path);
-                let _ = db::inject_token(
-                    &db_path,
-                    &account.token.access_token,
-                    &account.token.refresh_token,
-                    account.token.expiry_timestamp,
-                    &account.email,
-                    account.token.is_gcp_tos,
-                    account.token.project_id.as_deref(),
-                    account.token.id_token.as_deref(),
-                    account.token.oauth_client_key.as_deref(),
-                );
-            }
-        }
+        write_client_storage(account, target_ide, &candidate_dbs, dirs::home_dir().as_deref(), || write_to_system_keyring(account, false))?;
 
         // 3. 智能联动重启：刚才开着哪个，就重新拉起哪个（VS Code 插件免重启）
         if is_vscode_mode {
             // 免重启宿主编辑器
         } else if is_ide_mode {
             if ide_running {
-                let _ = integration.start_application(Some("ide"));
+                integration.start_application(Some("ide"))?;
             }
         } else if is_app_cli_mode {
             if app_running {
-                let _ = integration.start_application(None);
+                integration.start_application(None)?;
             }
         } else {
             if app_running {
-                let _ = integration.start_application(None);
+                integration.start_application(None)?;
             }
             if ide_running {
-                let _ = integration.start_application(Some("ide"));
+                integration.start_application(Some("ide"))?;
             }
         }
 
@@ -223,6 +140,42 @@ impl DesktopIntegration {
 
         Ok(())
     }
+}
+
+/// Credential writes are scoped separately from process control for isolated verification.
+fn write_client_storage(
+    account: &crate::models::Account,
+    target: Option<&str>,
+    databases: &[std::path::PathBuf],
+    home: Option<&std::path::Path>,
+    write_app_and_cli: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    if matches!(target, None | Some("app" | "all")) { write_app_and_cli()?; }
+    if matches!(target, None | Some("vscode" | "all")) {
+        if let Some(home) = home {
+            let gemini = home.join(".gemini");
+            if gemini.is_dir() {
+                cli_credentials::write_session(&gemini.join("jetski-standalone-oauth-token"), &cli_credentials::payload(&account.token)?)?;
+            }
+        }
+    }
+    for path in databases {
+        let storage = path.with_file_name("storage.json");
+        if storage.is_file() {
+            if let Some(profile) = &account.device_profile { device::write_profile(&storage, profile)?; }
+        }
+        fs::copy(path, path.with_extension("vscdb.backup")).map_err(|e| format!("Cannot back up client database: {e}"))?;
+        db::inject_token(path, &account.token.access_token, &account.token.refresh_token, account.token.expiry_timestamp,
+            &account.email, account.token.is_gcp_tos, account.token.project_id.as_deref(), account.token.id_token.as_deref(), account.token.oauth_client_key.as_deref())?;
+    }
+    Ok(())
+}
+
+fn reject_shared_databases(selected: &[std::path::PathBuf], other: &[std::path::PathBuf]) -> Result<(), String> {
+    if selected.iter().any(|path| other.contains(path)) {
+        return Err("App and IDE share a user-data directory. Configure separate client data directories before switching independently.".into());
+    }
+    Ok(())
 }
 
 fn cli_session_path() -> Result<Option<std::path::PathBuf>, String> {
@@ -507,7 +460,7 @@ pub fn read_from_system_keyring() -> Result<crate::modules::migration::ImportedO
     }
 }
 
-fn parse_keyring_payload(
+pub(crate) fn parse_keyring_payload(
     payload_str: &str,
 ) -> Result<crate::modules::migration::ImportedOAuthState, String> {
     let json: serde_json::Value = serde_json::from_str(payload_str)
@@ -678,5 +631,67 @@ mod linux_tests {
             std::fs::read(unrelated_accounts).unwrap(),
             b"unrelated-accounts-fixture"
         );
+    }
+}
+
+#[cfg(test)]
+mod scope_tests {
+    use super::*;
+    use crate::models::{Account, TokenData};
+
+    #[test]
+    fn shared_data_directories_are_rejected_before_switching() {
+        let app = std::path::PathBuf::from("/synthetic/app/state.vscdb");
+        let ide = std::path::PathBuf::from("/synthetic/ide/state.vscdb");
+        assert!(reject_shared_databases(&[app.clone()], &[app.clone()]).is_err());
+        assert!(reject_shared_databases(&[app], &[ide]).is_ok());
+        let app_folders = db::data_folder_names(Some("app"));
+        let ide_folders = db::data_folder_names(Some("ide"));
+        assert!(app_folders.iter().all(|folder| !ide_folders.contains(folder)));
+        assert!(ide_folders.contains(&"Antigravity_IDE"));
+        assert!(ide_folders.contains(&"antigravity-ide"));
+    }
+
+    fn database(root: &std::path::Path, name: &str) -> std::path::PathBuf {
+        let dir = root.join(name);
+        fs::create_dir(&dir).unwrap();
+        fs::write(dir.join("storage.json"), b"{}").unwrap();
+        let path = dir.join("state.vscdb");
+        rusqlite::Connection::open(&path).unwrap().execute("CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT)", []).unwrap();
+        path
+    }
+
+    #[test]
+    fn production_storage_writes_keep_app_cli_and_ide_independent() {
+        let temp = tempfile::tempdir().unwrap();
+        let home = temp.path();
+        fs::create_dir(home.join(".gemini")).unwrap();
+        let plugin = home.join(".gemini/jetski-standalone-oauth-token");
+        fs::write(&plugin, "fixture-plugin-original").unwrap();
+        let app = database(home, "App");
+        let ide = database(home, "IDE");
+        let original_app = fs::read(&app).unwrap();
+        let mut account = Account::new("B".into(), "b@example.test".into(), TokenData::new("fixture-access-B".into(), "fixture-refresh-B".into(), 3600, None, None, None, false, None));
+        account.device_profile = Some(device::generate_profile());
+        write_client_storage(&account, Some("ide"), &[ide.clone()], Some(home), || panic!("IDE must never write App / CLI credentials")).unwrap();
+        assert_eq!(fs::read(&app).unwrap(), original_app);
+        assert_eq!(fs::read_to_string(&plugin).unwrap(), "fixture-plugin-original");
+        assert!(crate::modules::migration::extract_oauth_state_from_file(&ide).unwrap().refresh_token == account.token.refresh_token);
+        let original_ide = fs::read(&ide).unwrap();
+        account.token.refresh_token = "fixture-refresh-A".into();
+        let mock_keyring = home.join("mock-keyring");
+        let cli = home.join("mock-cli");
+        write_client_storage(&account, Some("app"), &[app.clone()], Some(home), || {
+            let payload = cli_credentials::payload(&account.token)?;
+            cli_credentials::write_session(&mock_keyring, &payload)?;
+            cli_credentials::write_session(&cli, &payload)
+        }).unwrap();
+        assert_eq!(fs::read(&ide).unwrap(), original_ide);
+        assert_eq!(fs::read(&mock_keyring).unwrap(), fs::read(&cli).unwrap());
+        assert_eq!(fs::read_to_string(&plugin).unwrap(), "fixture-plugin-original");
+        assert!(crate::modules::migration::extract_oauth_state_from_file(&app).unwrap().refresh_token == account.token.refresh_token);
+        let conn = rusqlite::Connection::open(&app).unwrap();
+        let machine_id: String = conn.query_row("SELECT value FROM ItemTable WHERE key = 'storage.serviceMachineId'", [], |row| row.get(0)).unwrap();
+        assert_eq!(machine_id, account.device_profile.unwrap().dev_device_id);
     }
 }

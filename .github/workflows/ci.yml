@@ -57,7 +57,7 @@ jobs:
         run: node scripts/test-settings-layout.mjs
 
       - name: Test desktop preference UI races
-        run: node scripts/test-desktop-settings.mjs
+        run: node scripts/test-desktop-settings.mjs && node scripts/test-account-transfer.mjs
       - name: Install Chromium for mocked UI acceptance
         if: runner.os == 'Linux'
         run: npx playwright install --with-deps chromium
@@ -126,6 +126,14 @@ jobs:
 
       - name: Test serialized desktop preferences
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib modules::config::tests
+
+      - name: Test account scopes, transfers and system proxies
+        run: |
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib scope_tests
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib selection_tests
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib import_report_tests
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib transfer_tests
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib utils::proxy::tests
 
       - name: Test agy-switch CLI on every platform
         run: "cargo test --locked --manifest-path src-tauri/Cargo.toml --lib cli::"

@@ -7,6 +7,8 @@ import { listen } from '@tauri-apps/api/event';
 import { open } from '@tauri-apps/plugin-dialog';
 import { request as invoke } from '../../utils/request';
 import { isTauri } from '../../utils/env';
+import { parseAccountTransfer } from '../../utils/accountTransfer';
+import { importAccountTransfer, importLocalAccountsReport, type LocalImportSource } from '../../services/accountService';
 import { copyToClipboard } from '../../utils/clipboard';
 
 interface AddAccountDialogProps {
@@ -28,9 +30,10 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
 
     // UI State
     const [status, setStatus] = useState<Status>('idle');
+    const [importSources, setImportSources] = useState<LocalImportSource[]>([]);
     const [message, setMessage] = useState('');
 
-    const { startOAuthLogin, completeOAuthLogin, cancelOAuthLogin, importFromDb, importFromCustomDb } = useAccountStore();
+    const { startOAuthLogin, completeOAuthLogin, cancelOAuthLogin, importFromCustomDb } = useAccountStore();
 
     const oauthUrlRef = useRef(oauthUrl);
     const statusRef = useRef(status);
@@ -155,6 +158,7 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
     const resetState = () => {
         setStatus('idle');
         setMessage('');
+        setImportSources([]);
         setRefreshToken('');
         setOauthUrl('');
         setOauthUrlCopied(false);
@@ -217,42 +221,11 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
 
         setStatus('loading');
 
-        // 1. 尝试解析输入
-        let tokens: string[] = [];
-        const input = refreshToken.trim();
-
-        try {
-            // 尝试解析为 JSON
-            if (input.startsWith('[') && input.endsWith(']')) {
-                const parsed = JSON.parse(input);
-                if (Array.isArray(parsed)) {
-                    tokens = parsed
-                        .map((item: any) => item.refresh_token)
-                        .filter((t: any) => typeof t === 'string' && t.startsWith('1//'));
-                }
-            }
-        } catch (e) {
-            // JSON 解析失败,忽略
-            console.debug('JSON parse failed, falling back to regex', e);
-        }
-
-        // 2. 如果 JSON 解析没有结果,尝试正则提取 (或者输入不是 JSON)
-        if (tokens.length === 0) {
-            const regex = /1\/\/[a-zA-Z0-9_\-]+/g;
-            const matches = input.match(regex);
-            if (matches) {
-                tokens = matches;
-            }
-        }
-
-        // 去重
-        tokens = [...new Set(tokens)];
-
-        if (tokens.length === 0) {
-            setStatus('error');
-            setMessage(t('accounts.add.token.error_token')); // 或者提示"未找到有效 Token"
-            return;
-        }
+        let items;
+        try { items = parseAccountTransfer(refreshToken); }
+        catch { setStatus('error'); setMessage(t('accounts.add.token.error_token')); return; }
+        const structured = /^[\s]*[\[{]/.test(refreshToken);
+        const tokens = items.map(item => item.refresh_token);
 
         // 3. 批量添加
         let successCount = 0;
@@ -263,7 +236,8 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
             setMessage(t('accounts.add.token.batch_progress', { current: i + 1, total: tokens.length }));
 
             try {
-                await onAdd("", currentToken);
+                if (structured) await importAccountTransfer(items[i]);
+                else await onAdd("", currentToken);
                 successCount++;
             } catch (error) {
                 console.error(`Failed to add token ${i + 1}:`, error);
@@ -273,6 +247,7 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
             await new Promise(r => setTimeout(r, 100));
         }
 
+        await fetchAccounts();
         // 4. 结果反馈
         if (successCount === tokens.length) {
             setStatus('success');
@@ -418,14 +393,16 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
         }
     };
 
-    const handleImportDb = () => {
-        handleAction(t('accounts.add.import.btn_db'), async () => {
-            const accounts = await importFromDb();
-            if (Array.isArray(accounts) && accounts.length > 0) {
-                setMessage(t('accounts.add.token.batch_success', { count: accounts.length }));
-            }
-            return accounts;
-        });
+    const handleImportDb = async () => {
+        setStatus('loading'); setMessage(t('accounts.add.import.scan_btn') + '…'); setImportSources([]);
+        try {
+            const report = await importLocalAccountsReport();
+            await fetchAccounts();
+            setImportSources(report.sources);
+            const failed = report.sources.filter(source => !['imported', 'duplicate'].includes(source.status)).length;
+            setStatus(report.accounts.length ? 'success' : 'error');
+            setMessage(t('accounts.add.import.summary', { success: report.accounts.length, failed }));
+        } catch (error) { setStatus('error'); setMessage(String(error)); }
     };
 
     const handleImportCustomDb = async () => {
@@ -472,7 +449,7 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
         return (
             <div className={`alert ${styles[status]} mb-4 text-sm py-2 shadow-sm`}>
                 {icons[status]}
-                <span>{message}</span>
+                <div><span>{message}</span>{importSources.length > 0 && <><p className="mt-2">{t('accounts.add.import.failure_hint')}</p><ul className="mt-2 max-h-36 overflow-y-auto space-y-1 text-xs">{importSources.map((source, index) => <li key={index} className="break-all">{source.source}: {t('accounts.add.import.status_' + source.status)}</li>)}</ul></>}</div>
             </div>
         );
     };
@@ -653,6 +630,7 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
                                         />
                                         <p className="text-[10px] text-gray-400 mt-2">
                                             {t('accounts.add.token.hint')}
+                                            <input type="file" accept=".json,application/json" aria-label={t('accounts.add.token.choose_file')} disabled={status === 'loading'} className="block mt-2 file-input file-input-bordered file-input-sm w-full" onChange={async event => { const file = event.target.files?.[0]; if (file) { setRefreshToken(await file.text()); setStatus('idle'); } }} />
                                         </p>
                                     </div>
                                 </div>
@@ -674,7 +652,7 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
                                         <button
                                             className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3 text-sm font-medium text-white shadow-sm shadow-blue-500/20 transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
                                             onClick={handleImportDb}
-                                            disabled={status === 'loading' || status === 'success'}
+                                            disabled={status === 'loading'}
                                         >
                                             {status === 'loading' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4" />}
                                             {t('accounts.add.import.scan_btn')}
@@ -694,7 +672,7 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
                                         <button
                                             className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-blue-300 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-base-300 dark:bg-base-100 dark:text-gray-300 dark:hover:text-blue-400"
                                             onClick={handleImportCustomDb}
-                                            disabled={status === 'loading' || status === 'success'}
+                                            disabled={status === 'loading' || (status === 'success' && importSources.length === 0)}
                                         >
                                             <FileSearch className="w-4 h-4" />
                                             {t('accounts.add.import.file_btn')}
@@ -708,7 +686,7 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
                             <button
                                 className="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-base-200 text-gray-700 dark:text-gray-300 font-medium rounded-xl hover:bg-gray-200 dark:hover:bg-base-300 transition-colors focus:outline-none focus:ring-2 focus:ring-200 dark:focus:ring-base-300"
                                 onClick={() => void closeDialog()}
-                                disabled={status === 'success'} // Only disable on success, allow cancel on loading
+                                disabled={status === 'success' && importSources.length === 0}
                             >
                                 {t('accounts.add.btn_cancel')}
                             </button>

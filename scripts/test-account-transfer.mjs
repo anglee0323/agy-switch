@@ -1,0 +1,13 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import ts from 'typescript';
+const source = ts.transpileModule(fs.readFileSync('src/utils/accountTransfer.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 } }).outputText;
+const { parseAccountTransfer } = await import(`data:text/javascript;base64,${Buffer.from(source).toString('base64')}`);
+const item = { email: 'fixture@example.test', refresh_token: '1//fixture', oauth_client_key: 'fixture-client', is_gcp_tos: true, project_id: 'fixture-project', custom_label: 'fixture label' };
+assert.deepEqual(parseAccountTransfer(JSON.stringify({ schema_version: 2, accounts: [item] })), [item]);
+assert.deepEqual(parseAccountTransfer(JSON.stringify([item, item])), [item]);
+assert.equal(parseAccountTransfer('1//first 1//second').length, 2);
+assert.throws(() => parseAccountTransfer('{"accounts":["1//stray-secret"]}'));
+assert.throws(() => parseAccountTransfer('{"schema_version":99,"accounts":[]}'));
+assert.throws(() => parseAccountTransfer('{invalid-json 1//stray-secret'));
+console.log('Account transfer parsing: 6 checks passed');

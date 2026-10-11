@@ -147,12 +147,12 @@ pub async fn switch_account(
 
 /// 获取当前账号
 #[tauri::command]
-pub async fn get_current_account() -> Result<Option<Account>, String> {
+pub async fn get_current_account(target_ide: Option<String>) -> Result<Option<Account>, String> {
     // println!("🚀 Backend Command: get_current_account called"); // Commented out to reduce noise for frequent calls, relies on frontend log for frequency
     // Actually user WANTS to see it.
     modules::logger::log_info("Backend Command: get_current_account called");
 
-    let account_id = modules::get_current_account_id()?;
+    let account_id = modules::account::get_current_account_id_for_target(target_ide.as_deref())?;
 
     if let Some(id) = account_id {
         // modules::logger::log_info(&format!("   Found current account ID: {}", id));
@@ -171,6 +171,32 @@ pub async fn export_accounts(account_ids: Vec<String>) -> Result<AccountExportRe
     tokio::task::spawn_blocking(move || modules::account::export_accounts_by_ids(&account_ids))
         .await
         .unwrap_or_else(|_| Err("Task panicked".to_string()))
+}
+
+#[tauri::command]
+pub async fn save_account_export(account_ids: Vec<String>, path: String) -> Result<usize, String> {
+    tokio::task::spawn_blocking(move || modules::account::save_account_export(&account_ids, std::path::Path::new(&path)))
+        .await.map_err(|_| "Account export worker failed.".to_string())?
+}
+
+#[tauri::command]
+pub async fn import_account_transfer(app: tauri::AppHandle, item: crate::models::AccountExportItem) -> Result<Account, String> {
+    let response = modules::oauth::refresh_access_token(&item.refresh_token, item.oauth_client_key.as_deref()).await?;
+    let user = modules::oauth::get_user_info(&response.access_token).await?;
+    if user.email.trim().is_empty() || (!item.email.is_empty() && !item.email.eq_ignore_ascii_case(&user.email)) {
+        return Err("The imported credentials do not match the exported account identity.".into());
+    }
+    let token = crate::models::TokenData::new(response.access_token, item.refresh_token, response.expires_in,
+        Some(user.email.clone()), item.project_id, None, item.is_gcp_tos, response.id_token).with_oauth_client_key(response.oauth_client_key);
+    let mut account = modules::account::upsert_account(user.email, item.name.or(user.name), token)?;
+    if let Some(label) = item.custom_label {
+        let _write = modules::account::lock_account_file_updates()?;
+        account = modules::account::load_account(&account.id)?;
+        account.custom_label = Some(label);
+        modules::account::save_account(&account)?;
+    }
+    let _ = internal_refresh_account_quota(&app, &mut account).await;
+    Ok(account)
 }
 
 /// 内部辅助功能：在添加或导入账号后自动刷新一次额度
@@ -252,6 +278,7 @@ pub async fn save_config(app: tauri::AppHandle, config: AppConfig) -> Result<(),
     // Ordinary saves preserve dedicated desktop preferences under
     // the same configuration lock, including stale snapshots from other windows.
     modules::save_app_config(&config)?;
+    crate::utils::http::invalidate_clients();
     let _ = app.emit("config://updated", ());
     Ok(())
 }
@@ -330,6 +357,24 @@ pub async fn set_active_oauth_client(client_key: String) -> Result<(), String> {
 // --- 导入命令 ---
 
 #[tauri::command]
+pub async fn import_local_accounts_report(app: tauri::AppHandle) -> Result<modules::migration::LocalImportReport, String> {
+    let _guard = crate::cli::SwitchLock::acquire(&modules::account::get_data_dir()?)?;
+    let identities = tokio::task::spawn_blocking(|| ["app", "ide"].map(|target| (target, modules::migration::get_current_identity(Some(target)))))
+        .await.map_err(|_| "Local identity discovery failed.".to_string())?;
+    let report = modules::migration::import_local_accounts_report(None).await?;
+    for (target, identity) in identities {
+        if let Ok(identity) = identity {
+            if let Some(account) = report.accounts.iter().find(|account| identity.matches(account)) {
+                modules::account::set_current_account_id_with_target(&account.id, Some(target))?;
+            }
+        }
+    }
+    for mut account in report.accounts.clone() { let _ = internal_refresh_account_quota(&app, &mut account).await; }
+    crate::modules::tray::update_tray_menus(&app);
+    Ok(report)
+}
+
+#[tauri::command]
 pub async fn import_from_db(
     app: tauri::AppHandle,
     target_ide: Option<String>,
@@ -367,10 +412,6 @@ pub async fn import_custom_db(app: tauri::AppHandle, path: String) -> Result<Acc
     // 调用重构后的自定义导入函数
     let mut account = modules::migration::import_from_custom_db_path(path).await?;
 
-    // 自动设为当前账号
-    let account_id = account.id.clone();
-    modules::account::set_current_account_id(&account_id)?;
-
     // 自动触发刷新额度
     let _ = internal_refresh_account_quota(&app, &mut account).await;
 
@@ -396,7 +437,7 @@ pub(crate) async fn sync_account_from_db_internal(app: tauri::AppHandle) -> Resu
         return Ok(None);
     }
 
-    let target = index.current_target_ide.clone();
+    let target = Some("app".to_string());
     let identity = tokio::task::spawn_blocking(move || {
         modules::migration::get_current_identity(target.as_deref())
     })
@@ -426,7 +467,7 @@ pub(crate) async fn sync_account_from_db_internal(app: tauri::AppHandle) -> Resu
 
     // 既然是从数据库导入，自动将其设为 Manager 的当前账号并保留当前 target
     let account_id = account.id.clone();
-    modules::account::set_current_account_id_with_target(&account_id, current_target)?;
+    modules::account::set_current_account_id_with_target(&account_id, Some("app"))?;
     tracing::info!(
         previous_account_id = current.as_ref().map(|account| account.id.as_str()).unwrap_or("none"),
         current_account_id = account_id.as_str(),

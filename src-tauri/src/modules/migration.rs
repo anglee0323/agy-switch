@@ -40,7 +40,7 @@ fn resolve_current_identity(
 /// A live App identity takes precedence over shared, possibly stale credentials.
 /// Failure to verify a running App must not turn into a keyring fallback.
 pub(crate) fn get_current_identity(target_ide: Option<&str>) -> Result<CurrentIdentity, String> {
-    if matches!(target_ide, None | Some("app") | Some("app_cli")) {
+    if matches!(target_ide, None | Some("app" | "app_cli" | "all")) {
         let config = crate::modules::config::load_app_config()?;
         return resolve_current_identity(
             || {
@@ -316,107 +316,127 @@ pub async fn import_from_custom_db_path(path_str: String) -> Result<Account, Str
     account::upsert_account(email.clone(), user_info.name, token_data)
 }
 
-/// Scan all local sources (Keyring/Keychain, IDE Databases, V1/CLI Directories) and import all unique accounts
-pub async fn import_all_local_accounts(target_ide: Option<&str>) -> Result<Vec<Account>, String> {
-    use crate::modules::{integration, oauth};
+#[derive(serde::Serialize)]
+pub struct LocalImportReport {
+    pub accounts: Vec<Account>,
+    pub sources: Vec<LocalImportSource>,
+}
+#[derive(serde::Serialize)]
+pub struct LocalImportSource {
+    pub source: String,
+    pub status: String,
+}
 
-    let mut imported_accounts = Vec::new();
-    let mut seen_refresh_tokens = std::collections::HashSet::new();
-
-    // 1. Check System Keyring / Keychain
-    let mut credential_states = Vec::new();
-    if let Ok(Ok(state)) = tokio::task::spawn_blocking(integration::read_from_system_keyring).await
-    {
-        credential_states.push(state);
+fn discover_local_sources(target: Option<&str>) -> Vec<(String, Result<ImportedOAuthState, String>)> {
+    use crate::modules::integration;
+    let mut sources = Vec::new();
+    if matches!(target, None | Some("all" | "app" | "app_cli" | "agy")) {
+        sources.push(("App / CLI credential store".into(), integration::read_from_system_keyring()));
+        sources.push(("agy CLI session".into(), integration::read_cli_credentials()));
     }
-    if let Ok(state) = integration::read_cli_credentials() {
-        credential_states.push(state);
-    }
-    for oauth_state in credential_states {
-        let refresh_token = oauth_state.refresh_token.clone();
-        if !refresh_token.is_empty() && seen_refresh_tokens.insert(refresh_token.clone()) {
-            crate::modules::logger::log_info(
-                "Discovered OAuth state in system credential store or native agy session",
-            );
-            if let Ok(token_resp) = oauth::refresh_access_token(&refresh_token, None).await {
-                let email = match oauth::get_user_info(&token_resp.access_token).await {
-                    Ok(info) => info.email,
-                    Err(_) => "Unknown".to_string(),
-                };
-                let token_data = TokenData::new(
-                    token_resp.access_token,
-                    refresh_token,
-                    token_resp.expires_in,
-                    Some(email.clone()),
-                    oauth_state.project_id,
-                    None,
-                    oauth_state.is_gcp_tos,
-                    token_resp.id_token,
-                )
-                .with_oauth_client_key(token_resp.oauth_client_key);
-
-                if let Ok(acc) = account::upsert_account(email, None, token_data) {
-                    imported_accounts.push(acc);
-                }
+    if matches!(target, None | Some("all" | "vscode")) {
+        if let Some(home) = dirs::home_dir() {
+            let path = home.join(".gemini/jetski-standalone-oauth-token");
+            if path.is_file() {
+                sources.push(("VS Code plugin session".into(), fs::read_to_string(path).map_err(|_| "read_failed".into()).and_then(|payload| integration::parse_keyring_payload(&payload))));
             }
         }
     }
+    if matches!(target, None | Some("all")) {
+        if let Some(home) = dirs::home_dir() { sources.extend(discover_v1_sources(&home.join(".antigravity-agent"))); }
+    }
+    for path in db::get_all_candidate_db_paths(target) {
+        if path.is_file() {
+            sources.push((path.to_string_lossy().into_owned(), extract_oauth_state_from_file(&path)));
+        }
+    }
+    sources
+}
 
-    // 2. Scan all candidate database paths
-    let candidate_paths = db::get_all_candidate_db_paths(target_ide);
-    for db_path in candidate_paths {
-        if db_path.exists() {
-            if let Ok(oauth_state) = extract_oauth_state_from_file(&db_path) {
-                let refresh_token = oauth_state.refresh_token.clone();
-                if !refresh_token.is_empty() && seen_refresh_tokens.insert(refresh_token.clone()) {
-                    crate::modules::logger::log_info(&format!(
-                        "Discovered OAuth state in DB path: {:?}",
-                        db_path
-                    ));
-                    if let Ok(token_resp) = oauth::refresh_access_token(&refresh_token, None).await
-                    {
-                        let email = match oauth::get_user_info(&token_resp.access_token).await {
-                            Ok(info) => info.email,
-                            Err(_) => "Unknown".to_string(),
-                        };
-                        let token_data = TokenData::new(
-                            token_resp.access_token,
-                            refresh_token,
-                            token_resp.expires_in,
-                            Some(email.clone()),
-                            oauth_state.project_id,
-                            None,
-                            oauth_state.is_gcp_tos,
-                            token_resp.id_token,
-                        )
-                        .with_oauth_client_key(token_resp.oauth_client_key);
+fn discover_v1_sources(dir: &std::path::Path) -> Vec<(String, Result<ImportedOAuthState, String>)> {
+    let mut sources = Vec::new();
+    for name in ["antigravity_accounts.json", "accounts.json"] {
+        let index = dir.join(name);
+        if !index.is_file() { continue; }
+        let parsed = fs::read_to_string(&index).ok().and_then(|text| serde_json::from_str::<Value>(&text).ok());
+        let Some(parsed) = parsed else { sources.push(("Legacy account index".into(), Err("read_failed".into()))); continue; };
+        let entries = parsed.get("accounts").and_then(Value::as_object).or_else(|| parsed.as_object());
+        if let Some(entries) = entries {
+            for entry in entries.values().filter(|entry| entry.is_object()) {
+                let file = entry.get("backup_file").or_else(|| entry.get("data_file")).and_then(Value::as_str);
+                let Some(file) = file else { sources.push(("Legacy account backup".into(), Err("missing_path".into()))); continue; };
+                let original = PathBuf::from(file);
+                let basename = original.file_name().unwrap_or_default();
+                let path = [original.clone(), dir.join(basename), dir.join("backups").join(basename), dir.join("accounts").join(basename)].into_iter().find(|path| path.is_file());
+                let state = path.ok_or_else(|| "missing_backup".to_string()).and_then(|path| {
+                    let text = fs::read_to_string(path).map_err(|_| "read_failed".to_string())?;
+                    if let Ok(state) = crate::modules::integration::parse_keyring_payload(&text) { return Ok(state); }
+                    let json: Value = serde_json::from_str(&text).map_err(|_| "invalid_backup")?;
+                    let encoded = json.get("jetskiStateSync.agentManagerInitState").and_then(Value::as_str).ok_or("missing_credentials")?;
+                    let bytes = general_purpose::STANDARD.decode(encoded).map_err(|_| "invalid_backup")?;
+                    let oauth = protobuf::find_field(&bytes, 6)?.ok_or("missing_credentials")?;
+                    let token = String::from_utf8(protobuf::find_field(&oauth, 3)?.ok_or("missing_credentials")?).map_err(|_| "invalid_backup")?;
+                    Ok(ImportedOAuthState { refresh_token: token, is_gcp_tos: true, project_id: None })
+                });
+                sources.push(("Legacy account backup".into(), state));
+            }
+        }
+    }
+    sources
+}
 
-                        if let Ok(acc) = account::upsert_account(email, None, token_data) {
-                            imported_accounts.push(acc);
-                        }
+async fn import_discovered_sources<F, Fut>(
+    sources: Vec<(String, Result<ImportedOAuthState, String>)>,
+    mut validate: F,
+) -> LocalImportReport
+where F: FnMut(ImportedOAuthState) -> Fut, Fut: std::future::Future<Output = Result<Account, String>> {
+    let mut report = LocalImportReport { accounts: Vec::new(), sources: Vec::new() };
+    let mut imported_tokens = std::collections::HashSet::new();
+    for (source, state) in sources {
+        let status = match state {
+            Err(_) => "unavailable",
+            Ok(state) if state.refresh_token.trim().is_empty() => "missing_credentials",
+            Ok(state) if imported_tokens.contains(&state.refresh_token) => "duplicate",
+            Ok(state) => {
+                let refresh_token = state.refresh_token.clone();
+                match validate(state).await {
+                    Ok(account) => {
+                        imported_tokens.insert(refresh_token);
+                        if !report.accounts.iter().any(|saved| saved.id == account.id) { report.accounts.push(account); }
+                        "imported"
                     }
+                    Err(_) => "validation_failed",
                 }
             }
-        }
+        };
+        // Never put OAuth responses or credentials in diagnostics.
+        report.sources.push(LocalImportSource { source, status: status.into() });
     }
+    report
+}
 
-    // 3. Scan V1 / CLI agent directory (~/.antigravity-agent)
-    if let Ok(v1_accounts) = import_from_v1().await {
-        for acc in v1_accounts {
-            if seen_refresh_tokens.insert(acc.token.refresh_token.clone()) {
-                imported_accounts.push(acc);
-            }
-        }
-    }
+async fn validate_local_state(state: ImportedOAuthState) -> Result<Account, String> {
+    let response = crate::modules::oauth::refresh_access_token(&state.refresh_token, None).await?;
+    let user = crate::modules::oauth::get_user_info(&response.access_token).await?;
+    if user.email.trim().is_empty() { return Err("Account identity unavailable.".into()); }
+    let token = TokenData::new(response.access_token, state.refresh_token, response.expires_in,
+        Some(user.email.clone()), state.project_id, None, state.is_gcp_tos, response.id_token)
+        .with_oauth_client_key(response.oauth_client_key);
+    account::upsert_account(user.email, user.name, token)
+}
 
-    if imported_accounts.is_empty() {
-        return Err(
-            "No login state data found across Keyring, IDE databases, or CLI directories"
-                .to_string(),
-        );
-    }
+/// Each client is discovered independently; one failed source cannot hide another.
+pub async fn import_local_accounts_report(target: Option<&str>) -> Result<LocalImportReport, String> {
+    let target = target.map(str::to_owned);
+    let sources = tokio::task::spawn_blocking(move || discover_local_sources(target.as_deref()))
+        .await.map_err(|_| "Local account discovery failed.".to_string())?;
+    Ok(import_discovered_sources(sources, validate_local_state).await)
+}
 
-    Ok(imported_accounts)
+pub async fn import_all_local_accounts(target: Option<&str>) -> Result<Vec<Account>, String> {
+    let report = import_local_accounts_report(target).await?;
+    if report.accounts.is_empty() { return Err("No account imported. Check client login state, database location and system proxy; expired credentials require signing in again.".into()); }
+    Ok(report.accounts)
 }
 
 /// Import only the state observed by synchronization, never the first account
@@ -481,7 +501,7 @@ fn extract_enterprise_project_id_from_conn(
     }
 }
 
-fn extract_oauth_state_from_file(db_path: &PathBuf) -> Result<ImportedOAuthState, String> {
+pub(crate) fn extract_oauth_state_from_file(db_path: &PathBuf) -> Result<ImportedOAuthState, String> {
     use base64::{engine::general_purpose, Engine as _};
 
     if !db_path.exists() {
@@ -489,7 +509,7 @@ fn extract_oauth_state_from_file(db_path: &PathBuf) -> Result<ImportedOAuthState
     }
 
     // Connect to database
-    let conn = rusqlite::Connection::open(db_path)
+    let conn = rusqlite::Connection::open_with_flags(db_path, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY)
         .map_err(|e| format!("Failed to open database: {}", e))?;
 
     // 1. 尝试新版格式 (>= 1.16.5)
@@ -507,26 +527,29 @@ fn extract_oauth_state_from_file(db_path: &PathBuf) -> Result<ImportedOAuthState
         crate::modules::logger::log_info(
             "Detected new format database (antigravityUnifiedStateSync.oauthToken)",
         );
-        let (sentinel_key, oauth_info_blob) = protobuf::decode_unified_state_entry(&outer_b64)?;
-        if sentinel_key != "oauthTokenInfoSentinelKey" {
-            return Err(format!("Unexpected OAuth sentinel key: {}", sentinel_key));
-        }
+        let parsed = (|| -> Result<ImportedOAuthState, String> {
+            let (sentinel_key, oauth_info_blob) = protobuf::decode_unified_state_entry(&outer_b64)?;
+            if sentinel_key != "oauthTokenInfoSentinelKey" {
+                return Err("Unexpected OAuth sentinel key.".into());
+            }
 
-        // 解析 OAuthInfo (Field 3) -> Refresh Token
-        let refresh_bytes = protobuf::find_field(&oauth_info_blob, 3)
-            .map_err(|e| format!("Parsing OAuthInfo Field 3 failed: {}", e))?
-            .ok_or("Refresh Token not found in OAuthInfo (Field 3)")?;
+            // 解析 OAuthInfo (Field 3) -> Refresh Token
+            let refresh_bytes = protobuf::find_field(&oauth_info_blob, 3)
+                .map_err(|e| format!("Parsing OAuthInfo Field 3 failed: {}", e))?
+                .ok_or("Refresh Token not found in OAuthInfo (Field 3)")?;
 
-        let refresh_token = String::from_utf8(refresh_bytes)
-            .map_err(|_| "Refresh Token is not UTF-8 encoded".to_string())?;
-        let is_gcp_tos = protobuf::find_varint_field(&oauth_info_blob, 6)?.unwrap_or(1) != 0;
-        let project_id = extract_enterprise_project_id_from_conn(&conn)?;
+            let refresh_token = String::from_utf8(refresh_bytes)
+                .map_err(|_| "Refresh Token is not UTF-8 encoded".to_string())?;
+            let is_gcp_tos = protobuf::find_varint_field(&oauth_info_blob, 6)?.unwrap_or(1) != 0;
+            let project_id = extract_enterprise_project_id_from_conn(&conn)?;
 
-        return Ok(ImportedOAuthState {
-            refresh_token,
-            is_gcp_tos,
-            project_id,
-        });
+            Ok(ImportedOAuthState {
+                refresh_token,
+                is_gcp_tos,
+                project_id,
+            })
+        })();
+        if let Ok(state) = parsed { return Ok(state); }
     }
 
     // 2. 尝试旧版格式 (< 1.16.5)
@@ -582,8 +605,10 @@ fn get_oauth_state_from_db(target_ide: Option<&str>) -> Result<ImportedOAuthStat
     }
     use crate::modules::integration;
 
-    if let Ok(oauth_state) = integration::read_from_system_keyring() {
-        return Ok(oauth_state);
+    if matches!(target_ide, None | Some("app" | "app_cli" | "agy" | "all")) {
+        if let Ok(oauth_state) = integration::read_from_system_keyring() {
+            return Ok(oauth_state);
+        }
     }
 
     let candidate_paths = db::get_all_candidate_db_paths(target_ide);
@@ -640,5 +665,48 @@ mod current_identity_tests {
             || panic!("A failed live read must not overwrite the record from the keyring"),
         );
         assert_eq!(result.err().as_deref(), Some("running_app_identity_unavailable"));
+    }
+}
+
+#[cfg(test)]
+mod import_report_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn partial_failure_is_reported_and_does_not_hide_another_client_or_retry() {
+        let state = |token: &str| Ok(ImportedOAuthState { refresh_token: token.into(), is_gcp_tos: false, project_id: None });
+        let mut attempts = 0;
+        let report = import_discovered_sources(vec![
+            ("App".into(), state("fixture-A")), ("CLI".into(), state("fixture-A")),
+            ("IDE".into(), state("fixture-B")), ("IDE duplicate".into(), state("fixture-B")),
+            ("Unreadable".into(), Err("secret-bearing error must not be shown".into())),
+        ], |state| {
+            attempts += 1;
+            let attempt = attempts;
+            async move {
+                if attempt == 1 { return Err("synthetic network error".into()); }
+                Ok(Account::new(state.refresh_token.clone(), "fixture@example.test".into(), TokenData::new("fixture-access".into(), state.refresh_token, 3600, None, None, None, false, None)))
+            }
+        }).await;
+        assert_eq!(report.accounts.len(), 2);
+        assert_eq!(report.sources.iter().map(|source| source.status.as_str()).collect::<Vec<_>>(), ["validation_failed", "imported", "imported", "duplicate", "unavailable"]);
+        assert!(report.sources.iter().all(|source| !source.status.contains("secret")));
+    }
+
+    #[test]
+    fn corrupt_new_format_falls_back_to_valid_legacy_state_without_writes() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("state.vscdb");
+        {
+            let conn = rusqlite::Connection::open(&path).unwrap();
+            conn.execute("CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT)", []).unwrap();
+            let oauth = protobuf::create_oauth_info("fixture-access", "fixture-refresh", 123, false, None, None);
+            let legacy = general_purpose::STANDARD.encode(protobuf::encode_len_delim_field(6, &oauth));
+            conn.execute("INSERT INTO ItemTable VALUES (?1, ?2)", ["jetskiStateSync.agentManagerInitState", &legacy]).unwrap();
+            conn.execute("INSERT INTO ItemTable VALUES (?1, ?2)", ["antigravityUnifiedStateSync.oauthToken", "corrupt"]).unwrap();
+        }
+        let original = fs::read(&path).unwrap();
+        assert_eq!(extract_oauth_state_from_file(&path).unwrap().refresh_token, "fixture-refresh");
+        assert_eq!(fs::read(&path).unwrap(), original);
     }
 }

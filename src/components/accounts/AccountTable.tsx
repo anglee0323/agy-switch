@@ -24,7 +24,7 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import {
     GripVertical,
-    ArrowRightLeft,
+    Download, ArrowRightLeft,
     RefreshCw,
     Trash2,
     Lock,
@@ -68,6 +68,7 @@ interface AccountTableProps {
     onRefresh: (accountId: string) => void;
     onEditLabel: (accountId: string) => void;
     onDelete: (accountId: string) => void;
+    onExport?: (accountId: string) => void;
     /** 拖拽排序回调，当用户完成拖拽时触发 */
     onReorder?: (accountIds: string[]) => void;
     quotaWindow?: '5h' | 'weekly';
@@ -85,6 +86,7 @@ interface SortableRowProps {
     onRefresh: () => void;
     onEditLabel: () => void;
     onDelete: () => void;
+    onExport?: () => void;
     quotaWindow?: '5h' | 'weekly';
     isDragDisabled?: boolean;
 }
@@ -99,6 +101,7 @@ interface AccountRowContentProps {
     onRefresh: () => void;
     onEditLabel: () => void;
     onDelete: () => void;
+    onExport?: () => void;
     quotaWindow?: '5h' | 'weekly';
 }
 
@@ -188,6 +191,7 @@ function SortableAccountRow({
     onRefresh,
     onEditLabel,
     onDelete,
+    onExport,
     quotaWindow,
     isDragDisabled = false,
 }: SortableRowProps) {
@@ -262,6 +266,7 @@ function SortableAccountRow({
                 onRefresh={onRefresh}
                 onEditLabel={onEditLabel}
                 onDelete={onDelete}
+                onExport={onExport}
                 quotaWindow={quotaWindow}
             />
         </tr>
@@ -282,6 +287,7 @@ function AccountRowContent({
     onRefresh,
     onEditLabel,
     onDelete,
+    onExport,
     quotaWindow,
 }: AccountRowContentProps) {
     const { t } = useTranslation();
@@ -372,7 +378,7 @@ function AccountRowContent({
                         {isCurrent && (
                             <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[10px] font-bold shadow-sm border border-blue-200/50 dark:border-blue-700/50">
                                 <CheckCircle2 className="w-3 h-3" />
-                                {t('accounts.current_active', '当前生效')}
+                                {t('accounts.current_active', '当前选择')}
                             </span>
                         )}
                         {isDisabled && (
@@ -481,7 +487,8 @@ function AccountRowContent({
                     ? "bg-[#dbeafe] dark:bg-[#15243e] group-hover:bg-[#bfdbfe] dark:group-hover:bg-[#1e345b]"
                     : "bg-white dark:bg-base-100 group-hover:bg-gray-50 dark:group-hover:bg-base-200"
             )}>
-                <div className="flex items-center justify-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity max-w-[120px] mx-auto">
+                <div className="flex items-center justify-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity max-w-[150px] mx-auto">
+                    {onExport && <button className="p-1.5 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50" title={t('accounts.export_account')} aria-label={t('accounts.export_account')} onClick={event => { event.stopPropagation(); onExport(); }}><Download className="w-3.5 h-3.5" /></button>}
                     <button
                         className={cn(
                             "p-1.5 rounded-lg transition-all text-gray-500 dark:text-gray-400",
@@ -552,6 +559,7 @@ function AccountTable({
     onRefresh,
     onEditLabel,
     onDelete,
+    onExport,
     onReorder,
     quotaWindow,
 }: AccountTableProps) {
@@ -730,6 +738,7 @@ function AccountTable({
                                     onRefresh={() => onRefresh(account.id)}
                                     onEditLabel={() => onEditLabel(account.id)}
                                     onDelete={() => onDelete(account.id)}
+                            onExport={() => onExport?.(account.id)}
                                     quotaWindow={quotaWindow}
                                     isDragDisabled={isSortingActive}
                                 />

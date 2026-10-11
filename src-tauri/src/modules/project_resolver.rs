@@ -14,7 +14,7 @@ pub async fn fetch_project_id(access_token: &str) -> Result<String, String> {
         }
     });
 
-    let client = crate::utils::http::get_client();
+    let client = crate::utils::http::get_client()?;
     let mut last_error = String::new();
 
     for url in LOAD_PROJECT_ENDPOINTS {

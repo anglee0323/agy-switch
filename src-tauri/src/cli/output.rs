@@ -54,6 +54,8 @@ struct Index {
     accounts: Vec<Summary>,
     current_account_id: Option<String>,
     current_target_ide: Option<String>,
+    #[serde(default)]
+    current_ide_account_id: Option<String>,
 }
 #[derive(Deserialize)]
 struct Summary {
@@ -67,6 +69,10 @@ pub(super) struct Snapshot {
 
 impl Snapshot {
     pub fn read(root: &Path) -> Result<Self> {
+        Self::read_for_target(root, "app")
+    }
+
+    pub fn read_for_target(root: &Path, target: &str) -> Result<Self> {
         let bytes = match fs::read(root.join("accounts.json")) {
             Ok(bytes) => bytes,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -138,18 +144,25 @@ impl Snapshot {
                     "An account ID does not match its index entry.",
                 ));
             }
-            account.is_current = index.current_account_id.as_ref() == Some(&account.id);
+            let selected = if target == "ide" {
+                index.current_ide_account_id.as_ref().or_else(|| (index.current_target_ide.as_deref() == Some("ide")).then_some(index.current_account_id.as_ref()).flatten())
+            } else if matches!(index.current_target_ide.as_deref(), Some("ide" | "vscode")) {
+                None
+            } else {
+                index.current_account_id.as_ref()
+            };
+            account.is_current = selected == Some(&account.id);
             accounts.push(account);
         }
         Ok(Self {
             accounts,
-            current_target: index.current_target_ide.map(|target| {
-                if target == "agy" {
-                    "cli".into()
+            current_target: if target == "ide" { Some("ide".into()) } else { index.current_target_ide.map(|target| {
+                if target == "agy" || target == "app_cli" {
+                    "app".into()
                 } else {
                     target
                 }
-            }),
+            }) },
         })
     }
     pub fn current(&self) -> Result<&AccountView> {

@@ -58,6 +58,7 @@ export interface PinnedQuotaModelsConfig {
 }
 
 export interface AppConfig {
+    network?: { proxy_mode: 'system' | 'direct' | 'manual'; proxy_url: string };
     dashboard?: DashboardPreferences;
     desktop?: DesktopPreferences;
     menu_bar?: MenuBarPreferences;
@@ -71,6 +72,7 @@ export interface AppConfig {
     antigravity_executable?: string;
     antigravity_ide_executable?: string;
     antigravity_args?: string[];
+    antigravity_ide_args?: string[];
     quota_protection: QuotaProtectionConfig;
     pinned_quota_models: PinnedQuotaModelsConfig;
 }

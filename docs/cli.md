@@ -31,6 +31,7 @@ agy-switch refresh              # refresh all saved accounts over the network
 agy-switch refresh user@example.com
 agy-switch accounts list
 agy-switch current --json
+agy-switch current --target ide --json
 agy-switch quota                       # current account's cached quota
 agy-switch quota user@example.com --json
 agy-switch switch ACCOUNT_ID
@@ -61,7 +62,7 @@ agy-switch experiments run             # keep App translation active in foregrou
 
 There is no `--target cli` mode. The APP and Google’s `agy` may share a system credential store; writing only a session file cannot guarantee that a new `agy` process uses that account. Use the normal APP+agy synchronization path and verify the active identity in the client. This CLI does not install `agy` or create a missing native CLI data directory. If that directory already exists, normal synchronization can create its first native token file. A valid system token profile may also let `agy` sign in locally without a browser, as described in the [official authentication guide](https://antigravity.google/docs/cli/install/#local-silent-keyring-sign-in).
 
-Switching is an explicit mutating command. It reuses the GUI's token validation/refresh, credential synchronization, process handling and account-index update. The default `--target app` follows the GUI behavior: it may close and restart Antigravity and synchronize an initialized native `agy` session. The CLI requires a discoverable APP for this target and rejects a file-only fallback; the GUI’s existing fallback behavior is unchanged. `--target ide` retains the independent IDE database path.
+Switching is an explicit mutating command. It reuses the GUI's token validation/refresh, credential synchronization, process handling and account-index update. The default `--target app` switches App and the initialized native `agy` session together, closing and restarting only a running App. On Linux an initialized agy session can be used without an installed App; the shared credential store is still updated. `--target ide` changes only IDE credentials and restarts only a running IDE. App/CLI and IDE have separate recorded selections; `current --target app|ide` reads the corresponding record. See [account scopes and import](account-scopes.md).
 
 When the CLI relaunches an APP or IDE, child stdin/stdout/stderr are detached so the command returns promptly and JSON output stays machine-readable. GUI launches preserve their existing I/O behavior.
 
