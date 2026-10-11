@@ -51,6 +51,7 @@ import { QuotaItem } from './QuotaItem';
 import { getDisplayQuotaModels } from '../../config/modelConfig';
 import { categorizeModel, getModelProtectionKey } from '../../utils/modelCategory';
 import { getValidationBlockedStatusLabel } from './accountValidationStatus';
+import AccountSelection from './AccountSelection';
 
 // ============================================================================
 // 类型定义
@@ -248,12 +249,11 @@ function SortableAccountRow({
             </td>
             {/* 复选框 */}
             <td className="px-2 py-1 w-10 align-middle">
-                <input
-                    type="checkbox"
-                    className="checkbox checkbox-sm rounded border-2 border-gray-400 dark:border-gray-500 checked:border-blue-600 checked:bg-blue-600 [--chkbg:theme(colors.blue.600)] [--chkfg:white]"
+                <AccountSelection
                     checked={selected}
                     onChange={onSelect}
                     disabled={isRefreshing}
+                    label={t('accounts.select_account', { email: account.email })}
                 />
             </td>
             <AccountRowContent
@@ -488,7 +488,6 @@ function AccountRowContent({
                     : "bg-white dark:bg-base-100 group-hover:bg-gray-50 dark:group-hover:bg-base-200"
             )}>
                 <div className="flex items-center justify-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity max-w-[150px] mx-auto">
-                    {onExport && <button className="p-1.5 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50" title={t('accounts.export_account')} aria-label={t('accounts.export_account')} onClick={event => { event.stopPropagation(); onExport(); }}><Download className="w-3.5 h-3.5" /></button>}
                     <button
                         className={cn(
                             "p-1.5 rounded-lg transition-all text-gray-500 dark:text-gray-400",
@@ -533,6 +532,16 @@ function AccountRowContent({
                     >
                         <Trash2 className="w-3.5 h-3.5" />
                     </button>
+                    {onExport && (
+                        <button
+                            className="p-1.5 rounded-lg transition-all text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                            title={t('accounts.export_account')}
+                            aria-label={t('accounts.export_account')}
+                            onClick={event => { event.stopPropagation(); onExport(); }}
+                        >
+                            <Download className="w-3.5 h-3.5" />
+                        </button>
+                    )}
                 </div>
             </td>
         </>
@@ -675,11 +684,11 @@ function AccountTable({
                                 <span className="sr-only">{t('accounts.drag_to_reorder')}</span>
                             </th>
                             <th className="px-2 py-2 text-left w-10">
-                                <input
-                                    type="checkbox"
-                                    className="checkbox checkbox-sm rounded border-2 border-gray-400 dark:border-gray-500 checked:border-blue-600 checked:bg-blue-600 [--chkbg:theme(colors.blue.600)] [--chkfg:white]"
-                                    checked={accounts.length > 0 && selectedIds.size === accounts.length}
+                                <AccountSelection
+                                    checked={accounts.every(account => selectedIds.has(account.id))}
+                                    indeterminate={accounts.some(account => selectedIds.has(account.id)) && !accounts.every(account => selectedIds.has(account.id))}
                                     onChange={onToggleAll}
+                                    label={t('accounts.select_page')}
                                 />
                             </th>
                             <th className="px-2 py-1 text-left rtl:text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider w-[300px] whitespace-nowrap">{t('accounts.table.email')}</th>

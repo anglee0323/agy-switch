@@ -292,9 +292,8 @@
       "refresh_msg": "确定要刷新当前账号的配额吗？",
       "batch_refresh_msg": "确定要刷新选中的 {{count}} 个账号的配额吗？这可能需要一些时间。"
     },
-    "switch_target": "切换目标",
-    "target_app_cli": "App 与 CLI",
-    "switch_scope_hint": "App 与 agy 同步切换；IDE 独立切换",
+    "select_account": "选择账号 {{email}}",
+    "select_page": "选择本页账号",
     "export_account": "导出账号",
     "export_selected": "导出所选 {{count}} 个账号",
     "export_success": "已导出 {{count}} 个账号",

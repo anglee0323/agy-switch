@@ -6,11 +6,13 @@ long-running agy commands can retain an old session; start a new command after
 switching. IDE switching updates only the IDE databases and device data, closes
 and reopens only a running IDE, and keeps App/CLI and plugin credentials untouched.
 
-The account page selects App and CLI or IDE before switching. Selections are
-recorded separately; a saved selection does not prove a client's live identity.
+The account page and native menu switch App and CLI together without a client
+selector. Explicit IDE switching remains available through the management CLI
+and smart-switch policy. Selections are recorded separately; a saved selection
+does not prove a client's live identity.
 `agy-switch switch ID --target app|ide` uses the same service.
 `agy-switch current --target app|ide --json` reads the selected client's saved
-record without accessing live credentials. The native menu defaults to App/CLI.
+record without accessing live credentials.
 
 New automatic-switch policies default to App/CLI. Existing explicit global
 policies retain their scope; choose App/CLI or IDE in smart-switch settings to
@@ -36,7 +38,8 @@ in the import results instead of being silently skipped.
 
 ## Export and restore
 
-Each account and the selected-account toolbar offer JSON export. Version 2 exports
+JSON export is the last action for each account and in the selected-account
+toolbar, after the regular account controls. Version 2 exports
 preserve refresh tokens, OAuth client/profile metadata, project ID, name and remark.
 They omit access tokens, device identifiers and quota caches. On Unix the saved
 file uses mode 0600. The add-account dialog accepts that file, older token-only JSON
