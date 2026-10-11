@@ -194,7 +194,7 @@
       "risk_controlled": "Rate limited",
       "oauth_reauth_required": "OAuth Re-auth Required"
     },
-    "switch_account": "Switch to this account (Global smart sync)",
+    "switch_account": "Switch to this account",
     "refresh_quota": "Refresh this account's quota",
     "delete_account": "Delete this account",
     "quota_window_5h": "5-hour quota",
@@ -212,7 +212,7 @@
       "tabs": {
         "oauth": "OAuth",
         "token": "Refresh Token",
-        "import": "Import from Mac"
+        "import": "Local import"
       },
       "oauth": {
         "recommend": "Recommended",
@@ -236,20 +236,28 @@
       "token": {
         "label": "Refresh Token",
         "placeholder": "Paste your Refresh Token here (Batch supported)\n\nSupported formats:\n1. Single Token (1//...)\n2. JSON Array (with refresh_token field)\n3. Any text containing tokens (Auto-extraction)",
-        "hint": "Tip: You can paste multiple tokens or a JSON array to import in batch.",
+        "hint": "Accepts refresh tokens, JSON arrays or account export files. Export files contain login credentials; keep them private.",
         "error_token": "Please enter Refresh Token",
         "batch_progress": "Importing {{current}}/{{total}} accounts...",
         "batch_success": "Successfully imported {{count}} accounts",
         "batch_partial": "Import finished: {{success}} success, {{fail}} failed",
-        "batch_fail": "Import failed"
+        "batch_fail": "Import failed",
+        "choose_file": "Choose an account export file"
       },
       "import": {
-        "scan_title": "Scan this Mac for accounts",
+        "scan_title": "Scan local accounts",
         "scan_desc": "Reads the accounts already signed in to the system keychain, Antigravity IDE, plugins and CLI, then imports them.",
         "scan_btn": "Scan and import",
         "file_title": "Import from a database file",
         "file_desc": "If the scan finds nothing, pick an Antigravity state.vscdb file yourself.",
-        "file_btn": "Choose a database file…"
+        "file_btn": "Choose a database file…",
+        "summary": "Imported {{success}} accounts; {{failed}} sources need attention",
+        "failure_hint": "Check login state, database locations and the system proxy for failed sources. Sign in again if credentials have expired.",
+        "status_imported": "Imported",
+        "status_duplicate": "Duplicate account",
+        "status_unavailable": "Unreadable or signed out",
+        "status_missing_credentials": "Missing credentials",
+        "status_validation_failed": "Credential validation failed (network or expired login)"
       },
       "btn_cancel": "Cancel",
       "btn_confirm": "Confirm",
@@ -283,7 +291,14 @@
       "batch_refresh_title": "Batch Refresh",
       "refresh_msg": "Are you sure you want to refresh the quota for the current account?",
       "batch_refresh_msg": "Are you sure you want to refresh quotas for the selected {{count}} accounts? This may take some time."
-    }
+    },
+    "switch_target": "Switch target",
+    "target_app_cli": "App and CLI",
+    "switch_scope_hint": "App and agy switch together; IDE switches independently",
+    "export_account": "Export account",
+    "export_selected": "Export {{count}} selected accounts",
+    "export_success": "Exported {{count}} accounts",
+    "export_failed": "Export failed: {{error}}"
   },
   "settings": {
     "general": {
@@ -520,5 +535,16 @@
     "restore_pending": "Translation is off. Temporarily unreachable pages will restore their original text within 15 seconds.",
     "injection_description": "A translation script is injected through the App’s existing local connection. It replaces known UI labels without changing installation/source files, permissions or accounts, or uploading conversations. It runs inside App pages and observes UI changes; runtime injection is not risk-free. Turning it off restores the original text; stopping renewals restores it within 15 seconds.",
     "cli_description": "Desktop and agy-switch CLI share the same switch. For CLI-only use, enable translation, then keep agy-switch experiments run active."
+  },
+  "network": {
+    "title": "Network proxy",
+    "description": "Follows system HTTP/SOCKS proxies and proxy environment variables by default, and rereads changes while running. Linux supports GNOME and KDE fixed proxies. Use a manual address for PAC scripts.",
+    "mode": "Proxy mode",
+    "system": "Follow system (default)",
+    "manual": "Manual proxy",
+    "direct": "Direct connection",
+    "address": "Proxy address",
+    "manual_hint": "Supports http://, https://, socks5:// and socks5h:// without TUN. Omit usernames and passwords from the address.",
+    "save_failed": "Could not save. Check the proxy address and settings file permissions."
   }
 }

@@ -9,7 +9,7 @@ mod workflows;
 use output::{AccountView, Snapshot};
 use std::path::{Path, PathBuf};
 
-const HELP: &str = "agy-switch - Antigravity account management CLI\n\nUsage:\n  agy-switch                         Interactive dashboard / menu (TUI)\n  agy-switch accounts list [--json]\n  agy-switch current [--json]\n  agy-switch quota [ACCOUNT_ID|EMAIL] [--json]\n  agy-switch switch [ACCOUNT_ID|EMAIL] [--target app|ide] [--json]\n  agy-switch stats [--json]\n  agy-switch refresh [ACCOUNT_ID|EMAIL] [--json]\n  agy-switch policy show [--json]\n  agy-switch policy set [OPTIONS] [--json]\n    --enabled true|false --mode wait|stop --strategy priority|round-robin\n    --reserve 1..98 --minimum 2..100 --model all|gemini|claude|MODEL_ID\n    --target app|app-cli|ide|vscode --candidates ID|EMAIL...\n    --clear-candidates\n  agy-switch policy order [ID|EMAIL...] [--json]\n  agy-switch accounts order [ID|EMAIL...] [--json]\n  agy-switch update check [--json]\n  agy-switch experiments show [--json]\n  agy-switch experiments translation on|off [--json]\n  agy-switch experiments run          Maintain App translation in foreground\n  agy-switch --help\n  agy-switch --version\n\nRead commands use local cached data only and never open the GUI or refresh tokens.\n'current' is agy-switch's recorded account, not a live credential-store check.\n'switch' may refresh tokens, close/restart Antigravity, and update credentials.\nDefault target 'app' synchronizes APP credentials and an initialized agy session.\nThere is no CLI-only target: APP and agy may share the same credential store.\nPolicy edits configure the desktop scheduler; they do not start a CLI daemon.\nUpdate checks contact GitHub but never download or install.\nExperimental translation affects only Antigravity App on Windows/macOS.\nKeep Switch desktop or experiments run active; injection never changes App files.\nOrdering requires every account (or selected candidate) exactly once.\nAccounts can be managed interactively via TUI or through the GUI. ABV_DATA_DIR overrides the data directory.\n";
+const HELP: &str = "agy-switch - Antigravity account management CLI\n\nUsage:\n  agy-switch                         Interactive dashboard / menu (TUI)\n  agy-switch accounts list [--json]\n  agy-switch current [--target app|ide] [--json]\n  agy-switch quota [ACCOUNT_ID|EMAIL] [--json]\n  agy-switch switch [ACCOUNT_ID|EMAIL] [--target app|ide] [--json]\n  agy-switch stats [--json]\n  agy-switch refresh [ACCOUNT_ID|EMAIL] [--json]\n  agy-switch policy show [--json]\n  agy-switch policy set [OPTIONS] [--json]\n    --enabled true|false --mode wait|stop --strategy priority|round-robin\n    --reserve 1..98 --minimum 2..100 --model all|gemini|claude|MODEL_ID\n    --target app|app-cli|ide|vscode --candidates ID|EMAIL...\n    --clear-candidates\n  agy-switch policy order [ID|EMAIL...] [--json]\n  agy-switch accounts order [ID|EMAIL...] [--json]\n  agy-switch update check [--json]\n  agy-switch experiments show [--json]\n  agy-switch experiments translation on|off [--json]\n  agy-switch experiments run          Maintain App translation in foreground\n  agy-switch --help\n  agy-switch --version\n\nRead commands use local cached data only and never open the GUI or refresh tokens.\n'current' is agy-switch's recorded account, not a live credential-store check.\n'switch' may refresh tokens, close/restart Antigravity, and update credentials.\nDefault target 'app' synchronizes APP credentials and an initialized agy session.\nIDE switches leave App and agy credentials unchanged.\nThere is no CLI-only target: APP and agy may share the same credential store.\nPolicy edits configure the desktop scheduler; they do not start a CLI daemon.\nUpdate checks contact GitHub but never download or install.\nExperimental translation affects only Antigravity App on Windows/macOS.\nKeep Switch desktop or experiments run active; injection never changes App files.\nOrdering requires every account (or selected candidate) exactly once.\nAccounts can be managed interactively via TUI or through the GUI. ABV_DATA_DIR overrides the data directory.\n";
 
 #[derive(Debug, PartialEq)]
 enum Command {
@@ -17,6 +17,7 @@ enum Command {
     Version,
     List,
     Current,
+    CurrentIde,
     Quota(Option<String>),
     Stats,
     Refresh(Option<String>),
@@ -86,6 +87,8 @@ fn parse(args: &[String], interactive: bool) -> Result<(Command, bool)> {
         ["--version"] | ["-V"] => Command::Version,
         ["list"] => Command::List,
         ["current"] => Command::Current,
+        ["current", "--target", "app"] => Command::Current,
+        ["current", "--target", "ide"] => Command::CurrentIde,
         ["quota"] => Command::Quota(None),
         ["quota", selector] if !selector.starts_with('-') => {
             Command::Quota(Some((*selector).into()))
@@ -230,7 +233,7 @@ fn execute(command: Command, json: bool) -> Result<String> {
         Command::UpdateCheck => return settings::check_update(json, picker::Lang::current(&data_dir()?)),
         _ => {}
     }
-    let snapshot = Snapshot::read(&data_dir()?)?;
+    let snapshot = if matches!(command, Command::CurrentIde) { Snapshot::read_for_target(&data_dir()?, "ide")? } else { Snapshot::read(&data_dir()?)? };
     match command {
         Command::List => {
             if json {
@@ -246,7 +249,7 @@ fn execute(command: Command, json: bool) -> Result<String> {
                 .collect::<Vec<_>>()
                 .join("\n"))
         }
-        Command::Current => {
+        Command::Current | Command::CurrentIde => {
             let account = snapshot.current()?;
             Ok(if json {
                 serde_json::json!({"schema_version": 1, "account": account, "current_target": snapshot.current_target, "source": "local_index"}).to_string()
@@ -279,7 +282,7 @@ fn execute(command: Command, json: bool) -> Result<String> {
                 .map_err(|_| CliError::data("Could not start the account-switch runtime."))?;
             let target_ide = match target.as_str() {
                 "ide" => Some("ide"),
-                _ => None,
+                _ => Some("app"),
             };
             runtime
                 .block_on(crate::modules::account::switch_account(
@@ -371,7 +374,7 @@ fn execute(command: Command, json: bool) -> Result<String> {
                 .map_err(|_| CliError::data("Could not start the account-switch runtime."))?;
             let target_ide = match target.as_str() {
                 "ide" => Some("ide"),
-                _ => None,
+                _ => Some("app"),
             };
             runtime
                 .block_on(crate::modules::account::switch_account(

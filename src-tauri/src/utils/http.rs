@@ -1,46 +1,50 @@
 use once_cell::sync::Lazy;
 use rquest::Client;
 use rquest_util::Emulation;
+use std::{
+    collections::HashMap,
+    sync::Mutex,
+    time::{Duration, Instant},
+};
 
-/// Global shared HTTP client (15s timeout)
-/// Client has a built-in connection pool; cloning it is light and shares the pool
-pub static SHARED_CLIENT: Lazy<Client> = Lazy::new(|| create_base_client(15));
+// Retain pooling for bursts, but do not freeze system proxies at first startup.
+static CLIENTS: Lazy<Mutex<HashMap<u8, (Instant, Client)>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
+const PROXY_POLL_INTERVAL: Duration = Duration::from_secs(2);
 
-/// Global shared standard HTTP client (15s timeout, NO JA3 Emulation)
-pub static SHARED_STANDARD_CLIENT: Lazy<Client> = Lazy::new(|| create_standard_client(15));
+pub fn invalidate_clients() {
+    if let Ok(mut clients) = CLIENTS.lock() {
+        clients.clear();
+    }
+}
 
-/// Global shared standard HTTP client (Long timeout: 60s, NO JA3 Emulation)
-pub static SHARED_STANDARD_CLIENT_LONG: Lazy<Client> = Lazy::new(|| create_standard_client(60));
-
-/// Base client creation logic with JA3 Emulation
-fn create_base_client(timeout_secs: u64) -> Client {
-    Client::builder()
-        .emulation(Emulation::Chrome123)
-        .timeout(std::time::Duration::from_secs(timeout_secs))
+fn get(kind: u8) -> Result<Client, String> {
+    let mut clients = CLIENTS
+        .lock()
+        .map_err(|_| "HTTP client cache unavailable.")?;
+    if let Some((created, client)) = clients.get(&kind) {
+        if created.elapsed() < PROXY_POLL_INTERVAL {
+            return Ok(client.clone());
+        }
+    }
+    let mut builder =
+        Client::builder().timeout(Duration::from_secs(if kind == 2 { 60 } else { 15 }));
+    if kind == 0 {
+        builder = builder.emulation(Emulation::Chrome123);
+    }
+    let client = super::proxy::configure_rquest(builder, &super::proxy::resolve()?)?
         .build()
-        .unwrap_or_else(|_| Client::new())
+        .map_err(|_| "Cannot initialize the HTTP client. Check proxy settings.")?;
+    clients.insert(kind, (Instant::now(), client.clone()));
+    Ok(client)
 }
 
-/// Get uniformly configured HTTP client (15s timeout)
-pub fn get_client() -> Client {
-    SHARED_CLIENT.clone()
+pub fn get_client() -> Result<Client, String> {
+    get(0)
 }
-
-/// Base client creation logic strictly WITHOUT JA3 Emulation (Pure Native)
-fn create_standard_client(timeout_secs: u64) -> Client {
-    Client::builder()
-        // No .emulation(Emulation::Chrome123) here!
-        .timeout(std::time::Duration::from_secs(timeout_secs))
-        .build()
-        .unwrap_or_else(|_| Client::new())
+pub fn get_standard_client() -> Result<Client, String> {
+    get(1)
 }
-
-/// Get standard HTTP client without JA3 Emulation (15s timeout)
-pub fn get_standard_client() -> Client {
-    SHARED_STANDARD_CLIENT.clone()
-}
-
-/// Get long timeout standard HTTP client without JA3 Emulation (60s timeout)
-pub fn get_long_standard_client() -> Client {
-    SHARED_STANDARD_CLIENT_LONG.clone()
+pub fn get_long_standard_client() -> Result<Client, String> {
+    get(2)
 }

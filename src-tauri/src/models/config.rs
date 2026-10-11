@@ -17,8 +17,30 @@ pub struct AppConfig {
     pub antigravity_executable: Option<String>,
     pub antigravity_ide_executable: Option<String>,
     pub antigravity_args: Option<Vec<String>>,
+    pub antigravity_ide_args: Option<Vec<String>>,
     pub quota_protection: QuotaProtectionConfig,
     pub pinned_quota_models: PinnedQuotaModelsConfig,
+    pub network: NetworkPreferences,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ProxyMode { #[default] System, Direct, Manual }
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct NetworkPreferences { pub proxy_mode: ProxyMode, pub proxy_url: String }
+impl NetworkPreferences {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.proxy_mode == ProxyMode::Manual {
+            let url = url::Url::parse(&self.proxy_url).map_err(|_| "Enter a valid HTTP or SOCKS proxy URL.")?;
+            if !matches!(url.scheme(), "http" | "https" | "socks5" | "socks5h") || url.host_str().is_none()
+                || !url.username().is_empty() || url.password().is_some() {
+                return Err("Use an HTTP or SOCKS proxy URL without embedded credentials.".into());
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Stable card identifiers used by the homepage and settings editor.
@@ -221,8 +243,10 @@ impl AppConfig {
             antigravity_executable: None,
             antigravity_ide_executable: None,
             antigravity_args: None,
+            antigravity_ide_args: None,
             quota_protection: QuotaProtectionConfig::default(),
             pinned_quota_models: PinnedQuotaModelsConfig::default(),
+            network: NetworkPreferences::default(),
         }
     }
 }

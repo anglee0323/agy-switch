@@ -112,7 +112,7 @@ struct Tier {
 }
 
 /// Get shared HTTP Client (15s timeout) for quota and project requests.
-async fn create_standard_client() -> rquest::Client {
+async fn create_standard_client() -> Result<rquest::Client, String> {
     crate::utils::http::get_standard_client()
 }
 
@@ -124,7 +124,7 @@ const CLOUD_CODE_LOAD_PROJECT_ENDPOINTS: [&str; 3] = [
 
 /// Fetch project ID and subscription tier
 async fn fetch_project_id(access_token: &str, email: &str) -> (Option<String>, Option<String>) {
-    let client = create_standard_client().await;
+    let Ok(client) = create_standard_client().await else { return (None, None); };
     let meta = json!({"metadata": {"ideType": "ANTIGRAVITY"}});
 
     for (ep_idx, ep_url) in CLOUD_CODE_LOAD_PROJECT_ENDPOINTS.iter().enumerate() {
@@ -253,7 +253,7 @@ pub async fn fetch_quota_with_cache(
 
     // We keep project_id to store in the DB, but we NO LONGER force inject it into payload if it's absent
 
-    let client = create_standard_client().await;
+    let client = create_standard_client().await.map_err(crate::error::AppError::Config)?;
     let payload = if let Some(ref pid) = project_id {
         json!({ "project": pid })
     } else {
@@ -491,7 +491,7 @@ async fn fetch_quota_summary(
     email: &str,
     project_id: Option<&str>,
 ) -> Option<Vec<crate::models::quota::QuotaGroup>> {
-    let client = create_standard_client().await;
+    let client = create_standard_client().await.ok()?;
     let payload = if let Some(pid) = project_id {
         json!({ "project": pid })
     } else {

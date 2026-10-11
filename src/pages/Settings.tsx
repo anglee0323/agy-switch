@@ -11,6 +11,7 @@ import DesktopSettings from '../components/settings/DesktopSettings';
 import DashboardSettings from '../components/settings/DashboardSettings';
 import ModelDisplaySettings from '../components/settings/ModelDisplaySettings';
 import ExperimentalSettings from '../components/settings/ExperimentalSettings';
+import NetworkSettings from '../components/settings/NetworkSettings';
 import { AutoSwitchSettings } from '../components/autoSwitch/AutoSwitch';
 import SettingsNavigation, { SETTINGS_SECTIONS, SettingsSection } from '../components/settings/SettingsNavigation';
 import '../components/settings/SettingsLayout.css';
@@ -101,6 +102,7 @@ function Settings() {
     const content: Record<SettingsSection, React.ReactNode> = {
         general: (
             <div className="space-y-6">
+                <NetworkSettings />
                 {/* 1. 界面外观与语言 */}
                 <section className="rounded-2xl border border-gray-200/80 bg-white p-5 sm:p-6 shadow-xs dark:border-slate-800 dark:bg-slate-900/80">
                     <div className="mb-5 flex items-start gap-3">

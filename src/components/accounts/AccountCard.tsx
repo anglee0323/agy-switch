@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { ArrowRightLeft, RefreshCw, Trash2, Lock, Ban, Diamond, Gem, Circle, Sparkles, Tag, Clock, GripVertical, BrainCircuit, CheckCircle2 } from 'lucide-react';
+import { Download, ArrowRightLeft, RefreshCw, Trash2, Lock, Ban, Diamond, Gem, Circle, Sparkles, Tag, Clock, GripVertical, BrainCircuit, CheckCircle2 } from 'lucide-react';
 import { Account } from '../../types/account';
 import { cn } from '../../utils/cn';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +19,7 @@ interface AccountCardProps {
     onRefresh: () => void;
     onEditLabel: () => void;
     onDelete: () => void;
+    onExport?: () => void;
     quotaWindow?: '5h' | 'weekly';
     dragHandleProps?: {
         attributes?: any;
@@ -38,6 +39,7 @@ function AccountCard({
     onRefresh,
     onEditLabel,
     onDelete,
+    onExport,
     quotaWindow,
     dragHandleProps,
     isDragging = false,
@@ -251,6 +253,7 @@ function AccountCard({
             {/* Footer: Actions Only */}
             <div className="flex-none flex items-center justify-center pt-2 pb-1 border-t border-gray-100 dark:border-base-200 mt-auto">
                 <div className="flex items-center justify-center gap-2 w-full">
+                    {onExport && <button className="p-1.5 rounded-lg text-gray-500 hover:text-blue-600 hover:bg-blue-50" title={t('accounts.export_account')} aria-label={t('accounts.export_account')} onClick={event => { event.stopPropagation(); onExport(); }}><Download className="w-3.5 h-3.5" /></button>}
                     <button
                         className={cn(
                             "p-1.5 rounded-lg transition-all text-gray-400 dark:text-gray-500",

@@ -90,6 +90,10 @@ pub struct AccountIndex {
     pub current_account_id: Option<String>,
     #[serde(default)]
     pub current_target_ide: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_ide_account_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_vscode_account_id: Option<String>,
 }
 
 /// 账号摘要信息
@@ -114,6 +118,43 @@ impl AccountIndex {
             accounts: Vec::new(),
             current_account_id: None,
             current_target_ide: None,
+            current_ide_account_id: None,
+            current_vscode_account_id: None,
+        }
+    }
+
+    pub fn selected(&self, target: Option<&str>) -> Option<String> {
+        match target {
+            Some("ide") => self.current_ide_account_id.clone().or_else(|| {
+                (self.current_target_ide.as_deref() == Some("ide")).then(|| self.current_account_id.clone()).flatten()
+            }),
+            Some("vscode") => self.current_vscode_account_id.clone().or_else(|| {
+                (self.current_target_ide.as_deref() == Some("vscode")).then(|| self.current_account_id.clone()).flatten()
+            }),
+            _ if matches!(self.current_target_ide.as_deref(), Some("ide" | "vscode")) => None,
+            _ => self.current_account_id.clone(),
+        }
+    }
+
+    pub fn record_selected(&mut self, id: &str, target: Option<&str>) {
+        // Migrate the legacy single selection before an App switch replaces it.
+        if self.current_ide_account_id.is_none() && self.current_target_ide.as_deref() == Some("ide") {
+            self.current_ide_account_id = self.current_account_id.clone();
+        }
+        if self.current_vscode_account_id.is_none() && self.current_target_ide.as_deref() == Some("vscode") {
+            self.current_vscode_account_id = self.current_account_id.clone();
+        }
+        match target {
+            Some("ide") => self.current_ide_account_id = Some(id.into()),
+            Some("vscode") => self.current_vscode_account_id = Some(id.into()),
+            _ => {
+                self.current_account_id = Some(id.into());
+                self.current_target_ide = target.map(str::to_owned);
+                if target == Some("all") {
+                    self.current_ide_account_id = Some(id.into());
+                    self.current_vscode_account_id = Some(id.into());
+                }
+            }
         }
     }
 }
@@ -136,12 +177,52 @@ pub struct DeviceProfile {
 /// 导出账号项（用于备份/迁移）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountExportItem {
+    #[serde(default)]
     pub email: String,
     pub refresh_token: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oauth_client_key: Option<String>,
+    #[serde(default)]
+    pub is_gcp_tos: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custom_label: Option<String>,
 }
 
 /// 导出账号响应
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AccountExportResponse {
+    #[serde(default)]
+    pub schema_version: u32,
     pub accounts: Vec<AccountExportItem>,
+}
+
+#[cfg(test)]
+mod selection_tests {
+    use super::*;
+
+    #[test]
+    fn app_and_ide_selections_do_not_overwrite_each_other() {
+        let mut index = AccountIndex::new();
+        index.record_selected("A", Some("app"));
+        index.record_selected("B", Some("ide"));
+        assert_eq!(index.selected(None).as_deref(), Some("A"));
+        assert_eq!(index.selected(Some("ide")).as_deref(), Some("B"));
+        index.record_selected("C", Some("app"));
+        assert_eq!(index.selected(Some("ide")).as_deref(), Some("B"));
+    }
+
+    #[test]
+    fn legacy_ide_record_is_preserved_without_claiming_app_identity() {
+        let mut index: AccountIndex = serde_json::from_str(r#"{"version":"2.0","accounts":[],"current_account_id":"B","current_target_ide":"ide"}"#).unwrap();
+        assert_eq!(index.selected(Some("ide")).as_deref(), Some("B"));
+        assert!(index.selected(Some("app")).is_none());
+        index.record_selected("A", Some("app"));
+        assert_eq!(index.selected(Some("ide")).as_deref(), Some("B"));
+        index.record_selected("C", Some("all"));
+        assert_eq!(index.selected(Some("ide")).as_deref(), Some("C"));
+    }
 }

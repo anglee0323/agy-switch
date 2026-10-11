@@ -34,7 +34,7 @@ fn evaluate(current: &str, release: Release) -> Result<UpdateInfo, String> {
 
 /// Read public release metadata only; no credentials, download or installer execution.
 pub async fn check_for_updates() -> Result<UpdateInfo, String> {
-    let client = reqwest::Client::builder()
+    let client = crate::utils::proxy::configure_reqwest(reqwest::Client::builder())?
         .timeout(std::time::Duration::from_secs(12))
         .redirect(reqwest::redirect::Policy::none())
         .user_agent(concat!("agy-switch/", env!("CARGO_PKG_VERSION")))
@@ -115,8 +115,18 @@ pub async fn download_and_install(app: tauri::AppHandle, expected_version: Strin
             return Err("update_mac_manual_required".into());
         }
     }
-    let updater = app.updater_builder().timeout(std::time::Duration::from_secs(180))
-        .build().map_err(|_| "update_unavailable")?;
+    let mut builder = app.updater_builder().timeout(std::time::Duration::from_secs(180));
+    match crate::utils::proxy::resolve()? {
+        crate::utils::proxy::Routing::NativeSystem => {},
+        crate::utils::proxy::Routing::Direct => builder = builder.no_proxy(),
+        crate::utils::proxy::Routing::Fixed(routes) => {
+            builder = builder.no_proxy();
+            if let Some(address) = routes.https.or(routes.all) {
+                builder = builder.proxy(url::Url::parse(&address).map_err(|_| "Invalid updater proxy settings.")?);
+            }
+        }
+    }
+    let updater = builder.build().map_err(|_| "update_unavailable")?;
     let mut update = updater.check().await.map_err(|_| "update_unavailable")?.ok_or("update_changed")?;
     if update.version != metadata.latest_version.trim_start_matches('v') || !trusted_download(&update.version, update.download_url.as_str()) {
         return Err("invalid_release".into());

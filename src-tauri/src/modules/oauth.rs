@@ -364,7 +364,7 @@ async fn exchange_code_once(
     redirect_uri: &str,
     client_cfg: &OAuthClientConfig,
 ) -> Result<TokenResponse, (Option<reqwest::StatusCode>, String)> {
-    let client = crate::utils::http::get_long_standard_client();
+    let client = crate::utils::http::get_long_standard_client().map_err(|error| (None, error))?;
     let params = [
         ("client_id", client_cfg.client_id.as_str()),
         ("client_secret", client_cfg.client_secret.as_str()),
@@ -497,7 +497,7 @@ async fn refresh_access_token_once(
     account_id: Option<&str>,
     client_cfg: &OAuthClientConfig,
 ) -> Result<TokenResponse, (Option<reqwest::StatusCode>, String)> {
-    let client = crate::utils::http::get_long_standard_client();
+    let client = crate::utils::http::get_long_standard_client().map_err(|error| (None, error))?;
     let params = [
         ("client_id", client_cfg.client_id.as_str()),
         ("client_secret", client_cfg.client_secret.as_str()),
@@ -651,7 +651,7 @@ pub async fn refresh_access_token(
 
 /// Get user info
 pub async fn get_user_info(access_token: &str) -> Result<UserInfo, String> {
-    let client = crate::utils::http::get_client();
+    let client = crate::utils::http::get_client()?;
 
     let response = client
         .get(USERINFO_URL)

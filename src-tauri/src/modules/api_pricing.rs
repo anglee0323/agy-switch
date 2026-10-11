@@ -42,7 +42,7 @@ pub async fn get_api_pricing() -> Result<ApiPricingSnapshot, String> {
         }
     }
 
-    let client = reqwest::Client::builder()
+    let client = crate::utils::proxy::configure_reqwest(reqwest::Client::builder())?
         .timeout(std::time::Duration::from_secs(12))
         .user_agent("agy-switch local usage dashboard")
         .build()

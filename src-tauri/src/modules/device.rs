@@ -35,14 +35,7 @@ pub fn get_storage_path(target_ide: Option<&str>) -> Result<PathBuf, String> {
         }
     }
 
-    let folder_names: &[&str] = if target_ide == Some("ide") {
-        &["Antigravity IDE"]
-    } else if target_ide == Some("code") || target_ide == Some("cursor") {
-        &["Antigravity"]
-    } else {
-        // target_ide = None: try IDE folder first, fall back to classic name
-        &["Antigravity IDE", "Antigravity"]
-    };
+    let folder_names = super::db::data_folder_names(Some(target_ide.unwrap_or("app")));
 
     // 3) Standard installation location
     #[cfg(target_os = "macos")]
@@ -176,12 +169,12 @@ pub fn write_profile(storage_path: &Path, profile: &DeviceProfile) -> Result<(),
     logger::log_info(&format!("device_profile_written to {:?}", storage_path));
 
     // Sync ItemTable.storage.serviceMachineId in state.vscdb
-    let _ = sync_state_service_machine_id_value(&profile.dev_device_id);
+    sync_state_service_machine_id_value(storage_path, &profile.dev_device_id)?;
     Ok(())
 }
 
-fn sync_state_service_machine_id_value(service_id: &str) -> Result<(), String> {
-    let db_path = get_state_db_path()?;
+fn sync_state_service_machine_id_value(storage_path: &Path, service_id: &str) -> Result<(), String> {
+    let db_path = storage_path.parent().ok_or("failed_to_get_storage_parent_dir")?.join("state.vscdb");
     if !db_path.exists() {
         logger::log_warn(&format!("state_db_missing: {:?}", db_path));
         return Ok(());
