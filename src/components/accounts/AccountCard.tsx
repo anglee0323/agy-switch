@@ -169,7 +169,7 @@ function AccountCard({
                             {isCurrent && (
                                 <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-[9px] font-bold shadow-sm border border-blue-200/50 dark:border-blue-700/50">
                                     <CheckCircle2 className="w-2.5 h-2.5" />
-                                    {t('accounts.current_active', '当前生效')}
+                                    {t('accounts.current_active', '当前选择')}
                                 </span>
                             )}
                             {isDisabled && (

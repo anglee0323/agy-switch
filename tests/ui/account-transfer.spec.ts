@@ -29,12 +29,22 @@ test('App/CLI and IDE switch choices use distinct shared service targets', async
     await page.getByTitle('切换到此账号', { exact: true }).nth(1).click();
     await expect.poll(() => page.evaluate(() => (window as any).__transferCalls.filter((call: any) => call.command === 'switch_account').map((call: any) => call.args.targetIde))).toEqual(['app', 'ide']);
     await expect(page.getByText(/Unimplemented synthetic command/)).toHaveCount(0);
+    await expect(page.getByRole('row').filter({ hasText: 'backup@example.invalid' }).getByText('当前选择')).toBeVisible();
+    await page.getByLabel('切换目标').selectOption('app');
+    await expect(page.getByRole('row').filter({ hasText: 'primary@example.invalid' }).getByText('当前选择')).toBeVisible();
+    await page.getByLabel('切换目标').selectOption('ide');
+    await expect(page.getByText('成功', { exact: true })).toHaveCount(0);
     await page.screenshot({ path: info.outputPath('account-scopes.png') });
+    await page.setViewportSize({ width: 1024, height: 700 });
+    await expect(page.getByLabel('切换目标')).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: info.outputPath('account-scopes-1024.png') });
 });
 
 test('single and selected account exports reach the save command', async ({ page }) => {
     await page.getByRole('button', { name: '导出账号', exact: true }).first().click();
     await expect.poll(() => page.evaluate(() => (window as any).__transferCalls.filter((call: any) => call.command === 'save_account_export').map((call: any) => call.args.accountIds.length))).toEqual([1]);
+    await expect(page.getByText(/已导出 1 个账号/)).toHaveCount(0);
     await page.locator('tbody input[type="checkbox"]').nth(0).check();
     await page.locator('tbody input[type="checkbox"]').nth(1).check();
     await page.getByRole('button', { name: '导出所选 2 个账号', exact: true }).click();
