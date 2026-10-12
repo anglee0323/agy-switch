@@ -7,7 +7,8 @@
 | [Release checklist](release-checklist.md) | Build, verify, publish and update Homebrew |
 | [Native GUI acceptance](native-gui-acceptance.md) | Hosted Windows/Linux window tests and their boundaries |
 | [Account data contract](account-dashboard-data-contract.md) | Read-only account, identity and quota projections |
-| [4.10.4 package verification](4.10.4-public-acceptance.md) | Current public packages, account toolbar and proxy-test fixture acceptance |
+| [4.10.5 package verification](4.10.5-public-acceptance.md) | Current public packages, export/import dialogs and plan classification acceptance |
+| [4.10.4 package verification](4.10.4-public-acceptance.md) | Previous account toolbar and proxy-test fixture acceptance |
 | [4.10.3 package verification](4.10.3-public-acceptance.md) | Previous public packages, App/CLI and IDE scopes, proxy routing and account transfer |
 | [4.10.2 package verification](4.10.2-public-acceptance.md) | Previous packages, automatic App switching/relaunch, Claude pricing and dual-family layout |
 | [4.10.1 package verification](4.10.1-public-acceptance.md) | Previous App-only translation baseline, shared CLI switch, hashes and update signatures |
