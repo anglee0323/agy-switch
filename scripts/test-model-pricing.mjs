@@ -7,11 +7,15 @@ const {findModelPricing,estimateApiCost}=await import(`data:text/javascript;base
 const price={model:'gemini-2.5-flash',input:.3,output:2.5,cached:.03};
 const snapshot={prices:[price]};
 const model=name=>({model:name,input_tokens:1e6,output_tokens:1e6,cached_tokens:1e6});
-test('explicit EXP-A estimate mapping does not absorb other versions or variants',()=>{
- const flash={...price,model:'gemini-3.8-flash'};
- const prices={prices:[flash]};
- assert.equal(findModelPricing('GEMINI-3.8-FLASH-EXP-A',prices),flash);
- for(const name of ['gemini-3.8-flash-exp-b','gemini-3.7-flash','gemini-3.8-flash-lite'])assert.equal(findModelPricing(name,prices),undefined);
+const aliases=JSON.parse(readFileSync(new URL('../tests/fixtures/model-pricing-aliases.json',import.meta.url),'utf8'));
+for(const [index,fixture] of aliases.entries())test(`shared Gemini pricing case ${index+1}: ${fixture.model}`,()=>{
+ const prices={prices:fixture.prices.map((model,index)=>({model,input:.75*(index+1),output:3.75*(index+1),cached:.075*(index+1)}))};
+ const matched=findModelPricing(fixture.model,prices);
+ assert.equal(matched?.model??null,fixture.expected);
+ const cost=estimateApiCost([model(fixture.model)],prices);
+ assert.equal(cost.unpricedModels,fixture.expected===null?1:0);
+ assert.equal(cost.pricedModels,fixture.expected===null?0:1);
+ if(matched)assert(Math.abs(cost.usd-(matched.input+matched.output+matched.cached))<1e-9);
 });
 test('exact aliases work without borrowing neighbouring model prices',()=>{
  assert.equal(findModelPricing('Gemini 2.5 Flash-n',snapshot),price);
