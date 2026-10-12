@@ -53,6 +53,13 @@ proof of the cause of response latency. It uses the existing local usage scan an
 does not require an account snapshot or a new benchmark request.
 
 **Estimated API cost** uses matched public Google API rates for Gemini and Claude.
+Gemini reasoning labels such as `Gemini 3.8 Flash (High)` and internal experiment
+names such as `gemini-3.8-flash-exp-b` estimate the same version's basic model rate.
+The rule recognizes new experiment labels without a model-version allow-list.
+Exact catalog rates take priority, followed by the basic model rate or a single
+unambiguous preview rate. Flash Lite and media variants remain separate; missing
+versions or ambiguous prices stay unpriced. See [Google's thinking guide](https://ai.google.dev/gemini-api/docs/thinking)
+for thinking levels and output-token accounting.
 Claude thinking names match the same model version's rates, including
 `claude-opus-4-6-thinking` → `Claude Opus 4.6`; other variants stay separate.
 The card shows the request count, with pricing provenance and estimate scope in

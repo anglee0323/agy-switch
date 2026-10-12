@@ -2,7 +2,7 @@
 //! existing public pricing cache, so opening it never waits for a price fetch.
 use super::{api_pricing::{ApiPricing, ApiPricingSnapshot}, native_token_stats::{LocalTokenModel, LocalTokenTotals, LocalTokenUsageSummary}};
 use serde::Serialize;
-use std::{sync::Mutex, time::{Duration, Instant}};
+use std::{sync::{Mutex, OnceLock}, time::{Duration, Instant}};
 
 struct CachedUsage { day: chrono::NaiveDate, read_at: Instant, value: MenuBarUsage }
 impl CachedUsage {
@@ -55,34 +55,58 @@ pub fn project(summary: &LocalTokenUsageSummary, pricing: Option<&ApiPricingSnap
     }
 }
 
-fn normalized(model: &str) -> String {
-    // Native -n alias and the explicit EXP-A estimate mapping requested by the owner.
+fn pricing_keys(model: &str) -> (String, Option<String>) {
+    // Keep this policy aligned with src/utils/modelPricing.ts.
     let model = model.to_ascii_lowercase();
     let model = model.strip_suffix("-n").unwrap_or(&model);
-    let model = if model == "gemini-3.8-flash-exp-a" { "gemini-3.8-flash" } else { model };
+    static TOKENS: OnceLock<regex::Regex> = OnceLock::new();
+    static GEMINI: OnceLock<regex::Regex> = OnceLock::new();
+    let exact = TOKENS.get_or_init(|| regex::Regex::new(r"[a-z]+|[0-9]+").unwrap())
+        .find_iter(model).map(|token| token.as_str()).collect::<Vec<_>>().join("-");
+    let pattern = GEMINI.get_or_init(|| regex::Regex::new(r"^gemini-([0-9]+(?:-[0-9]+)*)-(flash(?:-lite)?|pro)(?:-(.*))?$").unwrap());
+    if let Some(gemini) = pattern.captures(&exact) {
+        let suffix: Vec<_> = gemini.get(3).map(|value| value.as_str().split('-').collect()).unwrap_or_default();
+        let distinct_variant = suffix.iter().any(|token| ["lite", "image", "vision", "audio", "tts", "live", "embedding", "embeddings", "robotics", "native"].contains(token));
+        let mut experimental = false;
+        let alias = !distinct_variant && suffix.iter().all(|token| {
+            if ["exp", "experimental", "preview", "test"].contains(token) { experimental = true; }
+            experimental || (token.len() == 1 && token.as_bytes()[0].is_ascii_lowercase())
+                || ["high", "medium", "low", "minimal", "thinking"].contains(token)
+        });
+        let base = alias.then(|| format!("gemini-{}-{}", &gemini[1], &gemini[2]));
+        return (exact, base);
+    }
     let name: String = model.chars().filter(|c| c.is_ascii_alphanumeric()).collect();
     // App thinking aliases use the same model's token rates. Do not absorb
     // fast, experimental or neighbouring model versions into this mapping.
     if let Some(base) = name.strip_suffix("thinking") {
         if ["claudeopus", "claudesonnet", "claudehaiku"].iter().any(|prefix|
             base.strip_prefix(prefix).is_some_and(|version| !version.is_empty() && version.chars().all(|c| c.is_ascii_digit()))) {
-            return base.to_string();
+            return (base.to_string(), None);
         }
     }
-    name
+    (name, None)
 }
 
 pub(crate) fn estimate(models: &[LocalTokenModel], prices: &[ApiPricing]) -> (Option<f64>, usize) {
     let mut usd = 0.0;
     let mut priced = 0;
     let mut unpriced = 0;
+    let entries: Vec<_> = prices.iter().map(|price| (price, pricing_keys(&price.model))).collect();
     for model in models {
         if model.input_tokens == 0 && model.output_tokens == 0 && model.cached_tokens == 0 { continue; }
-        let name = normalized(&model.model);
-        let mut matching = prices.iter().filter(|price| normalized(&price.model) == name);
-        let price = matching.next();
+        let (exact, base) = pricing_keys(&model.model);
+        let mut matching: Vec<_> = entries.iter().filter(|(_, keys)| keys.0 == exact).map(|(price, _)| *price).collect();
+        if matching.is_empty() {
+            if let Some(base) = base {
+                let aliases: Vec<_> = entries.iter().filter(|(_, keys)| keys.1.as_deref() == Some(base.as_str())).collect();
+                matching = aliases.iter().filter(|(_, keys)| keys.0 == base).map(|(price, _)| *price).collect();
+                if matching.is_empty() { matching = aliases.iter().map(|(price, _)| *price).collect(); }
+            }
+        }
+        let price = matching.first().copied();
         // Do not guess prices from a substring or silently pick an ambiguous rate.
-        if let Some(price) = price.filter(|price| matching.next().is_none() && [price.input, price.output, price.cached].iter().all(|rate| rate.is_finite() && *rate >= 0.0)) {
+        if let Some(price) = price.filter(|price| matching.len() == 1 && [price.input, price.output, price.cached].iter().all(|rate| rate.is_finite() && *rate >= 0.0)) {
             usd += (model.input_tokens as f64 * price.input + model.output_tokens as f64 * price.output + model.cached_tokens as f64 * price.cached) / 1_000_000.0;
             priced += 1;
         } else { unpriced += 1; }
@@ -110,11 +134,21 @@ mod tests {
         assert!((usd.unwrap() - 1.275).abs() < 1e-9); assert_eq!(missing, 0);
     }
     #[test]
-    fn explicit_experimental_alias_preserves_version_and_variant_boundaries() {
-        let (usd, missing) = estimate(&[model("GEMINI-3.8-FLASH-EXP-A")], &[price()]);
-        assert!((usd.unwrap() - 1.275).abs() < 1e-9); assert_eq!(missing, 0);
-        for name in ["gemini-3.8-flash-exp-b", "gemini-3.7-flash", "gemini-3.8-flash-lite"] {
-            assert_eq!(estimate(&[model(name)], &[price()]), (None, 1));
+    fn shared_gemini_aliases_preserve_versions_variants_and_catalog_rates() {
+        #[derive(serde::Deserialize)]
+        struct Fixture { model: String, prices: Vec<String>, expected: Option<String> }
+        let fixtures: Vec<Fixture> = serde_json::from_str(include_str!("../../../tests/fixtures/model-pricing-aliases.json")).unwrap();
+        for fixture in fixtures {
+            let prices: Vec<_> = fixture.prices.iter().enumerate().map(|(index, name)| {
+                let multiplier = (index + 1) as f64;
+                ApiPricing { model: name.clone(), input: 0.75 * multiplier, output: 3.75 * multiplier, cached: 0.075 * multiplier }
+            }).collect();
+            let (usd, missing) = estimate(&[model(&fixture.model)], &prices);
+            if let Some(expected) = fixture.expected {
+                let index = fixture.prices.iter().position(|name| name == &expected).unwrap();
+                assert!((usd.unwrap() - 1.275 * (index + 1) as f64).abs() < 1e-9, "{}", fixture.model);
+                assert_eq!(missing, 0, "{}", fixture.model);
+            } else { assert_eq!((usd, missing), (None, 1), "{}", fixture.model); }
         }
     }
     #[test]
