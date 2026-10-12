@@ -8,9 +8,11 @@ export async function settleKeyboardDrag(page: import('@playwright/test').Page) 
 export function setupSettingsFixture(options: { theme?: string; language?: string; failLoad?: boolean; failLowQuotaLoad?: boolean; dashboardCards?: string[]; quotaScope?: string; autoRefresh?: boolean; autoSync?: boolean } = {}) {
     const w = window as any;
     const callbacks: Record<number, Function> = {}; let callback = 1;
+    const listeners: Record<string, number[]> = {};
     let general = { language: options.language || 'zh', theme: options.theme || 'light', auto_refresh: options.autoRefresh ?? false, refresh_interval: 15, auto_sync: options.autoSync ?? false, sync_interval: 5,
         dashboard: { cards: options.dashboardCards ?? ['total_tokens', 'input_tokens', 'output_tokens', 'cache_hit_rate', 'api_cost', 'first_text_latency', 'body_speed'], order: [] as string[] },
         desktop: { launch_at_login: false, hide_dock_icon: false, start_minimized: false }, menu_bar: { quota_scope: options.quotaScope || 'all' },
+        network: { proxy_mode: 'system', proxy_url: '' },
         quota_protection: { enabled: false, threshold_percentage: 10, monitored_models: [] }, pinned_quota_models: { models: [] } };
     const accounts = ['primary', 'backup', 'studio', 'personal'].map((name, index) => ({ id: `fixture-${index}`, email: `${name}@example.invalid`, created_at: 1, last_used: 1,
         token: { access_token: '', refresh_token: '', expires_in: 0, expiry_timestamp: 0, token_type: 'Bearer' },
@@ -28,6 +30,10 @@ export function setupSettingsFixture(options: { theme?: string; language?: strin
     w.__settingsFixture = { calls, holdAutoSave: false, holdDashboardSave: false, holdGeneralSave: false, holdExperimentSave: false, failExperimentSave: false, failLoad: Boolean(options.failLoad), failLowQuotaLoad: Boolean(options.failLowQuotaLoad), lowQuota: () => copy(lowQuota),
         experiments: () => copy(experiments),
         general: () => copy(general),
+        externalNetworkEdit: (network: typeof general.network) => {
+            general.network = copy(network);
+            for (const id of listeners['config://updated'] || []) callbacks[id]?.({ event: 'config://updated', id: 0, payload: null });
+        },
         externalExperimentEdit: () => { experiments.translation_enabled = true; experiments.translated = 12; },
         disconnectApp: () => { experiments.available = false; experiments.state = 'not_running'; experiments.translation_enabled = true; },
         resolveExperimentSave: () => { if (pendingExperiment) { pendingExperiment.resolve(pendingExperiment.action()); pendingExperiment = null; } },
@@ -82,7 +88,7 @@ export function setupSettingsFixture(options: { theme?: string; language?: strin
             if (command === 'set_desktop_preferences') { desktop = { ...desktop, ...args.patch }; general.desktop = { launch_at_login: desktop.launch_at_login, hide_dock_icon: desktop.hide_dock_icon, start_minimized: desktop.start_minimized }; return copy(desktop); }
             if (command === 'set_menu_bar_preferences') { general.menu_bar = { ...general.menu_bar, ...args.patch, ...(args.quotaScope ? { quota_scope: args.quotaScope } : {}) }; return copy(general.menu_bar); }
             if (command === 'set_window_theme' || command === 'set_window_language') return null;
-            if (command === 'plugin:event|listen') return callback++;
+            if (command === 'plugin:event|listen') { (listeners[args.event] ||= []).push(args.handler); return callback++; }
             if (command.startsWith('plugin:window|')) {
                 if (/size$/.test(command)) return { width: 1100, height: 780 };
                 if (/position$/.test(command)) return { x: 0, y: 0 };

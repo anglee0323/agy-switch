@@ -73,4 +73,35 @@ test('ordered proxy writes preserve newer edits and recover after a failure', as
     await mode.selectOption('direct');
     await expect.poll(stored).toEqual({ proxy_mode: 'direct', proxy_url: '' });
     await expect(section.getByRole('alert')).toHaveCount(0);
+    await page.evaluate(() => { (window as any).__settingsFixture.holdGeneralSave = true; });
+    await mode.selectOption('system');
+    await mode.selectOption('direct');
+    const before = await page.evaluate(() => (window as any).__settingsFixture.calls.filter((c: any) => c.command === 'save_config').length);
+    await page.evaluate(() => (window as any).__settingsFixture.resolveGeneralSave());
+    await expect.poll(() => page.evaluate(() => (window as any).__settingsFixture.calls.filter((c: any) => c.command === 'save_config').length)).toBe(before + 1);
+    await expect(mode).toHaveValue('direct');
+    await page.evaluate(() => {
+        const fixture = (window as any).__settingsFixture;
+        fixture.holdGeneralSave = false;
+        fixture.resolveGeneralSave();
+    });
+    await expect.poll(stored).toEqual({ proxy_mode: 'direct', proxy_url: '' });
+});
+
+test('shared config updates appear without erasing an unfinished manual address', async ({ page }) => {
+    await page.addInitScript(setupSettingsFixture);
+    await page.goto('/settings');
+    const mode = page.getByLabel('代理方式');
+    await expect(mode).toHaveValue('system');
+    await page.evaluate(() => (window as any).__settingsFixture.externalNetworkEdit({ proxy_mode: 'direct', proxy_url: '' }));
+    await expect(mode).toHaveValue('direct');
+    await mode.selectOption('manual');
+    const address = page.getByLabel('代理地址');
+    await address.fill('socks5://');
+    await page.evaluate(() => (window as any).__settingsFixture.externalNetworkEdit({ proxy_mode: 'system', proxy_url: '' }));
+    await expect(mode).toHaveValue('manual');
+    await expect(address).toHaveValue('socks5://');
+    await address.fill('socks5://127.0.0.1:7891');
+    await address.press('Enter');
+    await expect.poll(() => page.evaluate(() => (window as any).__settingsFixture.general().network)).toEqual({ proxy_mode: 'manual', proxy_url: 'socks5://127.0.0.1:7891' });
 });

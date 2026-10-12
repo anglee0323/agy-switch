@@ -5,6 +5,9 @@ import type { AppConfig } from '../../types/config';
 
 type Network = NonNullable<AppConfig['network']>;
 
+const sameNetwork = (left: Network, right: Network) => left.proxy_mode === right.proxy_mode
+    && (left.proxy_mode !== 'manual' || left.proxy_url.trim() === right.proxy_url.trim());
+
 function validAddress(value: string) {
     try {
         const address = new URL(value);
@@ -20,16 +23,20 @@ export default function NetworkSettings() {
     const [url, setUrl] = useState('');
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
-    const initialized = useRef(false);
+    const persisted = useRef<Network | null>(null);
     const live = useRef(true);
     const revision = useRef(0);
     const draft = useRef<Network>({ proxy_mode: 'system', proxy_url: '' });
     const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const queue = useRef<Promise<void>>(Promise.resolve());
+    const pending = useRef(0);
     useEffect(() => {
-        if (!config || initialized.current) return;
-        initialized.current = true;
-        draft.current = config.network || { proxy_mode: 'system', proxy_url: '' };
+        if (!config) return;
+        const next = config.network || { proxy_mode: 'system', proxy_url: '' };
+        const unchanged = pending.current === 0 && (!persisted.current || sameNetwork(draft.current, persisted.current));
+        persisted.current = next;
+        if (!unchanged) return;
+        draft.current = next;
         setMode(draft.current.proxy_mode);
         setUrl(draft.current.proxy_url);
     }, [config]);
@@ -49,6 +56,7 @@ export default function NetworkSettings() {
         // Older responses never replace a newer proxy draft.
         setSaving(true);
         setError('');
+        pending.current++;
         const write = queue.current.then(async () => {
             const latest = useConfigStore.getState().config;
             if (!latest) return;
@@ -59,7 +67,7 @@ export default function NetworkSettings() {
         try {
             await write;
         } catch { if (live.current && edit === revision.current) setError(t('network.save_failed')); }
-        finally { if (live.current && edit === revision.current) setSaving(false); }
+        finally { pending.current--; if (live.current && edit === revision.current) setSaving(false); }
     };
     const edit = (next: Network, delayed = false) => {
         if (timer.current) clearTimeout(timer.current);
