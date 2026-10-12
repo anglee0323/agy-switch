@@ -52,6 +52,7 @@ import { getDisplayQuotaModels } from '../../config/modelConfig';
 import { categorizeModel, getModelProtectionKey } from '../../utils/modelCategory';
 import { getValidationBlockedStatusLabel } from './accountValidationStatus';
 import AccountSelection from './AccountSelection';
+import { getAccountTier } from '../../utils/accountTier';
 
 // ============================================================================
 // 类型定义
@@ -341,15 +342,15 @@ function AccountRowContent({
                     <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
                         {/* 1. 订阅类型徽章 (始终置前，上下对齐) */}
                         {(() => {
-                            const tier = (account.quota?.subscription_tier || 'free').toLowerCase();
-                            if (tier.includes('ultra')) {
+                            const tier = getAccountTier(account);
+                            if (tier === 'ultra') {
                                 return (
                                     <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-gradient-to-r from-purple-600 to-pink-600 text-white text-[10px] font-bold shadow-sm hover:scale-105 transition-transform cursor-default">
                                         <Gem className="w-2.5 h-2.5 fill-current" />
                                         {t('accounts.ultra')}
                                     </span>
                                 );
-                            } else if (tier.includes('pro')) {
+                            } else if (tier === 'pro') {
                                 return (
                                     <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-gradient-to-r from-blue-600 to-indigo-600 text-white text-[10px] font-bold shadow-sm hover:scale-105 transition-transform cursor-default">
                                         <Diamond className="w-2.5 h-2.5 fill-current" />
@@ -358,9 +359,9 @@ function AccountRowContent({
                                 );
                             } else {
                                 return (
-                                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-400 text-[10px] font-bold shadow-sm border border-gray-200 dark:border-white/10 hover:bg-gray-200 transition-colors cursor-default">
+                                    <span title={tier === 'unknown' ? t('accounts.unknown_hint') : undefined} className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-400 text-[10px] font-bold shadow-sm border border-gray-200 dark:border-white/10 hover:bg-gray-200 transition-colors cursor-default">
                                         <Circle className="w-2.5 h-2.5" />
-                                        {t('accounts.free')}
+                                        {t(`accounts.${tier}`)}
                                     </span>
                                 );
                             }

@@ -24,8 +24,9 @@ import { save } from "@tauri-apps/plugin-dialog";
 import { format } from "date-fns";
 import { saveAccountExport } from "../services/accountService";
 import type { Account } from "../types/account";
+import { getAccountTier, type AccountTier } from "../utils/accountTier";
 
-type FilterType = "all" | "pro" | "ultra" | "free";
+type FilterType = "all" | AccountTier;
 type ViewMode = "list" | "grid";
 export type QuotaWindow = "5h" | "weekly";
 
@@ -163,41 +164,15 @@ function Accounts() {
 
   // 计算各筛选状态下的数量 (基于搜索结果)
   const filterCounts = useMemo(() => {
-    return {
-      all: searchedAccounts.length,
-      pro: searchedAccounts.filter((a) =>
-        a.quota?.subscription_tier?.toLowerCase().includes("pro"),
-      ).length,
-      ultra: searchedAccounts.filter((a) =>
-        a.quota?.subscription_tier?.toLowerCase().includes("ultra"),
-      ).length,
-      free: searchedAccounts.filter((a) => {
-        const tier = a.quota?.subscription_tier?.toLowerCase();
-        return tier && !tier.includes("pro") && !tier.includes("ultra");
-      }).length,
-    };
+    const counts = { all: searchedAccounts.length, pro: 0, ultra: 0, free: 0, unknown: 0 };
+    searchedAccounts.forEach(account => { counts[getAccountTier(account)]++; });
+    return counts;
   }, [searchedAccounts]);
 
   // 过滤和搜索最终结果
   const filteredAccounts = useMemo(() => {
-    let result = searchedAccounts;
-
-    if (filter === "pro") {
-      result = result.filter((a) =>
-        a.quota?.subscription_tier?.toLowerCase().includes("pro"),
-      );
-    } else if (filter === "ultra") {
-      result = result.filter((a) =>
-        a.quota?.subscription_tier?.toLowerCase().includes("ultra"),
-      );
-    } else if (filter === "free") {
-      result = result.filter((a) => {
-        const tier = a.quota?.subscription_tier?.toLowerCase();
-        return tier && !tier.includes("pro") && !tier.includes("ultra");
-      });
-    }
-
-    return result;
+    return filter === "all" ? searchedAccounts
+      : searchedAccounts.filter(account => getAccountTier(account) === filter);
   }, [searchedAccounts, filter]);
 
   // Pagination Logic
@@ -631,6 +606,28 @@ function Accounts() {
               {filterCounts.free}
             </span>
           </button>
+          {(filterCounts.unknown > 0 || filter === 'unknown') && (
+            <button
+              className={cn(
+                "px-2 md:px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all flex items-center gap-1 md:gap-1.5 whitespace-nowrap shrink-0",
+                filter === 'unknown'
+                  ? "bg-white dark:bg-base-100 text-blue-600 dark:text-blue-400 shadow-sm ring-1 ring-black/5"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-base-content hover:bg-white/40"
+              )}
+              onClick={() => setFilter('unknown')}
+              title={`${t('accounts.unknown')} (${filterCounts.unknown})`}
+            >
+              <span className="hidden md:inline">{t('accounts.unknown')}</span>
+              <span className={cn(
+                "px-1.5 py-0.5 rounded-md text-[10px] font-bold transition-colors",
+                filter === 'unknown'
+                  ? "bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400"
+                  : "bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+              )}>
+                {filterCounts.unknown}
+              </span>
+            </button>
+          )}
         </div>
 
         <div className="flex-1 min-w-[8px]"></div>
