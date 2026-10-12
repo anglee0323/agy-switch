@@ -4,7 +4,8 @@
     "subtitle": "Antigravity local token usage",
     "scanning": "Scanning local records…",
     "scanned_at": "Scanned {{time}}",
-    "data_through": ", data through {{time}}",
+    "data_through": " · Latest usage record {{time}}",
+    "scan_hint": "Scans local records every minute and when returning to this window. Usage times come from records Antigravity has written locally; refreshing does not create new usage.",
     "waiting_scan": "Waiting to scan",
     "range_label": "Date range",
     "today": "Today",
@@ -15,7 +16,7 @@
     "refresh": "Refresh",
     "refreshing": "Refreshing…",
     "toast_updated": "Local token stats updated{{dataTime}}",
-    "toast_data_time": ", data through {{time}}",
+    "toast_data_time": ", latest usage record {{time}}",
     "toast_scan_failed": "Couldn't read local token stats: {{message}}",
     "unreadable_databases": "{{count}} local conversation database(s) could not be read. Statistics may be incomplete.",
     "total_tokens": "Total tokens ({{range}})",
@@ -539,13 +540,15 @@
   },
   "network": {
     "title": "Network proxy",
-    "description": "Follows system HTTP/SOCKS proxies and proxy environment variables by default, and rereads changes while running. Linux supports GNOME and KDE fixed proxies. Use a manual address for PAC scripts.",
+    "description": "Selections apply automatically to new requests. Follows system HTTP/SOCKS proxies and proxy environment variables by default, and rereads changes while running. Linux supports GNOME and KDE fixed proxies. Use a manual address for PAC scripts.",
     "mode": "Proxy mode",
     "system": "Follow system (default)",
     "manual": "Manual proxy",
     "direct": "Direct connection",
     "address": "Proxy address",
-    "manual_hint": "Supports http://, https://, socks5:// and socks5h:// without TUN. Omit usernames and passwords from the address.",
+    "manual_hint": "Applies automatically after you finish entering the address. Supports http://, https://, socks5:// and socks5h:// without TUN. Omit usernames and passwords from the address.",
+    "invalid_address": "Enter a valid HTTP or SOCKS proxy address without credentials. The previously applied proxy remains active.",
+    "applying": "Applying…",
     "save_failed": "Could not save. Check the proxy address and settings file permissions."
   }
 }

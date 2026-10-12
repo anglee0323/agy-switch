@@ -1,5 +1,13 @@
 # Account and quota cards
 
+The homepage scans local token records every minute while visible and immediately
+when returning to the window. Its status distinguishes the scan time from the
+latest usage-record time. Refreshing rereads Antigravity's local conversation
+stores; it does not create new usage or fetch a server-side billing feed. The
+latest record can remain unchanged even after a successful scan.
+A background command can continue after a model response finishes without
+producing further Antigravity token records.
+
 The Dashboard offers ten optional cards: total, input and output tokens, cache
 hit rate, estimated API cost, first-text latency, body output speed, account
 status, aggregate quota and mean request input. Settings uses the same saved selection

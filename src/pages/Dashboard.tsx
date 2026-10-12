@@ -373,11 +373,18 @@ function Dashboard() {
     useEffect(() => {
         fetchUsage();
         fetchPricing();
-        const usageInterval = window.setInterval(fetchUsage, 60_000);
+        const refreshVisibleUsage = () => {
+            if (document.visibilityState !== 'hidden') void fetchUsage();
+        };
+        const usageInterval = window.setInterval(refreshVisibleUsage, 60_000);
         const pricingInterval = window.setInterval(fetchPricing, 24 * 60 * 60 * 1000);
+        window.addEventListener('focus', refreshVisibleUsage);
+        document.addEventListener('visibilitychange', refreshVisibleUsage);
         return () => {
             window.clearInterval(usageInterval);
             window.clearInterval(pricingInterval);
+            window.removeEventListener('focus', refreshVisibleUsage);
+            document.removeEventListener('visibilitychange', refreshVisibleUsage);
         };
     }, [fetchPricing, fetchUsage]);
 
@@ -524,8 +531,7 @@ function Dashboard() {
         models: performance.model_count, sources: performance.source_count,
     }) : '';
 
-    // Scan freshness is intentionally not rendered inline: the toolbar row only fits next to
-    // the page title when this string stays out of the layout. It is exposed on the refresh button.
+    // Keep scan freshness below the toolbar so it does not squeeze its controls.
     const scanStatus = loading
         ? t('local_dashboard.scanning')
         : lastUpdatedAt
@@ -680,6 +686,10 @@ function Dashboard() {
                         </button>
                     </div>
                 </div>
+
+                <p data-usage-freshness className="text-[11px] leading-5 text-gray-400 dark:text-gray-500" title={t('local_dashboard.scan_hint')}>
+                    {scanStatus}
+                </p>
 
                 {error && (
                     <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-600 dark:border-red-900/30 dark:bg-red-900/10 dark:text-red-300">
