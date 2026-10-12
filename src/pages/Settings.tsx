@@ -220,7 +220,7 @@ function Settings() {
                                 className="flex shrink-0 items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:border-blue-400 hover:text-blue-600 dark:border-slate-700 dark:bg-slate-800 dark:text-gray-200 dark:hover:border-blue-500 dark:hover:text-blue-300 shadow-2xs"
                             >
                                 <FolderOpen className="h-3.5 w-3.5" />
-                                {t('local_settings.open_directory', '在访达中打开')}
+                                {t('local_settings.open_directory', '在文件夹中打开')}
                             </button>
                         </div>
                     </div>

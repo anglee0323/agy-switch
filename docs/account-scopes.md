@@ -49,7 +49,9 @@ reports it.
 ## Export and restore
 
 JSON export is the last action for each account and in the selected-account
-toolbar, after the regular account controls. Version 2 exports
+toolbar, after the regular account controls. The suggested filename includes the
+local date and time to the second, for example
+`antigravity-accounts-2026-10-12_03-05-00.json`. Version 2 exports
 preserve refresh tokens, OAuth client/profile metadata, project ID, name and remark.
 They omit access tokens, device identifiers and quota caches. On Unix the saved
 file uses mode 0600. The add-account dialog accepts that file, older token-only JSON
