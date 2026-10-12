@@ -68,6 +68,9 @@ changes take effect on new requests after at most two seconds. Loopback App RPC
 remains direct.
 
 Settings also provide manual HTTP, HTTPS, SOCKS5/SOCKS5h routing and direct mode.
+Mode changes apply automatically. A valid manual address applies after a short
+typing pause, on leaving the field or on Enter; incomplete or invalid addresses
+retain the previously applied routing. No separate Save action is needed.
 PAC scripts and automatic proxy discovery are not evaluated; users with those
 settings receive a message to enter the proxy tool's local HTTP or SOCKS address.
 Other Linux desktops can use environment variables or the manual setting. TUN is

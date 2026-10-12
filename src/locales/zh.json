@@ -4,7 +4,8 @@
     "subtitle": "Antigravity 本地 Token 用量",
     "scanning": "正在扫描本地记录…",
     "scanned_at": "已扫描 {{time}}",
-    "data_through": "，数据截至 {{time}}",
+    "data_through": " · 最新用量记录 {{time}}",
+    "scan_hint": "每分钟扫描本地记录，回到窗口时立即重扫。用量时间取自 Antigravity 已写入本机的记录；刷新不会生成新用量。",
     "waiting_scan": "等待扫描",
     "range_label": "统计范围",
     "today": "今天",
@@ -15,7 +16,7 @@
     "refresh": "刷新",
     "refreshing": "刷新中…",
     "toast_updated": "本地 Token 统计已更新{{dataTime}}",
-    "toast_data_time": "，数据截至 {{time}}",
+    "toast_data_time": "，最新用量记录 {{time}}",
     "toast_scan_failed": "读取本地 Token 统计失败：{{message}}",
     "unreadable_databases": "{{count}} 个本地对话数据库读取失败，统计结果可能不完整。",
     "total_tokens": "{{range}}总 Token",
@@ -539,13 +540,15 @@
   },
   "network": {
     "title": "网络代理",
-    "description": "默认跟随系统 HTTP/SOCKS 代理和代理环境变量，运行中会重新读取。Linux 支持 GNOME 与 KDE 固定代理；PAC 脚本请改用手动地址。",
+    "description": "选择后自动应用到新请求。默认跟随系统 HTTP/SOCKS 代理和代理环境变量，运行中会重新读取。Linux 支持 GNOME 与 KDE 固定代理；PAC 脚本请改用手动地址。",
     "mode": "代理方式",
     "system": "跟随系统（默认）",
     "manual": "手动代理",
     "direct": "直接连接",
     "address": "代理地址",
-    "manual_hint": "支持 http://、https://、socks5://、socks5h://，无需开启 TUN。地址请勿包含用户名和密码。",
+    "manual_hint": "地址输入完成后自动应用，支持 http://、https://、socks5://、socks5h://，无需开启 TUN。地址请勿包含用户名和密码。",
+    "invalid_address": "请输入有效的 HTTP 或 SOCKS 代理地址，不含用户名和密码。之前生效的代理保持不变。",
+    "applying": "正在应用…",
     "save_failed": "保存失败，请检查代理地址或设置文件是否可写。"
   }
 }

@@ -65,12 +65,12 @@ test('JSON file import preserves OAuth and remark metadata', async ({ page }) =>
     await expect.poll(() => page.evaluate(() => (window as any).__transferCalls.find((call: any) => call.command === 'import_account_transfer')?.args.item)).toEqual({ email: 'fixture@example.test', refresh_token: '1//fixture', oauth_client_key: 'fixture-client', custom_label: 'fixture remark' });
 });
 
-test('network defaults to system and saves a manual fallback', async ({ page }, info) => {
+test('network defaults to system and automatically applies a manual fallback', async ({ page }, info) => {
     await page.goto('/settings');
     await expect(page.getByLabel('代理方式')).toHaveValue('system');
     await page.getByLabel('代理方式').selectOption('manual');
     await page.getByLabel('代理地址').fill('socks5h://127.0.0.1:7891');
-    await page.getByRole('button', { name: '保存', exact: true }).first().click();
+    await expect(page.getByRole('button', { name: '保存', exact: true })).toHaveCount(0);
     await expect.poll(() => page.evaluate(() => (window as any).__settingsFixture.calls.filter((call: any) => call.command === 'save_config').at(-1)?.args.config.network)).toEqual({ proxy_mode: 'manual', proxy_url: 'socks5h://127.0.0.1:7891' });
     await page.screenshot({ path: info.outputPath('network-settings.png') });
 });
