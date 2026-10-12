@@ -36,6 +36,16 @@ from importing the same token. App keyring credentials are never used as a fallb
 for an IDE database. Expired credentials or unavailable networks remain visible
 in the import results instead of being silently skipped.
 
+After a partial token/JSON import, the dialog stays open for reviewing the result.
+Cancel or Confirm closes it without repeating successful imports.
+
+Account plan filters and list/card badges use the same classification. Missing,
+null or blank subscription tiers appear as Unknown instead of Free, and the Unknown
+filter is shown when needed. All = Pro + Ultra + Free + Unknown; each account belongs
+to exactly one category. OAuth login already attempts a quota refresh; a failed or
+incomplete plan observation stays unknown across restarts until a later refresh
+reports it.
+
 ## Export and restore
 
 JSON export is the last action for each account and in the selected-account

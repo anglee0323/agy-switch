@@ -39,6 +39,11 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
     const statusRef = useRef(status);
     const activeTabRef = useRef(activeTab);
     const isOpenRef = useRef(isOpen);
+    const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(() => () => {
+        if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current);
+    }, []);
 
     useEffect(() => {
         oauthUrlRef.current = oauthUrl;
@@ -93,7 +98,7 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
                     await completeOAuthLogin();
                     setStatus('success');
                     setMessage(`${t('accounts.add.tabs.oauth')} ${t('common.success')}!`);
-                    setTimeout(() => {
+                    closeTimerRef.current = setTimeout(() => {
                         setIsOpen(false);
                         resetState();
                     }, 1500);
@@ -156,6 +161,8 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
     }, [isOpen, activeTab]);
 
     const resetState = () => {
+        if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
         setStatus('idle');
         setMessage('');
         setImportSources([]);
@@ -189,7 +196,7 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
             setMessage(`${actionName} ${t('common.success')}!`);
 
             // 延迟关闭,让用户看到成功状态
-            setTimeout(() => {
+            closeTimerRef.current = setTimeout(() => {
                 setIsOpen(false);
                 resetState();
             }, 1500);
@@ -252,7 +259,7 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
         if (successCount === tokens.length) {
             setStatus('success');
             setMessage(t('accounts.add.token.batch_success', { count: successCount }));
-            setTimeout(() => {
+            closeTimerRef.current = setTimeout(() => {
                 setIsOpen(false);
                 resetState();
             }, 1500);
@@ -305,7 +312,7 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
                     setStatus('success');
                     setMessage(t('accounts.add.oauth_success') || t('common.success'));
 
-                    setTimeout(() => {
+                    closeTimerRef.current = setTimeout(() => {
                         setIsOpen(false);
                         resetState();
                     }, 1500);
@@ -375,7 +382,7 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
 
             // 对齐 Web 模式下的刷新逻辑
             if (!isTauri()) {
-                setTimeout(async () => {
+                closeTimerRef.current = setTimeout(async () => {
                     await fetchAccounts();
                     setIsOpen(false);
                     resetState();
@@ -686,15 +693,14 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
                             <button
                                 className="flex-1 px-4 py-2.5 bg-gray-100 dark:bg-base-200 text-gray-700 dark:text-gray-300 font-medium rounded-xl hover:bg-gray-200 dark:hover:bg-base-300 transition-colors focus:outline-none focus:ring-2 focus:ring-200 dark:focus:ring-base-300"
                                 onClick={() => void closeDialog()}
-                                disabled={status === 'success' && importSources.length === 0}
                             >
                                 {t('accounts.add.btn_cancel')}
                             </button>
                             {activeTab === 'token' && (
                                 <button
                                     className="flex-1 px-4 py-2.5 text-white font-medium rounded-xl shadow-md transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 bg-blue-500 hover:bg-blue-600 focus:ring-blue-500 shadow-blue-100 dark:shadow-blue-900/30 flex justify-center items-center gap-2"
-                                    onClick={handleSubmit}
-                                    disabled={status === 'loading' || status === 'success'}
+                                    onClick={status === 'success' ? () => void closeDialog() : handleSubmit}
+                                    disabled={status === 'loading'}
                                 >
                                     {status === 'loading' ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
                                     {t('accounts.add.btn_confirm')}
