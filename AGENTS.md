@@ -28,7 +28,9 @@ macOS native menu, Windows/Linux tray dashboard and a terminal interface.
   Missing or stale quotas remain unknown; disabled accounts use the shared disabled
   presentation. Aggregated quota is an average, not an additive token balance.
 - API costs are estimates from matched prices. Keep GUI, menu and CLI matching
-  consistent; unknown model rates stay unpriced.
+  consistent; unknown model rates stay unpriced. Extend the shared
+  `tests/fixtures/model-pricing-aliases.json` cases when changing alias rules;
+  preserve model-version and product-variant boundaries.
 - User-facing Chinese and English must be complete, natural and concise. Update
   `src/locales/zh.json` and `src/locales/en.json` together; remarks are user input.
 - Use shared presentation helpers. Preserve native styling, alignment, readable
@@ -45,6 +47,8 @@ macOS native menu, Windows/Linux tray dashboard and a terminal interface.
   and scoped tests. Use the existing CLI, UI and package checks where relevant.
 - Distinguish source builds, mocked UI, native windows, installed packages and live
   account operations. Report failures and untested behavior accurately.
+- Record the source commit for local replacements. Development builds may retain
+  the current release version; `--version` alone does not prove which code is installed.
 - Commit coherent steps and push when authorized. Merge only after required checks
   pass. Do not bypass branch protection, force-push, rewrite public tags/assets or
   delete unmerged work to make the repository look tidy.

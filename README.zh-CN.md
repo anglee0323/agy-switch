@@ -9,7 +9,7 @@
 
 AntiGravity Switch 把你的 Antigravity 账号集中到一个地方：查看哪个账号还有额度，切换到需要的账号，再了解本机记录的 Token 用量。桌面应用、菜单栏或托盘、命令行共用同一份账号数据，可以按自己的习惯选择入口。
 
-- **管理账号：** 添加账号，查看额度和重置时间，修改备注，调整顺序，禁用不可用的账号。
+- **管理账号：** 添加账号，查看额度和重置时间，修改备注，调整顺序，禁用不可用的账号，导出或跨设备恢复账号。
 - **快捷切换：** 在应用或快捷看板中选择账号；也可以启用智能切换，在额度不足时选择备用账号。
 - **查看用量：** 了解输入、输出、缓存 Token 的构成，查看用量趋势和各模型的 API 费用估算。
 - **终端操作：** 用键盘或命令管理账号，设置切换策略，调整候选顺序，检查更新。
@@ -23,7 +23,7 @@ AntiGravity Switch 把你的 Antigravity 账号集中到一个地方：查看哪
 | Antigravity IDE | 独立 IDE 的账号凭据 |
 | VS Code 中的 Antigravity 插件 | 插件凭据，无需重启 VS Code 主编辑器 |
 
-智能切换设置可选择全域同步、桌面客户端与命令行、Antigravity IDE 或 VS Code 插件。请先安装并初始化需要使用的客户端。兼容性取决于客户端版本和凭据存储方式；切换不会迁移正在运行的任务。本工具的管理命令 `agy-switch` 与 Google 的 `agy` 是两个不同的命令。
+账号管理和快捷看板会一起切换 App 与已初始化的 `agy` 会话。独立切换 IDE 可使用管理命令行或智能切换设置。智能切换设置可选择全域同步、桌面客户端与命令行、Antigravity IDE 或 VS Code 插件。请先安装并初始化需要使用的客户端。兼容性取决于客户端版本和凭据存储方式；切换不会迁移正在运行的任务。本工具的管理命令 `agy-switch` 与 Google 的 `agy` 是两个不同的命令。[账号同步范围](docs/account-scopes.md)
 
 <table>
   <tr>
@@ -46,7 +46,7 @@ AntiGravity Switch 把你的 Antigravity 账号集中到一个地方：查看哪
   </tr>
 </table>
 
-菜单栏的用量和额度为展示用示例数据，账号备注保留用户输入的语言。[截图来源](docs/screenshots/2026-10-06/README.md)
+图库展示的是 macOS 4.9.0，后续变化见下文及相关指南。菜单栏的用量和额度为展示用示例数据，账号备注保留用户输入的语言。[截图来源](docs/screenshots/2026-10-06/README.md)
 
 ## 安装
 
@@ -115,6 +115,9 @@ agy-switch              # 命令行看板
 | 选择首页卡片并调整顺序 | 设置 > 常规偏好 > 首页卡片，勾选显示内容、拖动调整位置，修改自动保存 |
 | 比较 5 小时和每周额度 | 账号管理，选择额度周期及列表或卡片视图 |
 | 修改账号备注或调整顺序 | 账号管理，编辑备注或拖动账号排序 |
+| 导出或恢复账号 | 账号管理，使用单个账号或选中账号后的末尾导出按钮，再通过添加账号导入 JSON（[说明](docs/account-scopes.md)） |
+| 重试识别账号套餐 | 账号管理 > 待识别，刷新配额以重新获取套餐信息 |
+| 配置网络代理 | 设置 > 常规偏好 > 网络代理，默认跟随系统，修改自动应用（[路由说明](docs/account-scopes.md#network-routing)） |
 | 不打开主窗口就查看额度和切换 | macOS 菜单栏，或 Windows/Linux 托盘看板 |
 | 选择快捷看板显示的模型系列 | 设置，选择 Gemini、Claude/GPT 或两组系列 |
 | 显示重置倒计时 | 设置，选择悬浮显示、始终显示或隐藏 |
@@ -149,7 +152,11 @@ PowerShell 中使用 `.\agy-switch.exe`。只读命令使用本机缓存，需�
 
 ### 费用估算
 
-费用估算根据已知模型价格，计算本机用量按 API 计费时对应的费用，不是实际订阅账单。无法计价的模型会明确标识，不计入预估合计。桌面应用会刷新价格缓存，命令行读取本机缓存。[用量与额度说明](docs/menu-bar-dashboard.md)
+费用估算根据已知模型价格，计算本机用量按 API 计费时对应的费用，不是实际订阅账单。`gemini-3.8-flash-exp-b`、`Gemini 3.8 Flash (High)` 等实验和推理标签，按同版本基础型号估算；报价表有完全匹配的价格时优先使用。Flash Lite 和媒体型号独立计价。未知或冲突的价格标记为未计价，不计入预估合计。桌面应用会刷新价格缓存，命令行读取本机缓存。[计价规则](docs/dashboard-overview.md)
+
+### 本地用量刷新
+
+首页在可见时每分钟扫描一次，回到窗口时立即重扫。扫描时间和最新用量记录时间分别显示：模型回复结束后，后台脚本仍可继续运行，这段时间可能没有新增 Antigravity Token。刷新会重新读取本地记录。[首页数据说明](docs/dashboard-overview.md)
 
 ### 运行中的任务
 
@@ -181,7 +188,9 @@ npm ci
 npm run tauri dev
 ```
 
-macOS 使用 `npm run tauri build`，Windows 使用 `./scripts/build-windows.ps1`，Linux 使用 `./scripts/build-linux-deb.sh --native` 或 `--docker`。原生窗口、命令行和安装包的验证记录见上方链接；构建成功不代表所有真实账号操作和桌面集成场景均已验证。
+`main` 可能包含比最新公开版本更新的维护改动。源码构建在准备 release 前保留当前版本号，请用 `git rev-parse HEAD` 记录实际构建的代码。
+
+macOS 使用 [Apple Silicon 源码构建步骤](docs/homebrew.md#build-from-source)，Windows 使用 `./scripts/build-windows.ps1`，Linux 使用 `./scripts/build-linux-deb.sh --native` 或 `--docker`。原生窗口、命令行和安装包的验证记录见上方链接；构建成功不代表所有真实账号操作和桌面集成场景均已验证。
 
 基于 [lbjlaq/Antigravity-Manager](https://github.com/lbjlaq/Antigravity-Manager) 衍生，采用 [CC BY-NC-SA 4.0](LICENSE) 许可。
 

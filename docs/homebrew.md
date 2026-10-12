@@ -35,6 +35,25 @@ For a manual installation, check for updates in the app or download the new ZIP.
 
 Saved accounts and preferences live outside the application bundle in `~/.antigravity_tools`. Ordinary upgrades and cask removal retain them; the cask has no `zap` rule that deletes account data.
 
+## Build from source
+
+For maintenance changes not yet in a public release, build a reviewed checkout on
+an Apple Silicon Mac with Node.js 22+ and Rust stable:
+
+```sh
+git rev-parse HEAD
+npm ci
+APPLE_SIGNING_IDENTITY=- npm run tauri build -- --target aarch64-apple-darwin --bundles app -- --locked
+node scripts/verify-macos-bundle.mjs src-tauri/target/aarch64-apple-darwin/release/bundle/macos/agy-switch.app "$(node -p 'require("./package.json").version')"
+```
+
+The app is created under `src-tauri/target/aarch64-apple-darwin/release/bundle/macos/`.
+Version metadata changes during release preparation, so a newer source build can
+report the same version as the latest public package. Record the source commit.
+The complete ad-hoc signature verifies bundle integrity; it does not provide
+Developer ID or notarization. Saved data remains outside the app when replacing
+an installation. Homebrew continues to install the pinned public ZIP.
+
 ## Verification and system trust
 
 The root recipe at `Casks/agy-switch.rb` pins the exact public ZIP and its SHA-256. Package hashes are listed in `release-manifest.json`; the update feed includes cryptographic package signatures. The Mac app has a complete ad-hoc resource signature but no Apple Developer ID or notarization. Gatekeeper can reject launch, and Homebrew does not bypass these checks.
