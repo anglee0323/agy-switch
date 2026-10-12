@@ -121,7 +121,7 @@
     "minutes": "{{count}} 分钟",
     "data_directory": "本地数据存储",
     "data_directory_desc": "在本机保存账号配置、凭据和配额缓存。",
-    "open_directory": "在访达中打开",
+    "open_directory": "在文件夹中打开",
     "application_paths": "关联客户端路径",
     "application_paths_desc": "账号切换时用于注入登录凭据并重启应用。系统默认自动识别，无需手动配置。",
     "choose_executable": "自定义路径…",

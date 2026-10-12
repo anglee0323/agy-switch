@@ -121,7 +121,7 @@
     "minutes": "{{count}} min",
     "data_directory": "Local Data Storage",
     "data_directory_desc": "Stores account profiles, credentials and quota caches on this device.",
-    "open_directory": "Reveal in Finder",
+    "open_directory": "Open folder",
     "application_paths": "Linked Client Applications",
     "application_paths_desc": "Used to inject credentials and restart apps when switching accounts. Automatically detected by default.",
     "choose_executable": "Custom Path…",

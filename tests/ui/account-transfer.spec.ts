@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { setupSettingsFixture } from './settings-fixture';
 
+test.use({ timezoneId: 'Asia/Shanghai' });
+
 test.beforeEach(async ({ page }) => {
     await page.addInitScript(setupSettingsFixture);
     await page.goto('/accounts');
@@ -30,14 +32,18 @@ test('account page switches App/CLI directly without a client selector', async (
     expect(await page.evaluate(() => (window as any).__transferCalls.some((call: any) => call.command === 'get_current_account' && call.args.targetIde === 'ide'))).toBe(false);
 });
 
-test('single and selected account exports reach the save command', async ({ page }) => {
+test('single and selected account exports use the local time at each save', async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-10-11T19:05:00Z'));
     await page.getByRole('button', { name: '导出账号', exact: true }).first().click();
     await expect.poll(() => page.evaluate(() => (window as any).__transferCalls.filter((call: any) => call.command === 'save_account_export').map((call: any) => call.args.accountIds.length))).toEqual([1]);
+    expect(await page.evaluate(() => (window as any).__transferCalls.find((call: any) => call.command === 'plugin:dialog|save')?.args.options.defaultPath)).toBe('antigravity-accounts-2026-10-12_03-05-00.json');
     await expect(page.getByText(/已导出 1 个账号/)).toHaveCount(0);
     await page.locator('tbody input[type="checkbox"]').nth(0).check();
     await page.locator('tbody input[type="checkbox"]').nth(1).check();
+    await page.clock.setFixedTime(new Date('2026-10-12T16:00:01Z'));
     await page.getByRole('button', { name: '导出所选 2 个账号', exact: true }).click();
     await expect.poll(() => page.evaluate(() => (window as any).__transferCalls.filter((call: any) => call.command === 'save_account_export').map((call: any) => call.args.accountIds.length))).toEqual([1, 2]);
+    expect(await page.evaluate(() => (window as any).__transferCalls.filter((call: any) => call.command === 'plugin:dialog|save').at(-1)?.args.options.defaultPath)).toBe('antigravity-accounts-2026-10-13_00-00-01.json');
 });
 
 test('local import displays partial failures without closing the results', async ({ page }, info) => {
