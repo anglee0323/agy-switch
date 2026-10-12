@@ -27,6 +27,7 @@ export function setupSettingsFixture(options: { theme?: string; language?: strin
     const copy = (value: any) => JSON.parse(JSON.stringify(value));
     w.__settingsFixture = { calls, holdAutoSave: false, holdDashboardSave: false, holdGeneralSave: false, holdExperimentSave: false, failExperimentSave: false, failLoad: Boolean(options.failLoad), failLowQuotaLoad: Boolean(options.failLowQuotaLoad), lowQuota: () => copy(lowQuota),
         experiments: () => copy(experiments),
+        general: () => copy(general),
         externalExperimentEdit: () => { experiments.translation_enabled = true; experiments.translated = 12; },
         disconnectApp: () => { experiments.available = false; experiments.state = 'not_running'; experiments.translation_enabled = true; },
         resolveExperimentSave: () => { if (pendingExperiment) { pendingExperiment.resolve(pendingExperiment.action()); pendingExperiment = null; } },

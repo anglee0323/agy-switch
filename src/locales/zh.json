@@ -539,13 +539,15 @@
   },
   "network": {
     "title": "网络代理",
-    "description": "默认跟随系统 HTTP/SOCKS 代理和代理环境变量，运行中会重新读取。Linux 支持 GNOME 与 KDE 固定代理；PAC 脚本请改用手动地址。",
+    "description": "选择后自动应用到新请求。默认跟随系统 HTTP/SOCKS 代理和代理环境变量，运行中会重新读取。Linux 支持 GNOME 与 KDE 固定代理；PAC 脚本请改用手动地址。",
     "mode": "代理方式",
     "system": "跟随系统（默认）",
     "manual": "手动代理",
     "direct": "直接连接",
     "address": "代理地址",
-    "manual_hint": "支持 http://、https://、socks5://、socks5h://，无需开启 TUN。地址请勿包含用户名和密码。",
+    "manual_hint": "地址输入完成后自动应用，支持 http://、https://、socks5://、socks5h://，无需开启 TUN。地址请勿包含用户名和密码。",
+    "invalid_address": "请输入有效的 HTTP 或 SOCKS 代理地址，不含用户名和密码。之前生效的代理保持不变。",
+    "applying": "正在应用…",
     "save_failed": "保存失败，请检查代理地址或设置文件是否可写。"
   }
 }

@@ -539,13 +539,15 @@
   },
   "network": {
     "title": "Network proxy",
-    "description": "Follows system HTTP/SOCKS proxies and proxy environment variables by default, and rereads changes while running. Linux supports GNOME and KDE fixed proxies. Use a manual address for PAC scripts.",
+    "description": "Selections apply automatically to new requests. Follows system HTTP/SOCKS proxies and proxy environment variables by default, and rereads changes while running. Linux supports GNOME and KDE fixed proxies. Use a manual address for PAC scripts.",
     "mode": "Proxy mode",
     "system": "Follow system (default)",
     "manual": "Manual proxy",
     "direct": "Direct connection",
     "address": "Proxy address",
-    "manual_hint": "Supports http://, https://, socks5:// and socks5h:// without TUN. Omit usernames and passwords from the address.",
+    "manual_hint": "Applies automatically after you finish entering the address. Supports http://, https://, socks5:// and socks5h:// without TUN. Omit usernames and passwords from the address.",
+    "invalid_address": "Enter a valid HTTP or SOCKS proxy address without credentials. The previously applied proxy remains active.",
+    "applying": "Applying…",
     "save_failed": "Could not save. Check the proxy address and settings file permissions."
   }
 }
