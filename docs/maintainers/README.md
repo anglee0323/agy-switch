@@ -19,6 +19,6 @@
 | [4.9.1 package verification](4.9.1-public-acceptance.md) | Previous packaging and update baseline |
 | [4.9.0 package verification](4.9.0-public-acceptance.md) | Last published baseline before the 4.9.1 packaging update |
 
-Current product screenshots are in `../screenshots/2026-10-06/`. The 4.9.0 native
+The historical 4.9.0 product gallery is in `../screenshots/2026-10-06/`. The 4.9.0 native
 captures remain as platform validation evidence. Obsolete design drafts, local
 preview journals and superseded screenshot sets are omitted from the current tree.

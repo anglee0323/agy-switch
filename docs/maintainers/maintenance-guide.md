@@ -51,7 +51,7 @@ Use the relevant rows, not the whole table for every small patch.
 | --- | --- | --- |
 | Account identity, switching or quotas | Rust account/service/integration modules, CLI projection, account store, menu projection | Account data contract; isolated account/CLI checks; native client checks when possible |
 | Smart switching or candidate order | `src-tauri/src/modules/auto_switch.rs`, Rust config models, `src-tauri/src/cli/`, Settings and both locales | GUI/CLI options, saved values and ordering must agree; policy and keyboard checks; README/CLI guide when behavior changes |
-| Model pricing or usage statistics | Rust pricing/statistics modules, `src/utils/modelPricing.ts`, dashboard, menu and CLI output | Alias/unpriced behavior and cached reads; matching tests; usage guide when semantics change |
+| Model pricing or usage statistics | Rust pricing/statistics modules, `src/utils/modelPricing.ts`, dashboard, menu and CLI output | Shared `tests/fixtures/model-pricing-aliases.json` cases in both TS/Rust; catalog precedence, version/variant boundaries and unpriced behavior; local-record/scan times; usage guide when semantics change |
 | Desktop or tray UI | `src/pages/`, `src/components/`, shared quota helpers; `native_menu.rs` for macOS and `MenuBarDashboard.tsx` for the web dashboard | Both locales, hover/keyboard/layout checks; native platform limits; replace README screenshots only when materially outdated |
 | CLI commands or terminal controls | `src-tauri/src/cli/`, common Rust services, console packaging | `--help`, both terminal languages, JSON/exit codes, `docs/cli.md`; CLI and PTY/ConPTY checks |
 | App name, logo or identity | `branding/`, `scripts/release-brand.mjs`, asset generator, Tauri metadata, `Info.plist`, tray and installer assets | GUI/Dock/tray names, both READMEs and install paths; branding/bundle tests; review data/autostart migration before identity changes |
@@ -89,6 +89,20 @@ OS protections or re-signing a downloaded package locally.
 
 ## Verification and handoff
 
+For a requested local replacement, record the source commit and any uncommitted
+changes, build the final package and verify its platform identity, integrity and
+CLI entry before replacing it. Close Switch, retain its external saved data and
+compare preference/account hashes without copying credentials into test artifacts.
+Reopen the installed app, verify its visible behavior and CLI links, and distinguish
+pre-launch account preservation from ordinary background updates after launch.
+Use synthetic storage for test operations; do not stop another client's tasks to
+test a Switch update. Follow local notes for installation paths and backup preferences.
+
+Development builds can share the latest release's version metadata. Record and
+compare the actual source/package payload; a matching `--version` string alone
+does not prove that replacement occurred. Local replacement is separate from
+publishing an update and does not change the pinned public package or checksum.
+
 Read `.github/workflows/ci.yml` for current check names and commands. Use Node.js 22+
 and Rust stable. Common entry points are:
 
@@ -98,6 +112,8 @@ cargo check --locked --manifest-path src-tauri/Cargo.toml
 cargo test --locked --manifest-path src-tauri/Cargo.toml --lib modules::config::tests
 node scripts/test-cli.mjs PATH_TO_BUILT_CONSOLE
 node scripts/test-cli-terminal.mjs PATH_TO_BUILT_CONSOLE
+node scripts/test-model-pricing.mjs
+cargo test --locked --manifest-path src-tauri/Cargo.toml --lib menu_bar_usage::tests
 npx playwright test tests/ui/updater.spec.ts
 node --test scripts/test-release.mjs scripts/test-update-assets.mjs scripts/test-homebrew-generator.mjs
 ```

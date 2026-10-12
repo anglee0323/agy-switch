@@ -9,7 +9,7 @@
 
 AntiGravity Switch brings your Antigravity accounts into one place. See which accounts have quota left, choose the one you want to use, and review token usage recorded on your machine. Use the desktop app, the menu bar or system tray, or the terminal—all share the same saved accounts.
 
-- **Manage accounts:** add accounts, check quotas and reset times, edit remarks, reorder accounts, and disable unavailable ones.
+- **Manage accounts:** add accounts, check quotas and reset times, edit remarks, reorder accounts, disable unavailable ones, and export or restore accounts across devices.
 - **Switch quickly:** select an account from the app or quick dashboard. Optional smart switching selects a backup account when quota runs low.
 - **Understand usage:** see input, output and cached tokens, usage trends, and estimated API costs by model.
 - **Work from the terminal:** manage accounts, edit switching policies, sort candidates, and check for updates with keyboard controls or commands.
@@ -23,7 +23,7 @@ AntiGravity Switch brings your Antigravity accounts into one place. See which ac
 | Antigravity IDE | The standalone IDE's account credentials |
 | Antigravity extension for VS Code | Extension credentials without restarting the VS Code host |
 
-In smart-switch settings, choose Global Sync, Desktop App & CLI, Antigravity IDE, or VS Code Extension. Install and initialize the clients you use first. Compatibility depends on the installed client version and credential store; switching does not migrate running tasks. The management command `agy-switch` is separate from Google's `agy`.
+The account page and quick dashboard switch App and initialized `agy` sessions together. Independent IDE switching is available through the management CLI and smart-switch settings. In smart-switch settings, choose Global Sync, Desktop App & CLI, Antigravity IDE, or VS Code Extension. Install and initialize the clients you use first. Compatibility depends on the installed client version and credential store; switching does not migrate running tasks. The management command `agy-switch` is separate from Google's `agy`. [Account scopes](docs/account-scopes.md)
 
 <table>
   <tr>
@@ -46,7 +46,7 @@ In smart-switch settings, choose Global Sync, Desktop App & CLI, Antigravity IDE
   </tr>
 </table>
 
-Menu bar usage and quotas are example data. Account remarks retain the language entered by the user. [Screenshot sources](docs/screenshots/2026-10-06/README.md)
+This gallery shows macOS 4.9.0; later changes are described below and in the linked guides. Menu bar usage and quotas are example data. Account remarks retain the language entered by the user. [Screenshot sources](docs/screenshots/2026-10-06/README.md)
 
 ## Installation
 
@@ -115,6 +115,9 @@ From 4.10.1, **Settings → Experimental Features** offers **Chinese interface**
 | Choose and reorder homepage summary cards | Settings > General > Dashboard cards; selections and drag order save automatically |
 | Compare five-hour and weekly quotas | Accounts; choose the quota window and list or card view |
 | Set account remarks or change account order | Accounts; edit a remark or drag an account into position |
+| Export or restore accounts | Accounts; use the trailing Export action for one account or a selection, then restore JSON through Add account ([details](docs/account-scopes.md)) |
+| Retry an unknown account plan | Accounts > Unknown; refresh quota to retry plan detection |
+| Configure a network proxy | Settings > General Preferences > Network proxy; follows system settings by default, changes apply automatically ([routing](docs/account-scopes.md#network-routing)) |
 | Check quotas and switch without the main window | macOS menu bar, or Windows/Linux tray dashboard |
 | Choose which model families the quick dashboard shows | Settings; Gemini, Claude/GPT, or both |
 | Show reset countdowns | Settings; on hover, always visible, or hidden |
@@ -149,7 +152,11 @@ They are the remaining quota reported for each account and window. The quick das
 
 ### Cost estimates
 
-The estimate covers the API-equivalent cost of recorded usage using known model prices. Unpriced models are marked explicitly and excluded from the estimated total. The desktop app refreshes its pricing cache; CLI reads use that local cache. [Usage and quota details](docs/menu-bar-dashboard.md)
+The estimate covers the API-equivalent cost of recorded usage using known model prices. Gemini experiment and thinking labels such as `gemini-3.8-flash-exp-b` and `Gemini 3.8 Flash (High)` use the same version's basic model rates unless the price catalog provides an exact rate. Flash Lite and media models stay separate. Unknown or conflicting rates are marked Unpriced and excluded from the estimated total. The desktop app refreshes its pricing cache; CLI reads use that local cache. [Pricing rules](docs/dashboard-overview.md)
+
+### Local usage freshness
+
+The homepage scans local records every minute while visible and when returning to the window. Scan time and latest usage-record time are separate: a background command can keep running after the model finishes replying, without generating more Antigravity tokens. Refresh rereads local records. [Dashboard details](docs/dashboard-overview.md)
 
 ### Running tasks
 
@@ -181,7 +188,9 @@ npm ci
 npm run tauri dev
 ```
 
-Use `npm run tauri build` on macOS, `./scripts/build-windows.ps1` on Windows, or `./scripts/build-linux-deb.sh --native` / `--docker` on Linux. Native-window, CLI and package validation records are linked above; a successful build alone does not establish every real-account or desktop integration scenario.
+`main` can contain maintenance changes newer than the latest public release. Source builds retain the current version number until release preparation; record `git rev-parse HEAD` to identify the code being built.
+
+Use the [Apple Silicon source-build recipe](docs/homebrew.md#build-from-source) on macOS, `./scripts/build-windows.ps1` on Windows, or `./scripts/build-linux-deb.sh --native` / `--docker` on Linux. Native-window, CLI and package validation records are linked above; a successful build alone does not establish every real-account or desktop integration scenario.
 
 Derived from [lbjlaq/Antigravity-Manager](https://github.com/lbjlaq/Antigravity-Manager). Licensed under [CC BY-NC-SA 4.0](LICENSE).
 

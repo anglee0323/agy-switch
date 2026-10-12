@@ -10,6 +10,9 @@ Start with the [English user guide](../README.md) or [中文使用说明](../REA
 | [Linux](linux.md) | Debian package, terminal use and runtime dependencies |
 | [Software updates](software-updates.md) | Update checks, downloads and installation |
 | [Smart switching](low-quota-switching.md) | Timing, account selection and task handling |
+| [Account scopes and transfer](account-scopes.md) | App/CLI and IDE separation, local import, JSON export, unknown plans and network routing |
+| [Dashboard metrics](dashboard-overview.md) | Local scan freshness, account cards and shared model pricing rules |
+| [Response performance](response-performance.md) | First-text latency, body speed, eligible samples and card ordering |
 | [Quick dashboard](menu-bar-dashboard.md) | Usage, quotas and display settings |
 
 Implementation contracts, test procedures and package verification belong in
