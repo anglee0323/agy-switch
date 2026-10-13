@@ -1,4 +1,5 @@
-import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
+import { createBrowserRouter, Navigate } from 'react-router-dom';
+import { RouterProvider } from 'react-router/dom';
 
 import Layout from './components/layout/Layout';
 import Dashboard from './pages/Dashboard';
@@ -14,6 +15,7 @@ import { listen } from '@tauri-apps/api/event';
 import { isTauri } from './utils/env';
 import UpdateDialog from './components/updater/UpdateDialog';
 import { useUpdateStore } from './stores/useUpdateStore';
+import { installMainWindowPresentation } from './utils/mainWindowPresentation';
 
 const router = createBrowserRouter([
   { path: "/menubar", element: <MenuBarDashboard /> },
@@ -72,9 +74,7 @@ function App() {
     if (window.location.pathname === '/menubar') {
       return () => { Promise.all(unlistenPromises).then(listeners => listeners.forEach(unlisten => unlisten())); };
     }
-    unlistenPromises.push(listen<string>('app://navigate', event => {
-      if (['/', '/accounts', '/settings'].includes(event.payload)) router.navigate(event.payload);
-    }));
+    unlistenPromises.push(installMainWindowPresentation(route => router.navigate(route, { flushSync: true })));
 
     // 监听托盘切换账号事件
     unlistenPromises.push(

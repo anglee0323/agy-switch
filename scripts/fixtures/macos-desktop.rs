@@ -58,10 +58,23 @@ fn main() {
         receive.await.unwrap()
     }
     async fn pause() { tokio::time::sleep(std::time::Duration::from_millis(200)).await; }
+    async fn present_pending(app: &tauri::AppHandle) {
+        let window = app.get_webview_window("main").unwrap();
+        if let Some(request) = desktop::main_window_ready(app.clone(), window.clone()).unwrap() {
+            let id = serde_json::to_value(request).unwrap()["request_id"].as_u64().unwrap();
+            desktop::present_main_window(app.clone(), window, id).await.unwrap();
+        }
+    }
+    async fn reopen(app: &tauri::AppHandle) {
+        desktop::show_main(app).unwrap();
+        present_pending(app).await;
+    }
 
     let failed = Arc::new(AtomicBool::new(false));
     let closing = Arc::new(AtomicBool::new(false));
     let setup_failed = failed.clone();
+    let mut context = tauri::generate_context!();
+    context.config_mut().identifier = "com.agy-switch.macos-desktop-fixture".into();
     let exit_code = tauri::Builder::default()
         .plugin(tauri_plugin_autostart::Builder::new().app_name("agy-switch-desktop-fixture").build())
         .manage(desktop::DesktopRuntime::default())
@@ -76,7 +89,7 @@ fn main() {
             setup_failed.store(!inspect(app.handle(), "startup", true, false), Ordering::Relaxed);
             Ok(())
         })
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("Cannot build native fixture")
         .run_return(move |app, event| {
             if let tauri::RunEvent::Exit = event {
@@ -88,16 +101,33 @@ fn main() {
                     pause().await;
                     let mut passed = on_main(&app, |app| inspect(app, "after_ready", true, false)).await;
                     passed &= on_main(&app, |app| {
-                        desktop::show_main(app).unwrap();
-                        inspect(app, "reopen", true, true)
+                        let window = app.get_webview_window("main").unwrap();
+                        let opaque: bool = unsafe { objc2::msg_send![window.ns_window().unwrap().cast::<objc2::runtime::AnyObject>(), isOpaque] };
+                        println!("{}", serde_json::json!({"stage":"opaque_frame","passed":opaque}));
+                        opaque
                     }).await;
+                    desktop::open_app_page(app.clone(), "accounts".into()).unwrap();
+                    let window = app.get_webview_window("main").unwrap();
+                    let first = desktop::main_window_ready(app.clone(), window.clone()).unwrap().unwrap();
+                    let first_id = serde_json::to_value(first).unwrap()["request_id"].as_u64().unwrap();
+                    passed &= on_main(&app, |app| inspect(app, "page_request_stays_hidden", true, false)).await;
+                    desktop::open_app_page(app.clone(), "dashboard".into()).unwrap();
+                    desktop::present_main_window(app.clone(), window.clone(), first_id).await.unwrap();
+                    passed &= on_main(&app, |app| inspect(app, "stale_page_reply_ignored", true, false)).await;
+                    present_pending(&app).await;
+                    passed &= on_main(&app, |app| inspect(app, "reopen", true, true)).await;
+                    desktop::open_app_page(app.clone(), "accounts".into()).unwrap();
+                    let closing_request = desktop::main_window_ready(app.clone(), window.clone()).unwrap().unwrap();
+                    let closing_id = serde_json::to_value(closing_request).unwrap()["request_id"].as_u64().unwrap();
                     on_main(&app, |app| { app.get_webview_window("main").unwrap().close().unwrap(); true }).await;
                     pause().await;
+                    desktop::present_main_window(app.clone(), window, closing_id).await.unwrap();
+                    passed &= on_main(&app, |app| inspect(app, "closed_page_reply_ignored", true, false)).await;
                     passed &= on_main(&app, |app| inspect(app, "close", true, false)).await;
                     // Reproduce the observed drift: a regular native policy with
                     // menu-only still saved. Closing/reopening must reconcile it.
+                    reopen(&app).await;
                     on_main(&app, |app| {
-                        desktop::show_main(app).unwrap();
                         NSApplication::sharedApplication(MainThreadMarker::new().unwrap())
                             .setActivationPolicy(NSApplicationActivationPolicy::Regular);
                         let status = serde_json::to_value(desktop::get_desktop_settings(app.clone()).unwrap()).unwrap();
@@ -111,16 +141,17 @@ fn main() {
                     for hide in [false, true, false, true] {
                         let patch = serde_json::from_value(serde_json::json!({"hide_dock_icon":hide,"start_minimized":hide})).unwrap();
                         desktop::set_desktop_preferences(app.clone(), patch).await.unwrap();
+                        reopen(&app).await;
                         passed &= on_main(&app, move |app| {
-                            desktop::show_main(app).unwrap();
                             inspect(app, if hide { "enable_and_reopen" } else { "disable_and_reopen" }, hide, true)
                         }).await;
                     }
-                    passed &= on_main(&app, |app| {
+                    on_main(&app, |app| {
                         desktop::set_tray_available(app, false);
-                        desktop::show_main(app).unwrap();
-                        inspect(app, "tray_unavailable_recovery", false, true)
+                        true
                     }).await;
+                    reopen(&app).await;
+                    passed &= on_main(&app, |app| inspect(app, "tray_unavailable_recovery", false, true)).await;
                     failed.fetch_or(!passed, Ordering::Relaxed);
                     closing.store(true, Ordering::Relaxed);
                     on_main(&app, |app| { app.get_webview_window("main").unwrap().close().unwrap(); true }).await;

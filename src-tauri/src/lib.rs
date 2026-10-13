@@ -282,9 +282,7 @@ pub fn run() {
             }
             if let Err(error) = modules::desktop::initialize(app.handle()) {
                 warn!("Desktop preferences could not be applied: {}", error);
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.show();
-                }
+                let _ = modules::desktop::show_main(app.handle());
             }
             modules::app_experiments::initialize();
             Ok(())
@@ -302,6 +300,8 @@ pub fn run() {
             modules::desktop::get_menu_bar_appearance,
             modules::desktop::set_desktop_preferences,
             modules::desktop::open_app_page,
+            modules::desktop::main_window_ready,
+            modules::desktop::present_main_window,
             modules::desktop::hide_menu_bar_dashboard,
             modules::desktop::quit_app,
             commands::list_accounts,

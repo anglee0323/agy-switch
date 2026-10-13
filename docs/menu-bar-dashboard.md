@@ -34,7 +34,14 @@ General Preferences includes OS launch-at-login and macOS Dock visibility contro
 
 Desktop and menu-bar preferences use dedicated atomic setters under the ordinary configuration lock. Older ordinary Settings saves preserve the latest dedicated preferences both on disk and in the visible editor, including when their responses arrive after a newer dedicated save. Failed OS writes are compensated and rollback failures remain visible. On macOS the native activation policy is checked, rather than treating successful dispatch as proof that the Dock setting took effect. Opening and closing the main window reconcile the latest in-memory preference, without replaying an old disk snapshot. Background startup explicitly hides the created main window, since native WebView creation can override its initial visibility flag. If the tray fails, background start is suppressed and a regular Dock presence is retained.
 
-Run `node scripts/test-macos-desktop.mjs` in a macOS desktop session for native lifecycle acceptance. It builds a fixture using the production desktop/config code, a temporary configuration and its own status icon. It checks startup, reopening, close after native policy drift, repeated preference changes, tray-unavailable recovery and process exit without loading accounts or writing login registration. Closing main without a usable tray exits the entire runtime, including any prewarmed hidden panel on Windows/Linux. This is separate from mocked browser acceptance and installed-package verification.
+Menu actions prepare the requested Dashboard, Accounts or Settings page before
+revealing the main window. The main window uses an opaque native background;
+window controls should not appear on their own ahead of the page. Only an explicit
+open request can reveal it. Background startup stays hidden, and closing the
+window cancels pending reveals. Repeated clicks keep the newest request. Page
+preparation does not wait for a quota refresh or usage scan.
+
+Run `node scripts/test-macos-desktop.mjs` in a macOS desktop session for native lifecycle acceptance. It builds a fixture using the production desktop/config code, a temporary configuration, separate WebView identity and its own status icon. It checks startup, reopening, opaque frames, pending/stale/canceled page requests, close after native policy drift, repeated preference changes, tray-unavailable recovery and process exit without loading accounts or writing login registration. Closing main without a usable tray exits the entire runtime, including any prewarmed hidden panel on Windows/Linux. This is separate from mocked browser acceptance and installed-package verification.
 
 ## Verification
 

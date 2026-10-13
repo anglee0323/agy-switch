@@ -36,8 +36,12 @@ profile has a 60-second process budget for WebView2 initialization and the entir
 lifecycle sequence (Linux uses 30 seconds); this is not a startup-performance
 benchmark. Every native assertion and clean exit remains required.
 
-macOS runs its separate AppKit fixture with 12 native Dock/window stages,
+macOS runs its separate AppKit fixture with 16 native Dock/window stages,
 including process exit after closing the main window without a usable tray.
+It also verifies that the main frame is opaque, page requests remain hidden until
+acknowledged, and stale replies or replies after closing cannot reveal it. These
+fixture acknowledgements are synthetic; React navigation ordering is checked by
+`tests/ui/window-presentation.spec.ts`. Neither suite measures time to first pixels.
 Its isolated configuration, native policy observations and full output are
 uploaded alongside the platform reports; installed-package verification remains
 separate.
