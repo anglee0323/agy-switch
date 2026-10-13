@@ -1461,7 +1461,6 @@ impl<E: Environment> integration::SystemIntegration for AutoSwitchIntegration<E>
         .map_err(|_| "Auto switch worker failed.".to_string())?
     }
     fn update_tray(&self) {}
-    fn show_notification(&self, _title: &str, _body: &str) {}
 }
 
 #[cfg(test)]
@@ -2145,7 +2144,7 @@ mod tests {
                     if id == "A" && unavailable == Some("forbidden") { a.quota.as_mut().unwrap().is_forbidden = true; }
                     account::save_account(&a).unwrap();
                 }
-                account::set_current_account_id(source).unwrap();
+                account::set_current_account_id_with_target(source, None).unwrap();
                 { let mut d = r.data.lock().unwrap(); d.config.strategy = strategy; d.config.candidate_account_ids = vec!["A".into(), "B".into(), "C".into()]; }
                 let env = FixtureEnvironment::default();
                 env.process.store(2, SeqCst); // Inspect selection without mutating native credentials.
@@ -2162,10 +2161,10 @@ mod tests {
             evaluate_core(&r, env.clone(), false).await.unwrap();
             let id = r.data.lock().unwrap().status.pending_id.clone().unwrap();
             cancel_pending(&r, &id).unwrap();
-            account::set_current_account_id("B").unwrap();
+            account::set_current_account_id_with_target("B", None).unwrap();
             evaluate_core(&r, env.clone(), false).await.unwrap();
             assert_eq!(r.data.lock().unwrap().canceled_source.as_deref(), Some("A"));
-            account::set_current_account_id("A").unwrap();
+            account::set_current_account_id_with_target("A", None).unwrap();
             env.process.store(0, SeqCst);
             env.now.store(NOW + 10, SeqCst);
             assert!(!evaluate_core(&r, env.clone(), false).await.unwrap());
@@ -2191,7 +2190,7 @@ mod tests {
                 )
                 .unwrap();
             }
-            account::set_current_account_id("B").unwrap();
+            account::set_current_account_id_with_target("B", None).unwrap();
             account::update_account_quota("B", quota(0.8, 0.08)).unwrap();
             let b = account::load_account("B").unwrap();
             cli_credentials::write_session(

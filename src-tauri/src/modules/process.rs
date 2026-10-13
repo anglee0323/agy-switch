@@ -47,23 +47,6 @@ fn get_ide_exe_paths(system: &System) -> std::collections::HashSet<String> {
     immune_exe_paths
 }
 
-/// Check if a process with the given name is running (case-insensitive, strips .exe on Windows).
-pub fn is_process_running_by_name(target_name: &str) -> bool {
-    let mut system = System::new();
-    system.refresh_processes(sysinfo::ProcessesToUpdate::All);
-    let target_lower = target_name.to_lowercase();
-    for (_pid, process) in system.processes() {
-        let mut name = process.name().to_string_lossy().to_lowercase();
-        if name.ends_with(".exe") {
-            name.truncate(name.len() - 4);
-        }
-        if name == target_lower {
-            return true;
-        }
-    }
-    false
-}
-
 /// Check if Antigravity is running
 pub fn is_antigravity_running(target_ide: Option<&str>) -> bool {
     let mut system = System::new();
