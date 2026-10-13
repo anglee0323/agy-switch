@@ -94,7 +94,10 @@ For a requested local replacement, record the source commit and any uncommitted
 changes, build the final package and verify its platform identity, integrity and
 CLI entry before replacing it. Close Switch, retain its external saved data and
 compare preference/account hashes without copying credentials into test artifacts.
-Reopen the installed app, verify its visible behavior and CLI links, and distinguish
+Reopen the installed app, verify its actual running path, visible behavior, CLI links
+and existing autostart executable path. Multiple registered copies can launch an
+older bundle; preserve the startup identity, arguments and enabled preference when
+correcting a stale path. Distinguish
 pre-launch account preservation from ordinary background updates after launch.
 Use synthetic storage for test operations; do not stop another client's tasks to
 test a Switch update. Follow local notes for installation paths and backup preferences.
