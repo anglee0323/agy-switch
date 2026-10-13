@@ -58,6 +58,7 @@ Use the relevant rows, not the whole table for every small patch.
 | Installation, updating or packaging | Platform scripts, `.github/workflows/`, updater module/store/dialog, Homebrew generator/template | Platform/update guides, release notes, real archive hashes/signatures and relevant installer checks |
 | Public release | Six version fields, versioned release notes, frozen source tag; verified assets; then `Casks/agy-switch.rb` | Both README current-version/install references, platform guides and current acceptance index; record the exact release source and actual package results |
 | Instructions or documentation | `AGENTS.md`, maintainer guides or affected user guides | Verify referenced paths/commands and rendered screenshot layout; no version bump or release solely for these changes |
+| Removing legacy code | Active Rust/TS consumers, registered commands, migration entry points and platform-only modules | Confirm the replacement path still supports saved data; run frontend build, Rust checks/tests and relevant CLI/platform checks |
 
 ## Release preparation and follow-up
 
@@ -102,6 +103,19 @@ Development builds can share the latest release's version metadata. Record and
 compare the actual source/package payload; a matching `--version` string alone
 does not prove that replacement occurred. Local replacement is separate from
 publishing an update and does not change the pinned public package or checksum.
+
+A local replacement can use an exact-source CI package after its checks pass;
+record the workflow, source commit, archive hash and installed payload identity.
+Do not describe a downloaded CI package as a local source build or a public release.
+
+When cleanup is authorized, finish checks and installation before removing owned
+temporary downloads and project-local outputs. `cargo clean --manifest-path
+src-tauri/Cargo.toml` removes the repository's Rust build outputs; `node_modules/`,
+`dist/`, `.vite/`, `src-tauri/gen/`, `test-results/` and `playwright-report/` are
+regenerable local dependencies or outputs. Check for another contributor's active
+build before cleaning them. Retain source and lockfiles, installed applications,
+external account/config storage and shared global Cargo/npm caches. The next
+build restores frontend dependencies with `npm ci` and regenerates its outputs.
 
 Read `.github/workflows/ci.yml` for current check names and commands. Use Node.js 22+
 and Rust stable. Common entry points are:
