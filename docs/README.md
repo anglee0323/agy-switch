@@ -14,6 +14,7 @@ Start with the [English user guide](../README.md) or [中文使用说明](../REA
 | [Dashboard metrics](dashboard-overview.md) | Local scan freshness, account cards and shared model pricing rules |
 | [Response performance](response-performance.md) | First-text latency, body speed, eligible samples and card ordering |
 | [Quick dashboard](menu-bar-dashboard.md) | Usage, quotas and display settings |
+| [Experimental App translation](app-experiments.md) | Chinese interface injection for the standalone Antigravity App, scope and limits |
 
 Implementation contracts, test procedures and package verification belong in
 [maintainer documentation](maintainers/README.md). Versioned release notes remain
