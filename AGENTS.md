@@ -35,6 +35,12 @@ macOS native menu, Windows/Linux tray dashboard and a terminal interface.
   `src/locales/zh.json` and `src/locales/en.json` together; remarks are user input.
 - Use shared presentation helpers. Preserve native styling, alignment, readable
   numbers and cached, responsive menu opening. Check desktop and tray variants.
+- Reveal the opaque main window only after the requested page has committed.
+  Preserve hidden startup, latest-request ordering and cancellation on close;
+  do not wait for network data or use a fixed delay to mask rendering races.
+- Proxy settings follow the system by default and apply automatically. Keep
+  invalid manual drafts from replacing valid routing, serialize saves and surface
+  failures. Dashboard scan time and latest usage-record time are separate facts.
 - Never put real credentials, personal test data or screenshot demonstration
   overrides in production artifacts. Do not dump account/config contents into logs.
 
@@ -54,6 +60,11 @@ macOS native menu, Windows/Linux tray dashboard and a terminal interface.
   delete unmerged work to make the repository look tidy.
 - Keep temporary previews, test logs and local handoff notes in ignored directories.
   Public maintainer docs should describe durable contracts and reproducible procedures.
+- Before removing legacy code, check active commands, migrations and platform-only
+  consumers; keep supported data compatibility and verify the affected paths.
+- After authorized cleanup, remove owned temporary files and project-local build
+  outputs/dependencies only after verification and replacement finish. Preserve
+  source, lockfiles, saved data, shared caches and other contributors' active work.
 
 ## Development is separate from publication
 
