@@ -13,6 +13,7 @@ pub const DASHBOARD_LABEL: &str = "menubar";
 #[derive(Default)]
 pub struct DesktopRuntime {
     tray_available: AtomicBool,
+    main_presentation: std::sync::Mutex<MainPresentation>,
     preferences_lock: tokio::sync::Mutex<()>,
     dock_error: std::sync::Mutex<Option<String>>,
     #[cfg(target_os = "macos")]
@@ -23,6 +24,32 @@ pub struct DesktopRuntime {
     appearance_lock: std::sync::Mutex<()>,
     #[cfg(target_os = "macos")]
     material_applied: AtomicBool,
+}
+
+#[derive(Clone, Serialize)]
+pub struct MainWindowRequest {
+    request_id: u64,
+    route: Option<&'static str>,
+}
+
+#[derive(Default)]
+struct MainPresentation {
+    ready: bool,
+    sequence: u64,
+    pending: Option<MainWindowRequest>,
+}
+
+impl MainPresentation {
+    fn request(&mut self, route: Option<&'static str>) -> MainWindowRequest {
+        self.sequence += 1;
+        let request = MainWindowRequest { request_id: self.sequence, route };
+        self.pending = Some(request.clone());
+        request
+    }
+
+    fn accepts(&self, request_id: u64) -> bool {
+        self.pending.as_ref().is_some_and(|request| request.request_id == request_id)
+    }
 }
 
 pub fn set_tray_available(app: &tauri::AppHandle, available: bool) {
@@ -404,6 +431,55 @@ fn start_hidden(autostart: bool, minimized: bool, available: bool) -> bool {
 }
 
 pub fn show_main(app: &tauri::AppHandle) -> Result<(), String> {
+    request_main_presentation(app, None)
+}
+
+fn request_main_presentation(app: &tauri::AppHandle, route: Option<&'static str>) -> Result<(), String> {
+    if app.get_webview_window("main").is_none() { return Err("Main window is unavailable".into()); }
+    let runtime = app.state::<DesktopRuntime>();
+    let (request, ready) = {
+        let mut state = runtime.main_presentation.lock().map_err(|error| error.to_string())?;
+        (state.request(route), state.ready)
+    };
+    // A hidden WebView can still be booting. Its listener retrieves the latest
+    // pending request after registration; startup never reveals an empty frame.
+    if ready {
+        app.emit_to("main", "app://present-main", request).map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn main_window_ready(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<Option<MainWindowRequest>, String> {
+    if window.label() != "main" { return Err("Only the main window can present itself".into()); }
+    let runtime = app.state::<DesktopRuntime>();
+    let mut state = runtime.main_presentation.lock().map_err(|error| error.to_string())?;
+    state.ready = true;
+    Ok(state.pending.clone())
+}
+
+#[tauri::command]
+pub async fn present_main_window(app: tauri::AppHandle, window: tauri::WebviewWindow, request_id: u64) -> Result<(), String> {
+    if window.label() != "main" { return Err("Only the main window can present itself".into()); }
+    let (send, receive) = tokio::sync::oneshot::channel();
+    let handle = app.clone();
+    app.run_on_main_thread(move || {
+        let result = (|| {
+            let runtime = handle.state::<DesktopRuntime>();
+            let mut state = runtime.main_presentation.lock().map_err(|error| error.to_string())?;
+            // Serialize the final reveal with close events on the native UI
+            // thread. Older navigation replies must not reopen a closed window.
+            if !state.accepts(request_id) { return Ok(()); }
+            reveal_main(&handle)?;
+            state.pending = None;
+            Ok(())
+        })();
+        let _ = send.send(result);
+    }).map_err(|error| error.to_string())?;
+    receive.await.map_err(|_| "Main window presentation was interrupted".to_string())?
+}
+
+fn reveal_main(app: &tauri::AppHandle) -> Result<(), String> {
     if let Some(popover) = app.get_webview_window(DASHBOARD_LABEL) {
         let _ = popover.hide();
     }
@@ -424,9 +500,7 @@ pub fn open_app_page(app: tauri::AppHandle, page: String) -> Result<(), String> 
         "settings" => "/settings",
         _ => return Err("Unknown application page".into()),
     };
-    show_main(&app)?;
-    app.emit_to("main", "app://navigate", route)
-        .map_err(|e| e.to_string())
+    request_main_presentation(&app, Some(route))
 }
 
 #[tauri::command]
@@ -625,6 +699,9 @@ pub fn handle_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
         }
     } else if window.label() == "main" {
         if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            if let Ok(mut state) = window.app_handle().state::<DesktopRuntime>().main_presentation.lock() {
+                state.pending = None;
+            }
             if tray_available(window.app_handle()) {
                 // Never hide the only recovery path when the tray failed.
                 if window.hide().is_ok() {
@@ -645,10 +722,27 @@ pub fn handle_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
 #[cfg(test)]
 mod tests {
     use super::{
-        panel_bounds, preference_transaction, rollback_failure, start_hidden, use_native_material,
+        panel_bounds, preference_transaction, rollback_failure, start_hidden, use_native_material, MainPresentation,
     };
     use crate::models::config::DesktopPreferences;
     use std::cell::{Cell, RefCell};
+
+    #[test]
+    fn presentation_keeps_only_the_latest_request_and_close_cancels_it() {
+        let mut state = MainPresentation::default();
+        assert!(!state.ready);
+        assert!(state.pending.is_none());
+        let first = state.request(Some("/accounts"));
+        let second = state.request(Some("/"));
+        assert!(!state.accepts(first.request_id));
+        assert!(state.accepts(second.request_id));
+        assert_eq!(state.pending.as_ref().unwrap().route, Some("/"));
+        state.pending = None;
+        assert!(!state.accepts(second.request_id));
+        let reopen = state.request(None);
+        assert!(state.accepts(reopen.request_id));
+        assert!(reopen.request_id > second.request_id);
+    }
 
     #[test]
     fn partially_failed_login_write_restores_actual_snapshot() {

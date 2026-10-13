@@ -3,17 +3,8 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import Navbar from '../navbar/Navbar';
 import { AutoSwitchStatusBar } from '../autoSwitch/AutoSwitch';
 import ToastContainer from '../common/ToastContainer';
-import { useEffect } from 'react';
-import { isTauri } from '../../utils/env';
-import { ensureFullViewState } from '../../utils/windowManager';
 
 function Layout() {
-    useEffect(() => {
-        if (isTauri()) {
-            ensureFullViewState();
-        }
-    }, []);
-
     return (
         <div className="h-screen flex flex-col bg-[#FAFBFC] dark:bg-base-300">
             {/* 全局窗口拖拽区域 - 使用 JS 手动触发拖拽，解决 HTML 属性失效问题 */}

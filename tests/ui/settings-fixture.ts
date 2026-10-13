@@ -88,6 +88,7 @@ export function setupSettingsFixture(options: { theme?: string; language?: strin
             if (command === 'set_desktop_preferences') { desktop = { ...desktop, ...args.patch }; general.desktop = { launch_at_login: desktop.launch_at_login, hide_dock_icon: desktop.hide_dock_icon, start_minimized: desktop.start_minimized }; return copy(desktop); }
             if (command === 'set_menu_bar_preferences') { general.menu_bar = { ...general.menu_bar, ...args.patch, ...(args.quotaScope ? { quota_scope: args.quotaScope } : {}) }; return copy(general.menu_bar); }
             if (command === 'set_window_theme' || command === 'set_window_language') return null;
+            if (command === 'main_window_ready') return null;
             if (command === 'plugin:event|listen') { (listeners[args.event] ||= []).push(args.handler); return callback++; }
             if (command.startsWith('plugin:window|')) {
                 if (/size$/.test(command)) return { width: 1100, height: 780 };

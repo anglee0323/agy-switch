@@ -47,6 +47,13 @@ fn main() {
         receive.await.unwrap()
     }
     async fn pause() { tokio::time::sleep(std::time::Duration::from_millis(350)).await; }
+    async fn present_pending(app: &tauri::AppHandle) {
+        let window = app.get_webview_window("main").unwrap();
+        if let Some(request) = desktop::main_window_ready(app.clone(), window.clone()).unwrap() {
+            let id = serde_json::to_value(request).unwrap()["request_id"].as_u64().unwrap();
+            desktop::present_main_window(app.clone(), window, id).await.unwrap();
+        }
+    }
     async fn toggle(app: &tauri::AppHandle) {
         let app = app.clone();
         tauri::async_runtime::spawn_blocking(move || desktop::toggle_dashboard(&app, None)).await.unwrap().unwrap();
@@ -96,6 +103,7 @@ fn main() {
                 let app = app.clone(); let failed = failed.clone(); let closing = closing.clone(); let close_timeout = close_timeout.clone();
                 tauri::async_runtime::spawn(async move {
                     pause().await;
+                    present_pending(&app).await;
                     let mut passed = on_main(&app, move |app| record("startup", visible(app, "main") == no_tray)).await;
                     if !no_tray {
                         for _ in 0..40 {
@@ -131,14 +139,17 @@ fn main() {
                         passed &= on_main(&app, |app| record("main_close_keeps_runtime", app.get_webview_window("main").is_some() && !visible(app, "main"))).await;
                         toggle(&app).await;
                         on_main(&app, |app| { desktop::show_main(app).unwrap(); true }).await;
+                        present_pending(&app).await;
                         pause().await;
                         passed &= on_main(&app, |app| record("main_reopen_hides_panel", visible(app, "main") && !visible(app, desktop::DASHBOARD_LABEL))).await;
                     }
-                    passed &= on_main(&app, |app| {
+                    on_main(&app, |app| {
                         desktop::set_tray_available(app, false);
                         desktop::show_main(app).unwrap();
-                        record("tray_unavailable_recovery", visible(app, "main"))
+                        true
                     }).await;
+                    present_pending(&app).await;
+                    passed &= on_main(&app, |app| record("tray_unavailable_recovery", visible(app, "main"))).await;
                     let patch = serde_json::from_value(serde_json::json!({"start_minimized":true})).unwrap();
                     passed &= record("background_start_rejected_without_tray", desktop::set_desktop_preferences(app.clone(), patch).await.is_err());
                     failed.fetch_or(!passed, Ordering::Relaxed);

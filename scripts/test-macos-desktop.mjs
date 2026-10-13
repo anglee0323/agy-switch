@@ -7,7 +7,7 @@ import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 assert.equal(process.platform, 'darwin', 'Requires native macOS');
-const output = resolve('artifacts/macos-desktop');
+const output = resolve(process.argv[2] || 'artifacts/macos-desktop');
 mkdirSync(output, { recursive: true });
 const root = mkdtempSync(join(tmpdir(), 'agy-desktop-fixture-'));
 writeFileSync(join(root, '.desktop-fixture'), 'Synthetic desktop lifecycle data only\n');
@@ -26,6 +26,6 @@ const stages = run.stdout.split('\n').filter(line => line.startsWith('{')).map(l
 writeFileSync(join(output, 'verification.json'), JSON.stringify({ fixture: root, stages, exit_code: run.status, signal: run.signal }, null, 2) + '\n');
 console.log(stages);
 assert.equal(run.status, 0, run.stderr);
-assert.equal(stages.length, 12, 'Every native lifecycle stage must execute');
+assert.equal(stages.length, 16, 'Every native lifecycle stage must execute');
 assert.ok(stages.every(stage => stage.passed));
-console.log('macOS native desktop lifecycle: 12 stages passed');
+console.log('macOS native desktop lifecycle: 16 stages passed');
