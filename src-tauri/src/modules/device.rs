@@ -83,20 +83,6 @@ pub fn get_storage_path(target_ide: Option<&str>) -> Result<PathBuf, String> {
     Err("storage_json_not_found".to_string())
 }
 
-/// Get directory of storage.json
-pub fn get_storage_dir() -> Result<PathBuf, String> {
-    let path = get_storage_path(None)?;
-    path.parent()
-        .map(|p| p.to_path_buf())
-        .ok_or_else(|| "failed_to_get_storage_parent_dir".to_string())
-}
-
-/// Get state.vscdb path (same directory as storage.json)
-pub fn get_state_db_path() -> Result<PathBuf, String> {
-    let dir = get_storage_dir()?;
-    Ok(dir.join("state.vscdb"))
-}
-
 /// Write device profile to storage.json
 pub fn write_profile(storage_path: &Path, profile: &DeviceProfile) -> Result<(), String> {
     if !storage_path.exists() {

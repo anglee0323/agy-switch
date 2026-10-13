@@ -109,10 +109,6 @@ impl BrowserEndpoint {
         })
     }
 
-    pub(crate) fn browser_pid(&self) -> u32 {
-        self.listener.browser_pid
-    }
-
     fn url(&self) -> String {
         format!("ws://{}{}", self.listener.address, self.path)
     }
@@ -124,6 +120,8 @@ impl BrowserEndpoint {
 pub struct AppOrigin(String);
 
 impl AppOrigin {
+    /// Test-facing read access; production code never stringifies origins.
+    #[cfg(test)]
     pub(crate) fn as_str(&self) -> &str {
         &self.0
     }
@@ -153,12 +151,6 @@ impl AppOrigin {
 pub struct PageTarget {
     id: String,
     origin: AppOrigin,
-}
-
-impl PageTarget {
-    pub(crate) fn origin(&self) -> &AppOrigin {
-        &self.origin
-    }
 }
 
 fn verified_pages(result: &Value, origin: &AppOrigin) -> Result<Vec<PageTarget>, TransportError> {
@@ -202,28 +194,6 @@ fn verified_pages(result: &Value, origin: &AppOrigin) -> Result<Vec<PageTarget>,
     Ok(pages)
 }
 
-/// Target disappearance is stronger than an origin mismatch: navigation or a
-/// changed type must never be treated as proof that restoration is unnecessary.
-fn target_destroyed(result: &Value, target: &PageTarget) -> Result<bool, TransportError> {
-    let targets = result
-        .get("targetInfos")
-        .and_then(Value::as_array)
-        .ok_or(TransportError::ProtocolError)?;
-    if targets.len() > 128 {
-        return Err(TransportError::Oversized);
-    }
-    let mut found = false;
-    for candidate in targets {
-        let id = candidate
-            .get("targetId")
-            .and_then(Value::as_str)
-            .filter(|id| safe_id(id))
-            .ok_or(TransportError::ProtocolError)?;
-        found |= id == target.id;
-    }
-    Ok(!found)
-}
-
 fn verify_browser_pid(result: &Value, expected_pid: u32) -> Result<(), TransportError> {
     let processes = result
         .get("processInfo")
@@ -264,9 +234,7 @@ fn response_result(raw: &str, id: u64) -> Result<Option<Value>, TransportError> 
 
 #[derive(Debug, Clone, Copy)]
 pub enum RuntimeAction {
-    Probe,
     Apply,
-    Renew,
     Dispose,
 }
 
@@ -286,21 +254,12 @@ fn expression(
     let expected = serde_json::to_string(&origin.0).unwrap();
     let registry = serde_json::to_string(REGISTRY).unwrap();
     let operation = match action {
-        RuntimeAction::Probe | RuntimeAction::Apply => {
+        RuntimeAction::Apply => {
             let dictionary: Value =
                 serde_json::from_str(DICTIONARY).map_err(|_| TransportError::RuntimeError)?;
             let config = json!({"appVersion":version,"locale":"zh-CN","dictionary":dictionary});
-            if matches!(action, RuntimeAction::Probe) {
-                // A probe must not dispose/recreate an active controller. For
-                // first use, put the temporary registry on a private host facade.
-                format!("const old=window[{registry}]; if(old) return old.brand==='antigravity-tools-scoped-localization-v1' && typeof old.probe==='function' ? old.probe() : {{status:'invalid_config'}}; const host={{document:window.document,MutationObserver:window.MutationObserver,setTimeout:window.setTimeout.bind(window),clearTimeout:window.clearTimeout.bind(window)}}; const c=({RUNTIME})(host,{config}); return c.probe();")
-            } else {
-                format!("const c = ({RUNTIME})(window, {config}); return c.apply();")
-            }
+            format!("const c = ({RUNTIME})(window, {config}); return c.apply();")
         }
-        RuntimeAction::Renew => format!(
-            "const c=window[{registry}]; if(!c) return {{status:'inactive'}}; if(c.brand!=='antigravity-tools-scoped-localization-v1' || typeof c.renewLease!=='function') return {{status:'invalid_config'}}; return c.renewLease();"
-        ),
         RuntimeAction::Dispose => {
             format!("const c=window[{registry}]; if(!c) return {{status:'disposed'}}; if(c.brand!=='antigravity-tools-scoped-localization-v1' || typeof c.dispose!=='function') return {{status:'invalid_config'}}; return c.dispose();")
         }
@@ -475,16 +434,6 @@ impl CdpTransport {
         verify_browser_pid(&value, self.browser_pid)
     }
 
-    pub fn pages(&mut self, origin: &AppOrigin) -> Result<Vec<PageTarget>, TransportError> {
-        self.verify_identity()?;
-        let value = self.call(
-            "Target.getTargets",
-            json!({"filter":[{"type":"page","exclude":false}]}),
-            None,
-        )?;
-        verified_pages(&value, origin)
-    }
-
     pub(crate) fn pages_for_origins(
         &mut self,
         origins: &[AppOrigin],
@@ -513,18 +462,6 @@ impl CdpTransport {
             return Err(TransportError::AmbiguousTargets);
         }
         Ok(result)
-    }
-
-    pub(crate) fn page_destroyed(&mut self, target: &PageTarget) -> Result<bool, TransportError> {
-        self.verify_identity()?;
-        // Include every type. A still-existing target with a changed type or
-        // origin is not sufficient evidence to clear pending restoration.
-        let value = self.call(
-            "Target.getTargets",
-            json!({"filter":[{"exclude":false}]}),
-            None,
-        )?;
-        target_destroyed(&value, target)
     }
 
     pub fn run(
@@ -621,7 +558,7 @@ mod tests {
             listener(),
         )
         .unwrap();
-        assert_eq!(endpoint.browser_pid(), 42);
+        assert_eq!(endpoint.listener.browser_pid, 42);
         assert_eq!(
             endpoint.url(),
             "ws://127.0.0.1:45678/devtools/browser/ABC-def-123"
@@ -691,55 +628,6 @@ mod tests {
         assert_eq!(pages.len(), 1);
         assert_eq!(pages[0].id, "app-1");
     }
-    #[test]
-    fn only_complete_target_id_absence_proves_page_destruction() {
-        let target = PageTarget {
-            id: "app-1".into(),
-            origin: AppOrigin::from_verified_server_port(45679).unwrap(),
-        };
-        assert_eq!(
-            target_destroyed(&json!({"targetInfos":[]}), &target),
-            Ok(true)
-        );
-        assert_eq!(
-            target_destroyed(
-                &json!({"targetInfos":[
-                    {"targetId":"other-1","type":"page","url":"https://example.com/"}
-                ]}),
-                &target
-            ),
-            Ok(true)
-        );
-        // A target that navigated away, or changed type, still exists.
-        assert_eq!(
-            target_destroyed(
-                &json!({"targetInfos":[
-                    {"targetId":"app-1","type":"other","url":"https://example.com/"}
-                ]}),
-                &target
-            ),
-            Ok(false)
-        );
-        for value in [
-            json!({}),
-            json!({"targetInfos":[{}]}),
-            json!({"targetInfos":[{"targetId":""}]}),
-            json!({"targetInfos":[{"targetId":42}]}),
-        ] {
-            assert_eq!(
-                target_destroyed(&value, &target),
-                Err(TransportError::ProtocolError)
-            );
-        }
-        assert_eq!(
-            target_destroyed(
-                &json!({"targetInfos":vec![json!({"targetId":"other"});129]}),
-                &target
-            ),
-            Err(TransportError::Oversized)
-        );
-    }
-
     #[test]
     fn protocol_ids_errors_and_oversized_messages_fail_closed() {
         assert_eq!(
@@ -815,27 +703,13 @@ mod tests {
     }
 
     #[test]
-    fn read_only_probe_does_not_replace_an_active_controller() {
+    fn dispose_expression_guards_the_controller_brand() {
         let origin = AppOrigin::from_verified_server_port(45679).unwrap();
-        let code = expression(RuntimeAction::Probe, "2.19.1", &origin).unwrap();
-        assert!(code.contains("old.probe()"));
-        assert!(code.contains("old.brand==='antigravity-tools-scoped-localization-v1' && typeof old.probe==='function'"));
-        assert!(code.contains("(host,"));
-        assert!(!code.contains(")(window,"));
-        for (action, method, no_controller_status) in [
-            (RuntimeAction::Renew, "renewLease", "inactive"),
-            (RuntimeAction::Dispose, "dispose", "disposed"),
-        ] {
-            let code = expression(action, "2.19.1", &origin).unwrap();
-            let guard = format!("if(c.brand!=='antigravity-tools-scoped-localization-v1' || typeof c.{method}!=='function') return {{status:'invalid_config'}};");
-            assert!(code.contains(&guard));
-            assert!(code.contains(&format!(
-                "if(!c) return {{status:'{no_controller_status}'}};"
-            )));
-            assert!(
-                code.find(&guard).unwrap() < code.find(&format!("return c.{method}();")).unwrap()
-            );
-        }
+        let code = expression(RuntimeAction::Dispose, "2.19.1", &origin).unwrap();
+        let guard = "if(c.brand!=='antigravity-tools-scoped-localization-v1' || typeof c.dispose!=='function') return {status:'invalid_config'};";
+        assert!(code.contains(guard));
+        assert!(code.contains("if(!c) return {status:'disposed'};"));
+        assert!(code.find(guard).unwrap() < code.find("return c.dispose();").unwrap());
     }
 
     #[test]
@@ -958,7 +832,7 @@ mod tests {
         .unwrap();
         let mut client = CdpTransport::connect(endpoint).unwrap();
         let pages = client
-            .pages(&AppOrigin::from_verified_server_port(45679).unwrap())
+            .pages_for_origins(&[AppOrigin::from_verified_server_port(45679).unwrap()])
             .unwrap();
         let report = client
             .run(&pages[0], "2.19.1", RuntimeAction::Apply)

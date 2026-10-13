@@ -18,9 +18,6 @@ pub trait SystemIntegration: Send + Sync {
 
     /// 更新系统托盘（如果适用）
     fn update_tray(&self);
-
-    /// 发送系统通知
-    fn show_notification(&self, title: &str, body: &str);
 }
 
 /// 桌面版实现：包含完整的进程控制 and UI 同步
@@ -48,11 +45,6 @@ impl SystemIntegration for DesktopIntegration {
 
     fn update_tray(&self) {
         let _ = crate::modules::tray::update_tray_menus(&self.app_handle);
-    }
-
-    fn show_notification(&self, title: &str, body: &str) {
-        // 使用 tauri-plugin-dialog 或原生通知（此处简化）
-        crate::modules::logger::log_info(&format!("[Notification] {}: {}", title, body));
     }
 }
 
@@ -515,13 +507,6 @@ impl SystemIntegration for SystemManager {
 
     fn update_tray(&self) {
         SystemManager::update_tray(self);
-    }
-
-    fn show_notification(&self, title: &str, body: &str) {
-        DesktopIntegration {
-            app_handle: self.app_handle.clone(),
-        }
-        .show_notification(title, body);
     }
 }
 

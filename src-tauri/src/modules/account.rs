@@ -359,8 +359,8 @@ mod tests {
         assert_eq!(index.current_account_id, Some("acc-1".to_string()));
         assert_eq!(index.current_target_ide, Some("agy".to_string()));
 
-        // 2. Call set_current_account_id (which sets target to None)
-        set_current_account_id("acc-1").unwrap();
+        // 2. Setting the same account without a target clears the target
+        set_current_account_id_with_target("acc-1", None).unwrap();
 
         // Load back and verify target is None
         let index = load_account_index_in_dir(dir.path()).unwrap();
@@ -1338,11 +1338,6 @@ pub fn get_current_account() -> Result<Option<Account>, String> {
     } else {
         Ok(None)
     }
-}
-
-/// Set current active account ID
-pub fn set_current_account_id(account_id: &str) -> Result<(), String> {
-    set_current_account_id_with_target(account_id, None)
 }
 
 /// Set current active account ID and target IDE

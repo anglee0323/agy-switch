@@ -14,7 +14,6 @@ pub mod desktop_lifecycle {
     pub use crate::modules::{desktop, tray};
 }
 
-use tauri::Manager;
 use tracing::{info, warn};
 
 fn env_flag_enabled(name: &str) -> bool {

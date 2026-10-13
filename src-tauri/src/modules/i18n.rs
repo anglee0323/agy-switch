@@ -31,11 +31,9 @@ fn supported_language(locale: &str) -> Option<&'static str> {
 /// Tray text structure
 #[derive(Debug, Clone)]
 pub struct TrayTexts {
-    pub current: String,
     pub saved: String,
     pub quota: String,
     pub switch_next: String,
-    pub refresh_current: String,
     pub refresh_saved: String,
     pub show_window: String,
     pub quit: String,
@@ -76,10 +74,6 @@ pub fn get_tray_texts(lang: &str) -> TrayTexts {
     let t = load_translations(lang);
 
     TrayTexts {
-        current: t
-            .get("current")
-            .cloned()
-            .unwrap_or_else(|| "Current".to_string()),
         saved: t.get("saved").cloned().unwrap_or_else(|| "Saved".into()),
         quota: t
             .get("quota")
@@ -89,10 +83,6 @@ pub fn get_tray_texts(lang: &str) -> TrayTexts {
             .get("switch_next")
             .cloned()
             .unwrap_or_else(|| "Switch to Next Account".to_string()),
-        refresh_current: t
-            .get("refresh_current")
-            .cloned()
-            .unwrap_or_else(|| "Refresh Current Quota".to_string()),
         refresh_saved: t.get("refresh_saved").cloned().unwrap_or_else(|| "Refresh Saved Account Quota".into()),
         show_window: t
             .get("show_window")

@@ -454,7 +454,6 @@ impl crate::modules::integration::SystemIntegration for HeadlessIntegration {
         crate::modules::process::start_antigravity_detached(target_ide)
     }
     fn update_tray(&self) {}
-    fn show_notification(&self, _title: &str, _body: &str) {}
 }
 
 pub(crate) use switch_lock::SwitchLock;
