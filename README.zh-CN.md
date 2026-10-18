@@ -50,7 +50,7 @@ AntiGravity Switch 把你的 Antigravity 账号集中到一个地方：查看哪
 
 ## 安装
 
-从 **[GitHub Releases](https://github.com/anglee0323/agy-switch/releases/latest)** 下载对应平台的安装包，当前版本为 **4.10.7**。应用全名是 AntiGravity Switch，仓库和命令行使用 `agy-switch`。
+从 **[GitHub Releases](https://github.com/anglee0323/agy-switch/releases/latest)** 下载对应平台的安装包，当前版本为 **4.10.8**。应用全名是 AntiGravity Switch，仓库和命令行使用 `agy-switch`。
 
 | 平台 | 桌面安装方式 | 命令行入口 |
 | --- | --- | --- |
@@ -88,14 +88,14 @@ brew install --cask anglee0323/agy-switch/agy-switch
 下载 **Linux AMD64 deb**，使用实际文件名安装：
 
 ```sh
-sudo apt install ./agy-switch-4.10.7-linux-amd64.deb
+sudo apt install ./agy-switch-4.10.8-linux-amd64.deb
 agy-switch-desktop       # 桌面应用
 agy-switch              # 命令行看板
 ```
 
 如果只用命令行，可以下载 **Linux AMD64 命令行 tar.gz**。桌面托盘是否可用取决于桌面环境。[Linux 依赖与安装](docs/linux.md)
 
-**系统信任检查：** 当前 macOS 安装包尚无 Developer ID 签名和公证，Windows 安装程序尚无 Authenticode 签名，系统可能阻止启动或提示安全确认。Homebrew 不会绕过这些检查。发布清单列出安装包的 SHA-256，更新源包含更新签名。[安装包验证与当前限制](docs/maintainers/4.10.7-public-acceptance.md)
+**系统信任检查：** 当前 macOS 安装包尚无 Developer ID 签名和公证，Windows 安装程序尚无 Authenticode 签名，系统可能阻止启动或提示安全确认。Homebrew 不会绕过这些检查。发布清单列出安装包的 SHA-256，更新源包含更新签名。[安装包验证与当前限制](docs/maintainers/4.10.8-public-acceptance.md)
 
 ## 第一次使用
 
@@ -149,6 +149,8 @@ PowerShell 中使用 `.\agy-switch.exe`。只读命令使用本机缓存，需�
 ### 额度数据
 
 表示各账号在对应周期的剩余额度。快捷看板的整体额度是有效账号数据的等权平均值，同时显示可用账号数，不是可相加的 Token 总量。数据缺失或过期时显示为未知。额度条默认在大于 60% 时为绿色、20% 至 60% 时为黄色、低于 20% 时为红色。
+
+接口返回的 Gemini 4 Argon 周额度会独立展示，不混入普通 Gemini 共享池；是否可见取决于账号接口实际返回的数据。[数据来源与限制](docs/quota-pools.md)
 
 ### 费用估算
 
