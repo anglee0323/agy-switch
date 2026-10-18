@@ -1,5 +1,5 @@
 import type { DashboardSnapshot } from './accountDashboard';
-import { aggregateMenuBar, menuBarAccount, type QuotaFamily, type QuotaWindow } from './menuBarOverview';
+import { aggregateArgon, aggregateMenuBar, menuBarAccount, type QuotaFamily, type QuotaWindow } from './menuBarOverview';
 import { DEFAULT_MENU_BAR_PREFERENCES, type MenuBarPreferences } from '../types/config';
 
 /** Read-only projection of the same cached quota observations used by the menu.
@@ -22,5 +22,5 @@ export function dashboardOverview(snapshot: DashboardSnapshot, preferences: Menu
         const summary = aggregateMenuBar(visible, preferences.quota_scope, window, threshold);
         return [window, { ...summary, used: summary.remaining === null ? null : 100 - summary.remaining }];
     })) as Record<QuotaWindow, ReturnType<typeof aggregateMenuBar> & { used: number | null }>;
-    return { accounts, windows, threshold };
+    return { accounts, windows, threshold, argonWeekly: aggregateArgon(preferences.quota_scope === 'other' ? [] : visible) };
 }

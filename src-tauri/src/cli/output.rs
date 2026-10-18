@@ -46,7 +46,13 @@ pub(super) struct BucketView {
     pub(super) bucket_id: String,
     pub(super) window: String,
     pub(super) remaining_fraction: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) remaining_fraction_known: Option<bool>,
     pub(super) reset_time: String,
+}
+
+pub(super) fn percentage_text(value: Option<i32>) -> String {
+    value.map(|v| format!("{v}%")).unwrap_or_else(|| "—".into())
 }
 
 #[derive(Deserialize)]
@@ -230,10 +236,10 @@ impl QuotaView {
             lines.push(terminal_text(&group.display_name));
             for bucket in &group.buckets {
                 lines.push(format!(
-                    "  {} ({}): {:.0}% remaining; resets {}",
+                    "  {} ({}): {} remaining; resets {}",
                     terminal_text(&bucket.bucket_id),
                     terminal_text(&bucket.window),
-                    bucket.remaining_fraction * 100.0,
+                    percentage_text(crate::models::quota::observed_quota_percentage(bucket.remaining_fraction, bucket.remaining_fraction_known)),
                     terminal_text(&bucket.reset_time)
                 ));
             }

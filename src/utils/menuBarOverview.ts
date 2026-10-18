@@ -1,4 +1,4 @@
-import { dashboardPools, type DashboardAccount, type DashboardSnapshot, type DashboardPool } from './accountDashboard';
+import { dashboardPools, quotaPoolKind, type QuotaPoolKind, type DashboardAccount, type DashboardSnapshot, type DashboardPool } from './accountDashboard';
 import { DEFAULT_MENU_BAR_PREFERENCES, type MenuBarPreferences, type MenuBarQuotaScope } from '../types/config';
 
 export type QuotaWindow = '5h' | 'weekly';
@@ -22,9 +22,13 @@ export interface AccountQuotaView {
   account: DashboardAccount;
   switchable: boolean;
   windows: Record<QuotaWindow, Record<QuotaFamily, FamilyQuota>>;
+  argonWeekly: FamilyQuota;
+  argonReported: boolean;
 }
-export const familyOf = (name: string): QuotaFamily | null =>
-  /gemini/i.test(name) ? 'gemini' : /claude|gpt/i.test(name) ? 'other' : null;
+export const familyOf = (name: string): QuotaFamily | null => {
+  const kind = quotaPoolKind('', name);
+  return kind === 'argon' ? null : kind;
+};
 const unknown = (reason: QuotaReason): FamilyQuota => ({ remaining: null, reason, resets: [], pools: 0 });
 const validReset = (value: string, now: number) => Number.isFinite(Date.parse(value)) && Date.parse(value) > now;
 
@@ -40,29 +44,37 @@ export function menuBarAccount(account: DashboardAccount, now: number, staleMinu
   const pools = dashboardPools(account.quota).filter(pool => pool.source === 'group');
   // A bucket named as two independent families is ambiguous, even if the two
   // observations agree. The dashboard deduplicates it; aggregation must not guess ownership.
-  const owners = new Map<string, Set<QuotaFamily>>();
+  const owners = new Map<string, Set<QuotaPoolKind>>();
   for (const group of account.quota?.groups || []) {
-    const family = familyOf(group.display_name);
-    if (!family) continue;
     for (const bucket of group.buckets) {
+      const family = quotaPoolKind(bucket.bucket_id, group.display_name);
+      if (!family) continue;
       if (!bucket.bucket_id) continue;
       const key = JSON.stringify([bucket.bucket_id, bucket.window.trim().toLowerCase()]);
-      const families = owners.get(key) || new Set<QuotaFamily>();
+      const families = owners.get(key) || new Set<QuotaPoolKind>();
       families.add(family); owners.set(key, families);
     }
   }
-  function quota(family: QuotaFamily, window: QuotaWindow): FamilyQuota {
+  function quota(family: QuotaPoolKind, window: QuotaWindow): FamilyQuota {
     if (blockedData) return unknown(blockedData);
     if ([...owners].some(([key, values]) => values.size > 1 && values.has(family) && JSON.parse(key)[1] === window)) return unknown('conflict');
-    const rows = pools.filter(pool => familyOf(pool.name) === family)
-      .flatMap(pool => pool.windows.filter(row => row.window.trim().toLowerCase() === window));
+    const rows = pools.flatMap(pool => pool.windows.filter(row => row.kind === family && row.window.trim().toLowerCase() === window));
     if (!rows.length || rows.some(row => row.remaining === null || row.key.startsWith('unidentified:'))) return unknown(rows.some(row => row.conflict) ? 'conflict' : 'unknown');
     if (rows.some(row => !validReset(row.resetTime, now))) return unknown(rows.some(row => Number.isFinite(Date.parse(row.resetTime)) && Date.parse(row.resetTime) <= now) ? 'expired' : 'unknown');
     return { remaining: rows.reduce((sum, row) => sum + (row.remaining as number), 0) / rows.length,
       reason: null, resets: [...new Set(rows.map(row => row.resetTime))], pools: rows.length };
   }
   return { account, switchable: !unavailable,
+    argonWeekly: quota('argon', 'weekly'), argonReported: pools.some(pool => pool.windows.some(row => row.kind === 'argon')),
     windows: { '5h': { gemini: quota('gemini', '5h'), other: quota('other', '5h') }, weekly: { gemini: quota('gemini', 'weekly'), other: quota('other', 'weekly') } } };
+}
+
+/** Only accounts reporting the dedicated pool participate; missing observations stay unknown. */
+export function aggregateArgon(accounts: AccountQuotaView[]) {
+  const reported = accounts.filter(view => view.argonReported);
+  const known = reported.flatMap(view => view.argonWeekly.remaining === null ? [] : [view.argonWeekly.remaining]);
+  const remaining = known.length ? known.reduce((sum, value) => sum + value, 0) / known.length : null;
+  return { remaining, used: remaining === null ? null : 100 - remaining, covered: known.length, total: reported.length };
 }
 
 /** Account/family observations receive equal weight. This is relative mean

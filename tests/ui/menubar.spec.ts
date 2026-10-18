@@ -17,7 +17,7 @@ test.beforeEach(async ({ page }) => {
     let appearance: any = { platform: 'macos', native_material: true, material_kind: 'liquid_glass', reduced_transparency: false, high_contrast: false };
     let status: any = { phase: 'disabled', reason: null, source_account_id: 'B', source_email: 'b@example.invalid', target_account_id: 'A', target_email: 'a@example.invalid', remaining_percentage: 6, pending_id: null, mode: 'wait', process_state: 'running', last_checked: now };
     const emit = (event: string, payload: any = {}) => Object.entries(listeners).forEach(([id, listener]) => { if (listener.event === event) callbacks[listener.handler]?.({ id: Number(id), event, payload }); });
-    w.__menuFixture = { calls, emit, setUsage: (next: any) => { usage = next; emit('menubar://opened'); }, current: () => current, setIdentity: (id: string | null, source = 'running_app') => { current = id; identity = source; emit('menubar://opened'); }, empty: () => { accounts = []; current = null; emit('menubar://data-updated'); }, failRead: () => { failRead = true; emit('menubar://data-updated'); }, recover: () => { failRead = false; emit('menubar://data-updated'); }, failRefresh: () => { failRefresh = true; }, failSave: () => { failSave = true; }, holdSwitch: () => { hold = true; }, releaseSwitch: () => release?.(), setStatus: (patch: any) => { status = { ...status, ...patch }; emit('menubar://opened'); }, setPreferences: (patch: any) => { preferences = { ...preferences, ...patch.menu_bar, ...(patch.scope ? { quota_scope: patch.scope } : {}) }; theme = patch.theme || theme; language = patch.language || language; emit('config://updated'); }, setAppearance: (patch: any) => { appearance = { ...appearance, ...patch }; emit('menubar://appearance', appearance); }, manyModels: () => { accounts[0].quota.models = Array.from({length: 14}, (_, i) => ({ name: 'extra-model-' + i, display_name: null, percentage: 50, reset_time: new Date(Date.now() + 7200000).toISOString(), inferred_bucket_id: null })); emit('menubar://data-updated'); } };
+    w.__menuFixture = { calls, emit, setArgon: () => { accounts[1].quota.groups.push({ display_name: 'Gemini 4 Argon', buckets: [{ bucket_id: 'gemini-argon-wtu-weekly', window: 'weekly', remaining_fraction: .1, reset_time: new Date(Date.now() + 86400000).toISOString() }] }); emit('menubar://data-updated'); }, setUsage: (next: any) => { usage = next; emit('menubar://opened'); }, current: () => current, setIdentity: (id: string | null, source = 'running_app') => { current = id; identity = source; emit('menubar://opened'); }, empty: () => { accounts = []; current = null; emit('menubar://data-updated'); }, failRead: () => { failRead = true; emit('menubar://data-updated'); }, recover: () => { failRead = false; emit('menubar://data-updated'); }, failRefresh: () => { failRefresh = true; }, failSave: () => { failSave = true; }, holdSwitch: () => { hold = true; }, releaseSwitch: () => release?.(), setStatus: (patch: any) => { status = { ...status, ...patch }; emit('menubar://opened'); }, setPreferences: (patch: any) => { preferences = { ...preferences, ...patch.menu_bar, ...(patch.scope ? { quota_scope: patch.scope } : {}) }; theme = patch.theme || theme; language = patch.language || language; emit('config://updated'); }, setAppearance: (patch: any) => { appearance = { ...appearance, ...patch }; emit('menubar://appearance', appearance); }, manyModels: () => { accounts[0].quota.models = Array.from({length: 14}, (_, i) => ({ name: 'extra-model-' + i, display_name: null, percentage: 50, reset_time: new Date(Date.now() + 7200000).toISOString(), inferred_bucket_id: null })); emit('menubar://data-updated'); } };
     w.__TAURI_INTERNALS__ = {
       transformCallback: (fn: Function) => { const id = sequence++; callbacks[id] = fn; return id; }, unregisterCallback: (id: number) => { delete callbacks[id]; }, convertFileSrc: (s: string) => s,
       metadata: { currentWindow: { label: 'menubar' }, currentWebview: { label: 'menubar' } },
@@ -51,6 +51,27 @@ async function bounded(page: Page) {
   expect(await page.locator('.mb-footer').evaluate(el => el.getBoundingClientRect().bottom <= innerHeight + 1)).toBe(true);
 }
 async function calls(page: Page, command: string) { return page.evaluate(command => (window as any).__menuFixture.calls.filter((call: any) => call.cmd === command), command); }
+
+test('dedicated Argon weekly rows do not change shared summaries or clip compact menus', async ({ page }, info) => {
+  const original = await page.locator('.mb-aggregate strong').allTextContents();
+  await page.evaluate(() => (window as any).__menuFixture.setArgon());
+  for (const language of ['zh', 'en']) {
+    await page.evaluate(language => (window as any).__menuFixture.setPreferences({ language, menu_bar: { reset_time_display: 'always' } }), language);
+    for (const width of [380, 320]) {
+      await page.setViewportSize({ width, height: 480 });
+      await bounded(page);
+      const argon = page.locator('.mb-argon');
+      // Pagination may put B on the next page at the smaller size.
+      if (!await argon.count()) await page.getByRole('button', { name: language === 'zh' ? '下一页' : 'Next page' }).click();
+      await expect(argon).toContainText('10%');
+      await expect(argon.getByRole('meter')).toHaveAttribute('aria-valuenow', '10');
+      await expect(page.locator('.mb-aggregate strong')).toHaveText(original);
+      await bounded(page);
+      await page.screenshot({ path: info.outputPath(`menubar-argon-${language}-${width}.png`) });
+      while (await page.getByRole('button', { name: language === 'zh' ? '上一页' : 'Previous page' }).isEnabled()) await page.getByRole('button', { name: language === 'zh' ? '上一页' : 'Previous page' }).click();
+    }
+  }
+});
 
 test('overview shows both independent windows and account labels do not navigate or switch', async ({ page }, info) => {
   await expect(page.locator('.mb-aggregate strong')).toHaveText(['51%', '51%']);

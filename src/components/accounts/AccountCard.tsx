@@ -1,3 +1,4 @@
+import { weeklyQuotaItems } from '../../utils/menuBarQuota';
 import { useMemo } from 'react';
 import { Download, ArrowRightLeft, RefreshCw, Trash2, Lock, Ban, Diamond, Gem, Circle, Sparkles, Tag, Clock, GripVertical, BrainCircuit, CheckCircle2 } from 'lucide-react';
 import { Account } from '../../types/account';
@@ -62,23 +63,10 @@ function AccountCard({
     // 解析周配额项 (当处于 weekly 视图时)
     const weeklyItems = useMemo(() => {
         if (quotaWindow !== 'weekly') return [];
-        return (account.quota?.quota_groups || []).flatMap(group => {
-            return group.buckets
-                .filter(b => b.window.toLowerCase().includes('week') || b.bucket_id.toLowerCase().includes('week'))
-                .map(b => {
-                    const isClaude = group.display_name.toLowerCase().includes('claude') || group.display_name.toLowerCase().includes('gpt');
-                    const title = isClaude ? 'Claude / GPT' : 'Gemini';
-                    const poolBadge = t('accounts.shared_pool', '共享池');
-                    return {
-                        id: `${group.display_name}-${b.bucket_id}`,
-                        title,
-                        poolBadge,
-                        percentage: Math.round((b.remaining_fraction || 0) * 100),
-                        resetTime: b.reset_time,
-                        Icon: isClaude ? BrainCircuit : Sparkles,
-                    };
-                });
-        });
+        return weeklyQuotaItems(account.quota).map(item => ({ ...item,
+            poolBadge: item.shared ? t('accounts.shared_pool') : t('accounts.dedicated_pool'),
+            Icon: item.isClaude ? BrainCircuit : Sparkles,
+        }));
     }, [quotaWindow, account.quota?.quota_groups, t]);
 
     const isModelProtected = (key?: string) => {

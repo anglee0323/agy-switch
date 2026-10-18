@@ -121,3 +121,17 @@
 .menubar-app[data-language="en"] .mb-account-switch { width: 72px; }
 .menubar-app[data-language="en"] { --mb-window-label-width: 36px; }
 @media (max-height: 520px) { .mb-account-row { height: 64px; padding: 4px 0; } .mb-account-families { top: 23px; } }
+
+.mb-argon { display: grid; grid-template-columns: 75px minmax(18px, 1fr) 65px 30px; gap: 4px 6px; align-items: center; margin-top: 5px; font-size: 10px; }
+.has-argon-pools .mb-account-row { height: 100px; }
+@media (max-height: 520px) { .has-argon-pools .mb-account-row { height: 84px; } }
+.mb-argon strong { grid-column: 4; grid-row: 1; text-align: right; font-variant-numeric: tabular-nums; }
+.mb-argon-reset { grid-column: 3; grid-row: 1; text-align: right; font-size: 9px; opacity: .65; }
+.hover-resets .mb-argon-reset { visibility: hidden; }
+.hover-resets:hover .mb-argon-reset { visibility: visible; }
+
+@media (max-height: 520px) {
+  .has-argon-pools .mb-overview { padding-bottom: 2px; }
+  .has-argon-pools .mb-overview-heading { margin-bottom: 4px; }
+  .has-argon-pools .mb-aggregate + .mb-aggregate { margin-top: 8px; }
+}

@@ -2,6 +2,10 @@
 
 `agy-switch` manages accounts saved by agy-switch. It is separate from Google's `agy`: it does not run an AI session. The same interactive workflow works on macOS, Windows and Linux, including masked refresh-token entry.
 
+Reported Gemini 4 Argon quota keeps its own weekly pool in account tables and
+quota details; it does not replace the shared Gemini figures. Missing observations
+remain unknown. See [quota pool data sources and verification limits](quota-pools.md).
+
 ## Install and run
 
 - **macOS:** the [Homebrew cask](homebrew.md) installs `agy-switch`. A manual installation includes the console executable at `"/Applications/AntiGravity Switch.app/Contents/MacOS/agy-switch"`.

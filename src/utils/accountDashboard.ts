@@ -18,10 +18,23 @@ export interface DashboardSnapshot {
   current_account_id: string | null; current_identity_source: "tools_record";
   accounts: DashboardAccount[];
 }
+export type QuotaPoolKind = 'gemini' | 'other' | 'argon';
+/** Keep in sync with models::quota::quota_pool. IDs outrank display labels. */
+export function quotaPoolKind(bucketId: string, groupName: string): QuotaPoolKind | null {
+  const id = bucketId.trim().toLowerCase();
+  if (id === 'gemini-5h' || id === 'gemini-weekly') return 'gemini';
+  if (id === '3p-5h' || id === '3p-weekly') return 'other';
+  if (id === 'gemini-argon-wtu-weekly') return 'argon';
+  if (id.startsWith('gemini-') || id.startsWith('3p-')) return null;
+  const name = groupName.trim().toLowerCase();
+  if (name === 'gemini' || name === 'gemini models') return 'gemini';
+  if (['claude', 'claude / gpt', 'claude/gpt', 'claude/gpt models', 'claude and gpt models'].includes(name)) return 'other';
+  return name === 'gemini 4 argon' ? 'argon' : null;
+}
 export interface DashboardPool {
   key: string; name: string; source: "group" | "model";
   mapping: "inferred" | "unmapped"; models: string[];
-  windows: { key: string; window: string; remaining: number | null; resetTime: string; conflict: boolean }[];
+  windows: { key: string; kind: QuotaPoolKind | null; window: string; remaining: number | null; resetTime: string; conflict: boolean }[];
 }
 const percentage = (v: unknown, fraction = false): number | null =>
   typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= (fraction ? 1 : 100)
@@ -41,13 +54,15 @@ export function dashboardPools(quota: DashboardQuota | null): DashboardPool[] {
       const remaining = percentage(bucket.remaining_fraction, true);
       let existing = observations.get(key);
       if (existing) {
+        const kind = quotaPoolKind(bucket.bucket_id, group.display_name);
+        if (existing.row.kind === null) existing.row.kind = kind;
         // A second group cannot create a second copy of the same bucket/window.
-        if (existing.row.remaining !== remaining || existing.row.resetTime !== bucket.reset_time) {
+        if (existing.row.remaining !== remaining || existing.row.resetTime !== bucket.reset_time || (kind !== null && existing.row.kind !== kind)) {
           existing.row.remaining = null;
           existing.row.conflict = true;
         }
       } else {
-        const row = { key, window: bucket.window, remaining, resetTime: bucket.reset_time, conflict: false };
+        const row = { key, kind: quotaPoolKind(bucket.bucket_id, group.display_name), window: bucket.window, remaining, resetTime: bucket.reset_time, conflict: false };
         pool.windows.push(row);
         existing = { owner: pool, row };
         observations.set(key, existing);
@@ -80,7 +95,7 @@ export function dashboardPools(quota: DashboardQuota | null): DashboardPool[] {
       return;
     }
     const pool: DashboardPool = { key, name: model.display_name || model.name || `Model ${index + 1}`, source: "model", mapping: "unmapped", models: [model.name],
-      windows: [{ key, window: "model", remaining, resetTime: model.reset_time, conflict: false }] };
+      windows: [{ key, kind: null, window: "model", remaining, resetTime: model.reset_time, conflict: false }] };
     models.set(key, pool);
     pools.push(pool);
   });
@@ -102,7 +117,8 @@ export function dashboardAccountState(account: DashboardAccount, now = Date.now(
   // are preserved but their coverage cannot be established from this response.
   const incompleteGroups = Boolean(quota?.groups?.some(g => {
     const windows = new Set(g.buckets.map(b => b.window.trim().toLowerCase()));
-    return !windows.has("5h") || !windows.has("weekly")
+    const weeklyOnly = g.buckets.length > 0 && g.buckets.every(b => quotaPoolKind(b.bucket_id, g.display_name) === 'argon');
+    return (!weeklyOnly && !windows.has("5h")) || !windows.has("weekly")
       || [...windows].some(window => window !== "5h" && window !== "weekly");
   }));
   const unresolvedMapping = Boolean(quota?.groups?.length && pools.some(p => p.source === "model"));

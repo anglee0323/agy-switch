@@ -303,7 +303,7 @@ fn remaining(q: &QuotaData, model: &str, now: i64) -> Result<f64, &'static str> 
     if trimmed.eq_ignore_ascii_case("gemini") {
         let mut min_val: Option<f64> = None;
         for m in &q.models {
-            if m.name.to_ascii_lowercase().starts_with("gemini") {
+            if crate::models::quota::model_quota_pool(&m.name, m.display_name.as_deref()) == Some(crate::models::quota::QuotaPool::Gemini) {
                 if let Ok(val) = remaining_single_model(q, &m.name, now) {
                     min_val = Some(min_val.map_or(val, |old| old.min(val)));
                 }
@@ -343,26 +343,23 @@ fn remaining_single_model(q: &QuotaData, model: &str, now: i64) -> Result<f64, &
         .iter()
         .find(|m| m.name == resolved)
         .ok_or("unknown_pool")?;
-    if !(0..=100).contains(&m.percentage) {
+    if m.percentage_known == Some(false) || !(0..=100).contains(&m.percentage) {
         return Err("unknown_pool");
     }
-    let lower = resolved.to_ascii_lowercase();
-    let pool = if lower.starts_with("gemini") {
-        "gemini"
-    } else if lower.starts_with("claude") || lower.starts_with("gpt") {
-        "3p"
-    } else {
-        return Err("unknown_pool");
-    };
+    use crate::models::quota::{model_quota_pool, quota_pool, QuotaPool};
+    let pool = model_quota_pool(resolved, m.display_name.as_deref()).ok_or("unknown_pool")?;
     let groups = q.quota_groups.as_ref().ok_or("unknown_pool")?;
     let mut weekly = None::<f64>;
     let mut short = None::<f64>;
+    let mut argon_observation = None;
     for bucket in groups.iter().flat_map(|g| &g.buckets) {
         let id = bucket.bucket_id.to_ascii_lowercase();
-        if !id.starts_with(&format!("{pool}-")) {
+        if quota_pool(&id, "") != Some(pool) {
             continue;
         }
-        if !bucket.remaining_fraction.is_finite()
+        if bucket.remaining_fraction_known == Some(false)
+            || (pool == QuotaPool::Argon && bucket.remaining_fraction_known != Some(true))
+            || !bucket.remaining_fraction.is_finite()
             || !(0.0..=1.0).contains(&bucket.remaining_fraction)
         {
             return Err("unknown_pool");
@@ -376,6 +373,12 @@ fn remaining_single_model(q: &QuotaData, model: &str, now: i64) -> Result<f64, &
         }
         let window = bucket.window.to_ascii_lowercase();
         let value = bucket.remaining_fraction * 100.0;
+        if pool == QuotaPool::Argon {
+            if window != "weekly" { return Err("unknown_pool"); }
+            let observation = (bucket.remaining_fraction, bucket.reset_time.as_str());
+            if argon_observation.is_some_and(|old| old != observation) { return Err("unknown_pool"); }
+            argon_observation = Some(observation);
+        }
         if id.ends_with("weekly") || window == "weekly" {
             weekly = Some(weekly.map_or(value, |old| old.min(value)));
         } else if id.ends_with("5h") || window == "5h" {
@@ -385,6 +388,7 @@ fn remaining_single_model(q: &QuotaData, model: &str, now: i64) -> Result<f64, &
         }
     }
     let weekly = weekly.ok_or("unknown_pool")?;
+    if pool == QuotaPool::Argon { return Ok(weekly); }
     let free = q
         .subscription_tier
         .as_deref()
@@ -1579,6 +1583,26 @@ mod tests {
         assert_eq!(remaining(&q, "gemini-test", NOW), Err("unknown_pool"));
         q.subscription_tier = Some("FREE".into());
         assert_eq!(remaining(&q, "gemini-test", NOW), Ok(8.0));
+    }
+    #[test]
+    fn argon_uses_its_own_weekly_pool_and_never_shared_gemini() {
+        let mut q = quota(0.9, 0.8);
+        let mut model = q.models[0].clone();
+        model.name = "gemini-4-argon-high".into();
+        model.percentage = 100;
+        q.models.push(model);
+        assert_eq!(remaining(&q, "gemini-4-argon-high", NOW), Err("unknown_pool"));
+        let group = serde_json::from_value(serde_json::json!({"display_name":"Gemini 4 Argon","buckets":[{
+            "bucket_id":"gemini-argon-wtu-weekly","window":"weekly","remaining_fraction":0.1,
+            "remaining_fraction_known":true,"reset_time":"2027-02-01T00:00:00Z"
+        }]})).unwrap();
+        q.quota_groups.as_mut().unwrap().insert(0, group);
+        assert_eq!(remaining(&q, "gemini-test", NOW), Ok(80.0));
+        assert_eq!(remaining(&q, "gemini-4-argon-high", NOW), Ok(10.0));
+        assert_eq!(remaining(&q, "gemini", NOW), Ok(80.0));
+        q.quota_groups.as_mut().unwrap()[0].buckets[0].remaining_fraction_known = Some(false);
+        assert_eq!(remaining(&q, "gemini-4-argon-high", NOW), Err("unknown_pool"));
+        assert_eq!(remaining(&q, "gemini-test", NOW), Ok(80.0));
     }
     #[test]
     fn queue_is_stable_and_loses_closed_evidence_on_activity() {

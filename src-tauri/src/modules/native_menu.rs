@@ -388,9 +388,10 @@ struct AccountQuotaWidgets {
     id: String,
     rows: Vec<(usize, QuotaRow)>,
     resets: Vec<(usize, usize, Retained<NSTextField>)>,
+    argon: Option<(Retained<QuotaBar>, Retained<NSTextField>, Retained<NSTextField>)>,
 }
 impl AccountQuotaWidgets {
-    fn apply(&self, account: Option<&DashboardEntry>, windows: [[Option<f64>; 2]; 2], now: i64, zh: bool) {
+    fn apply(&self, account: Option<&DashboardEntry>, windows: [[Option<f64>; 2]; 2], now: i64, zh: bool, freshness_minutes: i32) {
         let disabled = account.is_some_and(|account| account.disabled);
         let windows = if disabled { [[Some(0.0); 2]; 2] } else { windows };
         for (period, row) in &self.rows {
@@ -403,6 +404,12 @@ impl AccountQuotaWidgets {
         for (period, family, text) in &self.resets {
             text.setStringValue(&NSString::from_str(labels.as_ref().map(|labels| labels[*period][*family].as_str())
                 .unwrap_or(if zh { "未报告" } else { "Unknown" })));
+        }
+        if let Some((progress, value, reset)) = &self.argon {
+            let remaining = if disabled { Some(0.0) } else { account.and_then(|a| projection::argon_weekly(a, now, freshness_minutes)) };
+            progress.update(remaining, disabled);
+            value.setStringValue(&NSString::from_str(&projection::percent(remaining)));
+            reset.setStringValue(&NSString::from_str(&account.map(|a| projection::argon_reset_label(a, now, zh)).unwrap_or_default()));
         }
     }
 }
@@ -417,7 +424,7 @@ impl MenuSession {
         let windows = projection::open_menu_windows(snapshot, &ids, &self.preferences, now, self.freshness_minutes);
         for (row, &windows) in self.quotas.iter().zip(&windows) {
             let account = snapshot.and_then(|snapshot| snapshot.accounts.iter().find(|account| account.id == row.id));
-            row.apply(account, windows, now, self.zh);
+            row.apply(account, windows, now, self.zh, self.freshness_minutes);
         }
         for aggregate in &self.aggregates {
             let (remaining, usable, _) = projection::aggregate(&windows, self.preferences.quota_scope, aggregate.period, self.reserve);
@@ -431,16 +438,17 @@ impl MenuSession {
         }
     }
 }
-fn account_item(menu: &NSMenu, app: &tauri::AppHandle, account: &DashboardEntry, windows: [[Option<f64>; 2]; 2], preferences: &MenuBarPreferences, busy: bool, zh: bool, targets: &mut Vec<Retained<MenuAction>>, marker: MainThreadMarker) -> (Option<AccountControls>, AccountQuotaWidgets) {
+fn account_item(menu: &NSMenu, app: &tauri::AppHandle, account: &DashboardEntry, windows: [[Option<f64>; 2]; 2], preferences: &MenuBarPreferences, freshness_minutes: i32, busy: bool, zh: bool, targets: &mut Vec<Retained<MenuAction>>, marker: MainThreadMarker) -> (Option<AccountControls>, AccountQuotaWidgets) {
     let (primary, secondary) = projection::identity_parts(account, preferences);
     let title = if preferences.display_scope == MenuBarQuotaScope::All || secondary.is_empty() { primary.clone() } else { format!("{primary}   {secondary}") };
     let periods: Vec<_> = (0..2).filter(|period| if *period == 0 { preferences.show_session } else { preferences.show_weekly }).collect();
+    let show_argon = preferences.show_weekly && preferences.display_scope != MenuBarQuotaScope::Other && projection::argon_reported(account);
     let mode = preferences.reset_time_mode();
     let (_, column_width) = quota_column(preferences.display_scope, 0);
     let divider = (preferences.display_scope == MenuBarQuotaScope::All && !periods.is_empty())
         .then(|| rect(70.0 + column_width + FAMILY_GAP / 2.0, 43.0, 0.5, periods.len() as f64 * 18.0 - 2.0));
     let view = AccountRow::alloc(marker).set_ivars(AccountRowState { mode, divider, ..Default::default() });
-    let view: Retained<AccountRow> = unsafe { msg_send![super(view), initWithFrame: rect(0.0, 0.0, WIDTH, 48.0 + periods.len() as f64 * 18.0)] };
+    let view: Retained<AccountRow> = unsafe { msg_send![super(view), initWithFrame: rect(0.0, 0.0, WIDTH, 48.0 + periods.len() as f64 * 18.0 + if show_argon { 34.0 } else { 0.0 })] };
     let action_width = if zh { 64.0 } else { 72.0 };
     let action_frame = rect(WIDTH - 20.0 - action_width, 8.0, action_width, 26.0);
     label(&view, &primary, 20.0, 7.0, WIDTH - action_width - 48.0, 12.0, true, false, marker);
@@ -463,7 +471,7 @@ fn account_item(menu: &NSMenu, app: &tauri::AppHandle, account: &DashboardEntry,
     // observations or the aggregate calculation, which still excludes them.
     let windows = if account.disabled { [[Some(0.0); 2]; 2] } else { windows };
     let resets = projection::account_reset_labels(account, chrono::Utc::now().timestamp(), zh);
-    let mut widgets = AccountQuotaWidgets { id: account.id.clone(), rows: Vec::new(), resets: Vec::new() };
+    let mut widgets = AccountQuotaWidgets { id: account.id.clone(), rows: Vec::new(), resets: Vec::new(), argon: None };
     for (row, &period) in periods.iter().enumerate() {
         let y = 46.0 + row as f64 * 18.0;
         let cells = (0..2).map(|family| {
@@ -500,6 +508,22 @@ fn account_item(menu: &NSMenu, app: &tauri::AppHandle, account: &DashboardEntry,
             }
         }
         widgets.rows.push((period, row));
+    }
+    if show_argon {
+        let y = 46.0 + periods.len() as f64 * 18.0;
+        let remaining = if account.disabled { Some(0.0) } else { projection::argon_weekly(account, chrono::Utc::now().timestamp(), freshness_minutes) };
+        label(&view, if zh { "Argon · 每周" } else { "Argon · Weekly" }, 20.0, y - 3.0, 105.0, 11.0, false, false, marker);
+        let progress = bar(&view, remaining, preferences, rect(132.0, y + 3.0, WIDTH - 210.0, 4.0), account.disabled, marker);
+        progress.setToolTip(Some(&NSString::from_str("Gemini 4 Argon")));
+        let value = label(&view, &projection::percent(remaining), WIDTH - 70.0, y - 3.0, 50.0, 11.0, false, true, marker);
+        let reset_view = section(marker, 16.0);
+        reset_view.setFrame(rect(132.0, y + 13.0, WIDTH - 152.0, 16.0));
+        let reset = label(&reset_view, &projection::argon_reset_label(account, chrono::Utc::now().timestamp(), zh), 0.0, 0.0, WIDTH - 152.0, 9.0, false, true, marker);
+        reset_view.setHidden(true); view.addSubview(&reset_view);
+        if mode != MenuBarResetTimeDisplay::Hidden {
+            view.ivars().resets.borrow_mut().push(HoverQuota { bar: progress.clone(), reset: reset_view, full: progress.frame(), compact: progress.frame() });
+        }
+        widgets.argon = Some((progress, value, reset));
     }
     if mode == MenuBarResetTimeDisplay::Hover { track_hover(&view); }
     else if mode == MenuBarResetTimeDisplay::Always { view.show_resets(true); }
@@ -592,7 +616,7 @@ fn show(app: tauri::AppHandle, config: AppConfig, snapshot: Option<DashboardSnap
     let mut controls = Vec::new();
     let mut quotas = Vec::new();
     for (account, windows) in accounts.iter().zip(windows) {
-        let (control, widgets) = account_item(&menu, &app, account, windows, preferences, busy, zh, &mut targets, marker);
+        let (control, widgets) = account_item(&menu, &app, account, windows, preferences, config.refresh_interval, busy, zh, &mut targets, marker);
         if let Some(control) = control { controls.push(control); }
         quotas.push(widgets);
     }

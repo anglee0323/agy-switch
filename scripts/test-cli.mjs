@@ -48,6 +48,14 @@ try {
   assert.equal(readFileSync(join(data, 'accounts.json'), 'utf8'), index);
   assert.equal(readFileSync(join(data, 'accounts/test-1.json'), 'utf8'), account);
   assert.deepEqual(readdirSync(data).sort(), ['accounts', 'accounts.json']);
+  const argonAccount = JSON.parse(account);
+  argonAccount.quota.quota_groups = [{ display_name: 'Gemini 4 Argon', buckets: [{ bucket_id: 'gemini-argon-wtu-weekly', window: 'weekly', remaining_fraction: .1, remaining_fraction_known: true, reset_time: '2030-01-01T00:00:00Z' }] }];
+  writeFileSync(join(data, 'accounts/test-1.json'), JSON.stringify(argonAccount));
+  assert.match(run(['quota']).stdout, /Gemini 4 Argon[\s\S]*10% remaining/);
+  argonAccount.quota.quota_groups[0].buckets[0].remaining_fraction_known = false;
+  writeFileSync(join(data, 'accounts/test-1.json'), JSON.stringify(argonAccount));
+  assert.match(run(['quota']).stdout, /— remaining/);
+  assert.equal(JSON.parse(run(['quota', '--json']).stdout).quota.quota_groups[0].buckets[0].remaining_fraction_known, false);
   const noQuota = JSON.parse(account); delete noQuota.quota;
   writeFileSync(join(data, 'accounts/test-1.json'), JSON.stringify(noQuota));
   run(['quota'], 4);

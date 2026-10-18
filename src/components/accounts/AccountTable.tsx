@@ -1,3 +1,4 @@
+import { weeklyQuotaItems } from '../../utils/menuBarQuota';
 /**
  * 账号表格组件
  * 支持拖拽排序功能，用户可以通过拖拽行来调整账号顺序
@@ -298,23 +299,10 @@ function AccountRowContent({
     // 解析周配额项 (当处于 weekly 视图时)
     const weeklyItems = useMemo(() => {
         if (quotaWindow !== 'weekly') return [];
-        return (account.quota?.quota_groups || []).flatMap(group => {
-            return group.buckets
-                .filter(b => b.window.toLowerCase().includes('week') || b.bucket_id.toLowerCase().includes('week'))
-                .map(b => {
-                    const isClaude = group.display_name.toLowerCase().includes('claude') || group.display_name.toLowerCase().includes('gpt');
-                    const title = isClaude ? 'Claude / GPT' : 'Gemini';
-                    const poolBadge = t('accounts.shared_pool', '共享池');
-                    return {
-                        id: `${group.display_name}-${b.bucket_id}`,
-                        title,
-                        poolBadge,
-                        percentage: Math.round((b.remaining_fraction || 0) * 100),
-                        resetTime: b.reset_time,
-                        Icon: isClaude ? BrainCircuit : Sparkles,
-                    };
-                });
-        });
+        return weeklyQuotaItems(account.quota).map(item => ({ ...item,
+            poolBadge: item.shared ? t('accounts.shared_pool') : t('accounts.dedicated_pool'),
+            Icon: item.isClaude ? BrainCircuit : Sparkles,
+        }));
     }, [quotaWindow, account.quota?.quota_groups, t]);
 
     // 获取统一解析后的展示模型列表 (严格对齐用户自定义勾选)
