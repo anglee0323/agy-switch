@@ -211,8 +211,10 @@ async fn internal_refresh_account_quota(
         Ok(quota) => {
             // 更新账号配额
             let _ = modules::update_account_quota(&account.id, quota.clone());
+            account.update_quota(quota.clone());
             // 更新托盘菜单
             crate::modules::tray::update_tray_menus(app);
+            let _ = app.emit("accounts://refreshed", ());
             Ok(quota)
         }
         Err(e) => {
