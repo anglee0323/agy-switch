@@ -50,7 +50,7 @@ This gallery shows macOS 4.9.0; later changes are described below and in the lin
 
 ## Installation
 
-Download the package for your platform from **[GitHub Releases](https://github.com/anglee0323/agy-switch/releases/latest)**. The current release is **4.10.7**. The application is called AntiGravity Switch; the repository and terminal command are `agy-switch`.
+Download the package for your platform from **[GitHub Releases](https://github.com/anglee0323/agy-switch/releases/latest)**. The current release is **4.10.8**. The application is called AntiGravity Switch; the repository and terminal command are `agy-switch`.
 
 | Platform | Desktop package | Terminal access |
 | --- | --- | --- |
@@ -88,14 +88,14 @@ For terminal use only, extract the **Windows x64 console ZIP**, open PowerShell 
 Download the **Linux AMD64 deb**, then install it using the actual filename:
 
 ```sh
-sudo apt install ./agy-switch-4.10.7-linux-amd64.deb
+sudo apt install ./agy-switch-4.10.8-linux-amd64.deb
 agy-switch-desktop       # desktop app
 agy-switch              # terminal dashboard
 ```
 
 For terminal use only, download the **Linux AMD64 console tarball**. Desktop tray support depends on your desktop environment. [Linux dependencies and setup](docs/linux.md)
 
-**System trust checks:** the current macOS release has no Developer ID signing or notarization, and the Windows installer has no Authenticode signing. Your system may block launch or display security prompts. Homebrew does not bypass these checks. Package SHA-256 values are listed in the release manifest; update signatures are included in the update feed. [Package verification and current limitations](docs/maintainers/4.10.7-public-acceptance.md)
+**System trust checks:** the current macOS release has no Developer ID signing or notarization, and the Windows installer has no Authenticode signing. Your system may block launch or display security prompts. Homebrew does not bypass these checks. Package SHA-256 values are listed in the release manifest; update signatures are included in the update feed. [Package verification and current limitations](docs/maintainers/4.10.8-public-acceptance.md)
 
 ## First use
 
@@ -149,6 +149,8 @@ Use the console executable as `.\agy-switch.exe` in PowerShell. Read commands us
 ### Quota readings
 
 They are the remaining quota reported for each account and window. The quick dashboard's aggregate is an equal-weight average of valid account readings, with an available-account count; it is not a combined token balance. Missing or stale readings are shown as unknown. By default, bars are green above 60%, yellow from 20–60%, and red below 20%.
+
+A reported Gemini 4 Argon weekly pool stays separate from shared Gemini quota. Visibility depends on what the account API reports. [Data sources and limits](docs/quota-pools.md)
 
 ### Cost estimates
 
