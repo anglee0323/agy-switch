@@ -527,13 +527,37 @@ fn fuse_model_quotas(models: &mut [crate::models::quota::ModelQuota], groups: &[
         let Some(pool) = model_quota_pool(&model.name, model.display_name.as_deref()) else { continue; };
         let buckets: Vec<_> = groups.iter().flat_map(|group| group.buckets.iter()
             .filter(move |bucket| quota_pool(&bucket.bucket_id, &group.display_name) == Some(pool))).collect();
-        let target = buckets.iter().find(|b| b.window.eq_ignore_ascii_case("5h"))
-            .or_else(|| buckets.iter().find(|b| b.window.eq_ignore_ascii_case("weekly")));
-        let Some(bucket) = target else { continue; };
-        let conflict = buckets.iter().any(|b| b.window == bucket.window &&
-            (b.bucket_id != bucket.bucket_id || b.remaining_fraction != bucket.remaining_fraction || b.remaining_fraction_known != bucket.remaining_fraction_known || b.reset_time != bucket.reset_time));
-        let known = !conflict && bucket.remaining_fraction_known != Some(false)
-            && crate::models::quota::fraction_is_known(Some(bucket.remaining_fraction));
+        let resolve_window = |window: &str| {
+            let matching: Vec<_> = buckets.iter().copied().filter(|b| b.window.eq_ignore_ascii_case(window)).collect();
+            let first = *matching.first()?;
+            let conflict = matching.iter().any(|b|
+                b.bucket_id != first.bucket_id
+                || b.remaining_fraction != first.remaining_fraction
+                || b.remaining_fraction_known != first.remaining_fraction_known
+                || b.reset_time != first.reset_time
+            );
+            let known = !conflict
+                && first.remaining_fraction_known != Some(false)
+                && crate::models::quota::fraction_is_known(Some(first.remaining_fraction));
+            Some((first, conflict, known))
+        };
+        let selected = match (resolve_window("5h"), resolve_window("weekly")) {
+            (Some(s), Some(w)) => {
+                if !s.2 {
+                    Some(s)
+                } else if !w.2 {
+                    Some(w)
+                } else if w.0.remaining_fraction < s.0.remaining_fraction {
+                    Some(w)
+                } else {
+                    Some(s)
+                }
+            }
+            (Some(s), None) => Some(s),
+            (None, Some(w)) => Some(w),
+            (None, None) => None,
+        };
+        let Some((bucket, conflict, known)) = selected else { continue; };
         model.percentage_known = Some(known);
         model.observed_remaining_fraction = known.then_some(bucket.remaining_fraction);
         model.quota_bucket_id = (!conflict && !bucket.bucket_id.is_empty()).then(|| bucket.bucket_id.clone());
@@ -570,6 +594,30 @@ mod tests {
             assert!(models[0].quota_bucket_id.is_none());
             assert_eq!(models[0].percentage, 10);
         }
+    }
+    #[test]
+    fn quota_fusion_caps_by_weekly_when_weekly_is_more_restrictive_than_5h() {
+        let groups: Vec<crate::models::quota::QuotaGroup> = serde_json::from_value(json!([
+            {"display_name":"Gemini Models","buckets":[
+                {"bucket_id":"gemini-weekly","window":"weekly","remaining_fraction":0.4569,"remaining_fraction_known":true,"reset_time":"2030-01-05T00:00:00Z"},
+                {"bucket_id":"gemini-5h","window":"5h","remaining_fraction":1.0,"remaining_fraction_known":true,"reset_time":"2030-01-01T05:00:00Z"}
+            ]},
+            {"display_name":"Claude and GPT models","buckets":[
+                {"bucket_id":"3p-weekly","window":"weekly","remaining_fraction":0.0061,"remaining_fraction_known":true,"reset_time":"2030-01-05T12:00:00Z"},
+                {"bucket_id":"3p-5h","window":"5h","remaining_fraction":1.0,"remaining_fraction_known":true,"reset_time":"2030-01-01T05:00:00Z"}
+            ]}
+        ])).unwrap();
+        let mut models = serde_json::from_value::<Vec<crate::models::quota::ModelQuota>>(json!([
+            {"name":"gemini-3.8-flash","percentage":100,"reset_time":""},
+            {"name":"claude-sonnet-4-6","percentage":100,"reset_time":""}
+        ])).unwrap();
+        fuse_model_quotas(&mut models, &groups);
+        assert_eq!(models[0].percentage, 46);
+        assert_eq!(models[0].quota_bucket_id.as_deref(), Some("gemini-weekly"));
+        assert_eq!(models[0].reset_time, "2030-01-05T00:00:00Z");
+        assert_eq!(models[1].percentage, 1);
+        assert_eq!(models[1].quota_bucket_id.as_deref(), Some("3p-weekly"));
+        assert_eq!(models[1].reset_time, "2030-01-05T12:00:00Z");
     }
     #[test]
     fn production_summary_precedes_successful_but_incomplete_daily_endpoints() {

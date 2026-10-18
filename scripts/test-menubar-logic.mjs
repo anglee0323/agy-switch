@@ -19,6 +19,7 @@ const {
   weeklyQuotaItems,
   observedPercentage,
   observedModelPercentage,
+  effectiveModelQuota,
   validPercentage,
   lowestKnownQuota,
   isAccountSwitchable,
@@ -51,6 +52,27 @@ test('unknown fused model quota cannot expose an old percentage', () => {
   assert.equal(observedModelPercentage({name:'gemini-4-argon-high',percentage:100,percentage_known:false,reset_time:''}),null);
   assert.equal(observedModelPercentage({name:'gemini-4-argon-high',percentage:0,percentage_known:true,reset_time:''}),0);
   assert.equal(observedModelPercentage(undefined),null);
+});
+test('effective model quota caps 5h observation when weekly pool is more restrictive', () => {
+  const quota = {
+    models: [],
+    last_updated: 1,
+    is_forbidden: false,
+    quota_groups: [
+      {
+        display_name: 'Claude and GPT models',
+        buckets: [
+          { bucket_id: '3p-weekly', window: 'weekly', remaining_fraction: 0.0061, remaining_fraction_known: true, reset_time: '2030-01-05T12:00:00Z' },
+          { bucket_id: '3p-5h', window: '5h', remaining_fraction: 1.0, remaining_fraction_known: true, reset_time: '2030-01-01T05:00:00Z' },
+        ],
+      },
+    ],
+  };
+  const model = { name: 'claude-sonnet-4-6', percentage: 100, percentage_known: true, observed_remaining_fraction: 1.0, reset_time: '2030-01-01T05:00:00Z' };
+  const resolved = effectiveModelQuota(model, quota);
+  assert.ok(Math.abs(resolved.percentage - 0.61) < 1e-9);
+  assert.equal(resolved.resetTime, '2030-01-05T12:00:00Z');
+  assert.equal(effectiveModelQuota({ name: 'claude-sonnet-4-6', percentage: 0, reset_time: '' }, quota).percentage, null);
 });
 test("unknown percentages remain unknown", () => {
   for (const value of [undefined, null, NaN, Infinity, -1, 101, "50"])

@@ -396,14 +396,12 @@ fn remaining_single_model(q: &QuotaData, model: &str, now: i64) -> Result<f64, &
         .to_ascii_lowercase()
         .contains("free");
 
-    // 仅以 5 小时短周期配额为限制，不限制周线；仅在无 5h 桶的 Free 账号下回退使用周配额
-    if let Some(s) = short {
-        Ok(s.min(m.percentage as f64))
-    } else if free {
-        Ok(weekly.min(m.percentage as f64))
-    } else {
-        Err("unknown_pool")
-    }
+    let short = match short {
+        Some(v) => v,
+        None if free => 100.0,
+        None => return Err("unknown_pool"),
+    };
+    Ok(weekly.min(short).min(m.percentage as f64))
 }
 fn usable(a: &Account) -> bool {
     !a.disabled && !a.validation_blocked && !a.quota.as_ref().is_some_and(|q| q.is_forbidden)
@@ -1546,12 +1544,12 @@ mod tests {
         assert_eq!(Target::Vscode.argument(), Some("vscode"));
     }
     #[test]
-    fn prefers_5h_window_without_weekly_restriction() {
-        assert_eq!(remaining(&quota(0.08, 0.8), "gemini-test", NOW), Ok(80.0));
+    fn considers_both_windows_and_provider_ids_not_labels() {
+        assert_eq!(remaining(&quota(0.08, 0.8), "gemini-test", NOW), Ok(8.0));
         assert_eq!(remaining(&quota(0.8, 0.08), "gemini-test", NOW), Ok(8.0));
-        assert_eq!(remaining(&quota(0.08, 0.8), "all", NOW), Ok(80.0));
+        assert_eq!(remaining(&quota(0.08, 0.8), "all", NOW), Ok(8.0));
         assert_eq!(remaining(&quota(0.8, 0.08), "", NOW), Ok(8.0));
-        assert_eq!(remaining(&quota(0.08, 0.8), "gemini", NOW), Ok(80.0));
+        assert_eq!(remaining(&quota(0.08, 0.8), "gemini", NOW), Ok(8.0));
         assert_eq!(remaining(&quota(0.08, 0.8), "claude", NOW), Err("unknown_pool"));
         let mut q = quota(0.8, 0.8);
         q.quota_groups.as_mut().unwrap()[0].buckets[0].bucket_id = "3p-weekly".into();
