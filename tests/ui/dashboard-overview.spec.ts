@@ -5,8 +5,9 @@ import { makeDashboardSnapshot } from './dashboard-overview-fixture';
 const originalCards = ['total_tokens', 'input_tokens', 'output_tokens', 'cache_hit_rate', 'api_cost', 'first_text_latency', 'body_speed'];
 const newCards = ['account_status', 'aggregate_quota', 'average_input'];
 const allCards = [...originalCards, ...newCards];
-async function setup(page: Page, cards = allCards, language = 'zh', withModels = false, quotaScope = 'all') {
-    const install = (snapshot: ReturnType<typeof makeDashboardSnapshot>, withModels: boolean) => {
+async function setup(page: Page, cards = allCards, language = 'zh', withModels = false, quotaScope = 'all', withArgon = false) {
+    const install = (snapshot: ReturnType<typeof makeDashboardSnapshot>, withModels: boolean, withArgon: boolean) => {
+        if (withArgon) snapshot.accounts[0].quota.groups.push({ display_name: 'Gemini 4 Argon', buckets: [{ bucket_id: 'gemini-argon-wtu-weekly', window: 'weekly', remaining_fraction: .1, reset_time: new Date(Date.now() + 86400000).toISOString() }] });
         const w = window as any, original = w.__TAURI_INTERNALS__.invoke;
         w.__overviewFixture = { snapshot, fail: false, hold: false, resolve: null };
         const totals = { input_tokens: 0, output_tokens: 0, cached_tokens: 0, total_tokens: 0, request_count: 0 };
@@ -24,9 +25,19 @@ async function setup(page: Page, cards = allCards, language = 'zh', withModels =
             return original(command, args);
         };
     };
-    await page.addInitScript({ content: `(${setupSettingsFixture.toString()})(${JSON.stringify({ language, dashboardCards: cards, quotaScope })});(${install.toString()})((${makeDashboardSnapshot.toString()})(Date.now()),${withModels});` });
+    await page.addInitScript({ content: `(${setupSettingsFixture.toString()})(${JSON.stringify({ language, dashboardCards: cards, quotaScope })});(${install.toString()})((${makeDashboardSnapshot.toString()})(Date.now()),${withModels},${withArgon});` });
     await page.goto('/');
 }
+
+for (const language of ['zh', 'en']) test(`Argon weekly use is separate from shared quota summaries (${language})`, async ({ page }, info) => {
+    await setup(page, allCards, language, false, 'all', true);
+    const quota = page.locator('[data-dashboard-card="aggregate_quota"]');
+    await expect(quota.locator('[data-quota-window="5h"]')).toContainText('53%');
+    await expect(quota.locator('[data-quota-window="weekly"]')).toContainText('67%');
+    await expect(quota.locator('[data-quota-window="argon"]')).toContainText('90%');
+    await expect(quota.getByRole('meter', { name: language === 'zh' ? 'Argon 周额度已用' : 'Argon weekly used', exact: true })).toHaveAttribute('aria-valuenow', '90');
+    await page.screenshot({ path: info.outputPath(`dashboard-argon-${language}.png`) });
+});
 
 for (const language of ['zh', 'en']) for (const count of [5, 8, 10]) test(`model details remain reachable with ${count} cards in short windows (${language})`, async ({ page }) => {
     await setup(page, allCards.slice(0, count), language, true);

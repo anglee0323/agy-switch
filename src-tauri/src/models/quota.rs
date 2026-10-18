@@ -1,5 +1,45 @@
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum QuotaPool { Gemini, ThirdParty, Argon }
+
+/// Canonical bucket IDs take precedence over translated or abbreviated labels.
+/// A model-specific Gemini bucket must never become the shared Gemini pool.
+pub fn quota_pool(bucket_id: &str, group_name: &str) -> Option<QuotaPool> {
+    let id = bucket_id.trim().to_ascii_lowercase();
+    match id.as_str() {
+        "gemini-5h" | "gemini-weekly" => return Some(QuotaPool::Gemini),
+        "3p-5h" | "3p-weekly" => return Some(QuotaPool::ThirdParty),
+        "gemini-argon-wtu-weekly" => return Some(QuotaPool::Argon),
+        _ => {}
+    }
+    if id.starts_with("gemini-") || id.starts_with("3p-") { return None; }
+    match group_name.trim().to_ascii_lowercase().as_str() {
+        "gemini" | "gemini models" => Some(QuotaPool::Gemini),
+        "claude" | "claude / gpt" | "claude/gpt" | "claude/gpt models" | "claude and gpt models" => Some(QuotaPool::ThirdParty),
+        "gemini 4 argon" => Some(QuotaPool::Argon),
+        _ => None,
+    }
+}
+
+pub fn model_quota_pool(name: &str, display_name: Option<&str>) -> Option<QuotaPool> {
+    let lower = name.to_ascii_lowercase();
+    if lower.starts_with("gemini") {
+        let argon = [name, display_name.unwrap_or("")].iter().any(|value|
+            value.split(|c: char| !c.is_ascii_alphanumeric()).any(|word| word.eq_ignore_ascii_case("argon")));
+        Some(if argon { QuotaPool::Argon } else { QuotaPool::Gemini })
+    } else if lower.starts_with("claude") || lower.starts_with("gpt") { Some(QuotaPool::ThirdParty) }
+    else { None }
+}
+
+pub fn quota_group_label(name: &str) -> &str {
+    match quota_pool("", name) {
+        Some(QuotaPool::Gemini) => "Gemini",
+        Some(QuotaPool::ThirdParty) => "Claude/GPT",
+        _ => name,
+    }
+}
+
 /// 单个配额桶 (对应 retrieveUserQuotaSummary 里的一个 bucket)
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QuotaBucket {
@@ -110,4 +150,26 @@ impl Default for QuotaData {
 
 pub fn fraction_is_known(value: Option<f64>) -> bool {
     value.is_some_and(|v| v.is_finite() && (0.0..=1.0).contains(&v))
+}
+
+pub fn observed_quota_percentage(value: f64, known: Option<bool>) -> Option<i32> {
+    (known != Some(false) && (known.is_some() || value != 0.0) && fraction_is_known(Some(value)))
+        .then(|| (value * 100.0).round() as i32)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn pool_identity_matches_the_shared_frontend_fixture() {
+        let cases: Vec<serde_json::Value> = serde_json::from_str(include_str!("../../../tests/fixtures/quota-pool-cases.json")).unwrap();
+        for case in cases {
+            let actual = quota_pool(case["id"].as_str().unwrap(), case["name"].as_str().unwrap());
+            let actual = actual.map(|pool| match pool { QuotaPool::Gemini => "gemini", QuotaPool::ThirdParty => "other", QuotaPool::Argon => "argon" });
+            assert_eq!(actual, case["pool"].as_str(), "{case}");
+        }
+        assert_eq!(quota_group_label("Gemini 4 Argon"), "Gemini 4 Argon");
+        assert_eq!(model_quota_pool("gemini-4-argon-high", None), Some(QuotaPool::Argon));
+        assert_eq!(model_quota_pool("gemini-test", Some("Gemini 4 Argon High")), Some(QuotaPool::Argon));
+    }
 }

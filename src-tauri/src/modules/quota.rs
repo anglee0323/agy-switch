@@ -10,11 +10,11 @@ const QUOTA_API_ENDPOINTS: [&str; 3] = [
     "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
 ];
 
-// Quota Summary API endpoints (weekly + 5h grouped quota, fallback order 同上)
+// Production serves the complete shared quota; daily can return HTTP 200 with only 3p.
 const QUOTA_SUMMARY_ENDPOINTS: [&str; 3] = [
-    "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:retrieveUserQuotaSummary",
-    "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
     "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
+    "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
+    "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:retrieveUserQuotaSummary",
 ];
 
 /// Critical retry threshold: considered near recovery when quota reaches 95%
@@ -401,61 +401,8 @@ pub async fn fetch_quota_with_cache(
                     let quota_groups =
                         fetch_quota_summary(access_token, email, project_id.as_deref()).await;
 
-                    // [FIX #3426] Fuse real bucket quotas into models so UI doesn't show fake 100%
                     if let Some(ref groups) = quota_groups {
-                        for model in quota_data.models.iter_mut() {
-                            let name_lower = model.name.to_lowercase();
-                            let is_claude_or_gpt =
-                                name_lower.starts_with("claude") || name_lower.starts_with("gpt");
-                            let is_gemini = name_lower.starts_with("gemini");
-
-                            for group in groups {
-                                let gname = group.display_name.to_lowercase();
-                                let matches_group = if is_claude_or_gpt {
-                                    gname.contains("claude")
-                                        || gname.contains("gpt")
-                                        || gname.contains("3p")
-                                } else if is_gemini {
-                                    gname.contains("gemini")
-                                        || (!gname.contains("claude")
-                                            && !gname.contains("gpt")
-                                            && !gname.contains("3p"))
-                                } else {
-                                    false
-                                };
-
-                                if matches_group {
-                                    // Look for 5h bucket first, then fallback to any bucket
-                                    let target_bucket = group
-                                        .buckets
-                                        .iter()
-                                        .find(|b| {
-                                            let win = b.window.to_lowercase();
-                                            let bid = b.bucket_id.to_lowercase();
-                                            win.contains("5h")
-                                                || bid.contains("5h")
-                                                || win.contains("hour")
-                                                || bid.contains("hour")
-                                        })
-                                        .or_else(|| group.buckets.first());
-
-                                    if let Some(b) = target_bucket {
-                                        model.percentage =
-                                            (b.remaining_fraction * 100.0).round() as i32;
-                                        model.percentage_known = b.remaining_fraction_known;
-                                        model.observed_remaining_fraction =
-                                            (b.remaining_fraction_known == Some(true))
-                                                .then_some(b.remaining_fraction);
-                                        model.quota_bucket_id = (!b.bucket_id.is_empty())
-                                            .then(|| b.bucket_id.clone());
-                                        if !b.reset_time.is_empty() {
-                                            model.reset_time = b.reset_time.clone();
-                                        }
-                                        break;
-                                    }
-                                }
-                            }
-                        }
+                        fuse_model_quotas(&mut quota_data.models, groups);
                     }
 
                     quota_data.quota_groups = quota_groups;
@@ -570,4 +517,62 @@ async fn fetch_quota_summary(
     }
 
     None
+}
+
+/// Retain the primary model observation when no matching pool was reported.
+/// Never borrow a shared pool for Argon, or a model pool for shared Gemini.
+fn fuse_model_quotas(models: &mut [crate::models::quota::ModelQuota], groups: &[crate::models::quota::QuotaGroup]) {
+    use crate::models::quota::{model_quota_pool, quota_pool};
+    for model in models {
+        let Some(pool) = model_quota_pool(&model.name, model.display_name.as_deref()) else { continue; };
+        let buckets: Vec<_> = groups.iter().flat_map(|group| group.buckets.iter()
+            .filter(move |bucket| quota_pool(&bucket.bucket_id, &group.display_name) == Some(pool))).collect();
+        let target = buckets.iter().find(|b| b.window.eq_ignore_ascii_case("5h"))
+            .or_else(|| buckets.iter().find(|b| b.window.eq_ignore_ascii_case("weekly")));
+        let Some(bucket) = target else { continue; };
+        let conflict = buckets.iter().any(|b| b.window == bucket.window &&
+            (b.bucket_id != bucket.bucket_id || b.remaining_fraction != bucket.remaining_fraction || b.remaining_fraction_known != bucket.remaining_fraction_known || b.reset_time != bucket.reset_time));
+        let known = !conflict && bucket.remaining_fraction_known != Some(false)
+            && crate::models::quota::fraction_is_known(Some(bucket.remaining_fraction));
+        model.percentage_known = Some(known);
+        model.observed_remaining_fraction = known.then_some(bucket.remaining_fraction);
+        model.quota_bucket_id = (!conflict && !bucket.bucket_id.is_empty()).then(|| bucket.bucket_id.clone());
+        if known { model.percentage = (bucket.remaining_fraction * 100.0).round() as i32; }
+        if !bucket.reset_time.is_empty() { model.reset_time = bucket.reset_time.clone(); }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn argon_quota_fusion_is_independent_of_group_order_and_shared_pool() {
+        let fixture = |id: &str, fraction: f64| serde_json::json!({
+            "bucket_id":id,"window":if id.ends_with("5h") {"5h"} else {"weekly"},
+            "remaining_fraction":fraction,"remaining_fraction_known":true,"reset_time":"2030-01-01T00:00:00Z"
+        });
+        let groups: Vec<crate::models::quota::QuotaGroup> = serde_json::from_value(json!([
+            {"display_name":"Gemini 4 Argon","buckets":[fixture("gemini-argon-wtu-weekly",0.1)]},
+            {"display_name":"Gemini Models","buckets":[fixture("gemini-weekly",0.9),fixture("gemini-5h",0.8)]}
+        ])).unwrap();
+        for mut groups in [groups.clone(), groups.into_iter().rev().collect()] {
+            let mut models = serde_json::from_value::<Vec<crate::models::quota::ModelQuota>>(json!([
+                {"name":"gemini-4-argon-high","percentage":100,"reset_time":""},
+                {"name":"gemini-3.8-flash","percentage":100,"reset_time":""}
+            ])).unwrap();
+            fuse_model_quotas(&mut models, &groups);
+            assert_eq!(models[0].percentage, 10);
+            assert_eq!(models[0].quota_bucket_id.as_deref(), Some("gemini-argon-wtu-weekly"));
+            assert_eq!(models[1].percentage, 80);
+            groups.retain(|g| g.display_name != "Gemini 4 Argon");
+            models[0].quota_bucket_id = None;
+            fuse_model_quotas(&mut models, &groups);
+            assert!(models[0].quota_bucket_id.is_none());
+            assert_eq!(models[0].percentage, 10);
+        }
+    }
+    #[test]
+    fn production_summary_precedes_successful_but_incomplete_daily_endpoints() {
+        assert_eq!(QUOTA_SUMMARY_ENDPOINTS[0], "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary");
+    }
 }

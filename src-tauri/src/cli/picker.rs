@@ -1,3 +1,5 @@
+use crate::models::quota::{quota_pool, observed_quota_percentage, QuotaPool};
+use super::output::percentage_text;
 use super::output::{AccountView, QuotaView, Snapshot};
 use super::{CliError, HeadlessIntegration};
 use std::io::{self, Write};
@@ -305,6 +307,28 @@ impl Table {
     }
 }
 
+fn pool_bucket<'a>(quota: &'a QuotaView, pool: QuotaPool, window: &str) -> Option<&'a super::output::BucketView> {
+    let mut found: Option<&super::output::BucketView> = None;
+    for group in quota.quota_groups.iter().flatten() {
+        for bucket in &group.buckets {
+            if quota_pool(&bucket.bucket_id, &group.display_name) != Some(pool) || !bucket.window.eq_ignore_ascii_case(window) { continue; }
+            if found.is_some_and(|old| old.bucket_id != bucket.bucket_id || old.remaining_fraction != bucket.remaining_fraction || old.remaining_fraction_known != bucket.remaining_fraction_known || old.reset_time != bucket.reset_time) { return None; }
+            found = Some(bucket);
+        }
+    }
+    found
+}
+fn pool_quota_brief(quota: &QuotaView, pool: QuotaPool, lang: Lang) -> String {
+    [("5h", if matches!(lang, Lang::Zh) { "5小时: " } else { "5-Hour: " }),
+     ("weekly", if matches!(lang, Lang::Zh) { "周限:  " } else { "Weekly: " })].into_iter().map(|(window, prefix)| {
+        let bucket = pool_bucket(quota, pool, window);
+        let pct = bucket.and_then(|b| observed_quota_percentage(b.remaining_fraction, b.remaining_fraction_known));
+        let value = pct.map(|v| format!("{v}%")).unwrap_or_else(|| if matches!(lang, Lang::Zh) { "未知" } else { "Unknown" }.into());
+        let countdown = bucket.map(|b| format_quota_countdown(&b.reset_time, lang)).unwrap_or_default();
+        if countdown.is_empty() { format!("{prefix}{value}") } else { format!("{prefix}{value} ({countdown})") }
+    }).collect::<Vec<_>>().join("\n")
+}
+
 pub(crate) fn quota_brief(quota: Option<&QuotaView>, lang: Lang) -> String {
     if let Some(q) = quota {
         if q.is_forbidden {
@@ -317,20 +341,14 @@ pub(crate) fn quota_brief(quota: Option<&QuotaView>, lang: Lang) -> String {
         if let Some(groups) = &q.quota_groups {
             for g in groups {
                 if let Some(b) = g.buckets.first() {
-                    let pct = (b.remaining_fraction * 100.0).round() as i32;
-                    let short_name = if g.display_name.contains("Gemini") {
-                        "Gemini"
-                    } else if g.display_name.contains("Claude") || g.display_name.contains("GPT") {
-                        "Claude/GPT"
-                    } else {
-                        &g.display_name
-                    };
-                    parts.push(format!("{}: {}%", short_name, pct));
+                    let pct = observed_quota_percentage(b.remaining_fraction, b.remaining_fraction_known);
+                    let short_name = crate::models::quota::quota_group_label(&g.display_name);
+                    parts.push(format!("{}: {}", short_name, percentage_text(pct)));
                 }
             }
         } else {
             for m in q.models.iter().take(2) {
-                parts.push(format!("{}: {}%", m.name, m.percentage));
+                parts.push(format!("{}: {}", m.name, percentage_text(observed_quota_percentage(m.percentage as f64 / 100.0, m.percentage_known))));
             }
         }
         if !parts.is_empty() {
@@ -849,63 +867,17 @@ fn build_accounts_table(accounts: &[AccountView], lang: Lang, selected_idx: Opti
                     Lang::En => "5-Hour: Forbidden\nWeekly: Relogin".into(),
                 };
                 claude_quota = gemini_quota.clone();
-            } else if let Some(groups) = &q.quota_groups {
-                for g in groups {
-                    let weekly_b = g.buckets.iter().find(|b| b.bucket_id.contains("week") || b.window.contains("week"));
-                    let five_h_b = g.buckets.iter().find(|b| b.bucket_id.contains("5h") || b.window.contains("5h"));
-
-                    let five_h_str = match five_h_b {
-                        Some(fb) => {
-                            let pct = (fb.remaining_fraction * 100.0).round() as i32;
-                            let cd = format_quota_countdown(&fb.reset_time, lang);
-                            let prefix = match lang {
-                                Lang::Zh => "5小时: ",
-                                Lang::En => "5-Hour: ",
-                            };
-                            if cd.is_empty() {
-                                format!("{}{}%", prefix, pct)
-                            } else {
-                                format!("{}{}% ({})", prefix, pct, cd)
-                            }
-                        }
-                        None => match lang {
-                            Lang::Zh => "5小时: 未知".to_string(),
-                            Lang::En => "5-Hour: Unknown".to_string(),
-                        },
-                    };
-
-                    let weekly_str = match weekly_b {
-                        Some(wb) => {
-                            let pct = (wb.remaining_fraction * 100.0).round() as i32;
-                            let cd = format_quota_countdown(&wb.reset_time, lang);
-                            let prefix = match lang {
-                                Lang::Zh => "周限:  ",
-                                Lang::En => "Weekly: ",
-                            };
-                            if cd.is_empty() {
-                                format!("{}{}%", prefix, pct)
-                            } else {
-                                format!("{}{}% ({})", prefix, pct, cd)
-                            }
-                        }
-                        None => match lang {
-                            Lang::Zh => "周限:  未知".to_string(),
-                            Lang::En => "Weekly: Unknown".to_string(),
-                        },
-                    };
-
-                    let text = format!("{}\n{}", five_h_str, weekly_str);
-                    if g.display_name.contains("Gemini") {
-                        gemini_quota = text;
-                    } else if g.display_name.contains("Claude") || g.display_name.contains("GPT") {
-                        claude_quota = text;
-                    }
+            } else if q.quota_groups.is_some() {
+                gemini_quota = pool_quota_brief(q, QuotaPool::Gemini, lang);
+                claude_quota = pool_quota_brief(q, QuotaPool::ThirdParty, lang);
+                if let Some(bucket) = pool_bucket(q, QuotaPool::Argon, "weekly") {
+                    gemini_quota.push_str(&format!("\nArgon: {}", percentage_text(observed_quota_percentage(bucket.remaining_fraction, bucket.remaining_fraction_known))));
                 }
             } else {
                 for m in &q.models {
                     let text = match lang {
-                        Lang::Zh => format!("5小时: {}%\n周限:  -", m.percentage),
-                        Lang::En => format!("5-Hour: {}%\nWeekly: -", m.percentage),
+                        Lang::Zh => format!("5小时: {}\n周限:  -", percentage_text(observed_quota_percentage(m.percentage as f64 / 100.0, m.percentage_known))),
+                        Lang::En => format!("5-Hour: {}\nWeekly: -", percentage_text(observed_quota_percentage(m.percentage as f64 / 100.0, m.percentage_known))),
                     };
                     if m.name.to_lowercase().contains("gemini") {
                         gemini_quota = text;
@@ -1750,8 +1722,8 @@ fn show_single_account_quota(acc: &AccountView, lang: Lang) {
         if let Some(groups) = &q.quota_groups {
             for g in groups {
                 for b in &g.buckets {
-                    let pct = (b.remaining_fraction * 100.0).round() as i32;
-                    let bar = progress_bar(pct, 10);
+                    let pct = observed_quota_percentage(b.remaining_fraction, b.remaining_fraction_known);
+                    let bar = pct.map(|value| progress_bar(value, 10)).unwrap_or_else(|| "—".into());
                     let cd = format_countdown(&b.reset_time, lang);
 
                     let window_desc = if b.bucket_id.contains("week") || b.window.contains("week") {
@@ -1768,18 +1740,12 @@ fn show_single_account_quota(acc: &AccountView, lang: Lang) {
                         &b.bucket_id
                     };
 
-                    let group_title = if g.display_name.contains("Gemini") {
-                        "Gemini"
-                    } else if g.display_name.contains("Claude") || g.display_name.contains("GPT") {
-                        "Claude/GPT"
-                    } else {
-                        &g.display_name
-                    };
+                    let group_title = crate::models::quota::quota_group_label(&g.display_name);
 
                     let name = format!("{} ({})", group_title, window_desc);
                     q_table.add_row(vec![
                         name,
-                        format!("{}%", pct),
+                        percentage_text(pct),
                         bar,
                         if cd.is_empty() { "-".into() } else { cd },
                     ]);
@@ -1787,11 +1753,11 @@ fn show_single_account_quota(acc: &AccountView, lang: Lang) {
             }
         } else if !q.models.is_empty() {
             for m in &q.models {
-                let bar = progress_bar(m.percentage, 10);
+                let bar = observed_quota_percentage(m.percentage as f64 / 100.0, m.percentage_known).map(|pct| progress_bar(pct, 10)).unwrap_or_else(|| "—".into());
                 let cd = format_countdown(&m.reset_time, lang);
                 q_table.add_row(vec![
                     m.name.clone(),
-                    format!("{}%", m.percentage),
+                    percentage_text(observed_quota_percentage(m.percentage as f64 / 100.0, m.percentage_known)),
                     bar,
                     if cd.is_empty() { "-".into() } else { cd },
                 ]);
@@ -2121,11 +2087,11 @@ fn show_refresh_quotas(root: &Path, lang: Lang) {
                     if let Some(groups) = &quota.quota_groups {
                         for g in groups {
                             if let Some(b) = g.buckets.first() {
-                                let pct = (b.remaining_fraction * 100.0).round() as i32;
+                                let pct = observed_quota_percentage(b.remaining_fraction, b.remaining_fraction_known);
                                 let cd = format_countdown(&b.reset_time, lang);
                                 q_table.add_row(vec![
                                     g.display_name.clone(),
-                                    format!("{}%", pct),
+                                    percentage_text(pct),
                                     if cd.is_empty() { "-".into() } else { cd },
                                 ]);
                             }
@@ -2135,7 +2101,7 @@ fn show_refresh_quotas(root: &Path, lang: Lang) {
                             let cd = format_countdown(&m.reset_time, lang);
                             q_table.add_row(vec![
                                 m.name.clone(),
-                                format!("{}%", m.percentage),
+                                percentage_text(observed_quota_percentage(m.percentage as f64 / 100.0, m.percentage_known)),
                                 if cd.is_empty() { "-".into() } else { cd },
                             ]);
                         }
@@ -2238,11 +2204,11 @@ fn show_refresh_quotas(root: &Path, lang: Lang) {
                     if let Some(groups) = &quota.quota_groups {
                         for g in groups {
                             if let Some(b) = g.buckets.first() {
-                                let pct = (b.remaining_fraction * 100.0).round() as i32;
+                                let pct = observed_quota_percentage(b.remaining_fraction, b.remaining_fraction_known);
                                 let cd = format_countdown(&b.reset_time, lang);
                                 q_table.add_row(vec![
                                     g.display_name.clone(),
-                                    format!("{}%", pct),
+                                    percentage_text(pct),
                                     if cd.is_empty() { "-".into() } else { cd },
                                 ]);
                             }
@@ -2252,7 +2218,7 @@ fn show_refresh_quotas(root: &Path, lang: Lang) {
                             let cd = format_countdown(&m.reset_time, lang);
                             q_table.add_row(vec![
                                 m.name.clone(),
-                                format!("{}%", m.percentage),
+                                percentage_text(observed_quota_percentage(m.percentage as f64 / 100.0, m.percentage_known)),
                                 if cd.is_empty() { "-".into() } else { cd },
                             ]);
                         }
@@ -2654,5 +2620,32 @@ mod presentation_tests {
             assert!(!rendered.contains("100%"));
             assert!(rendered.contains(match lang { Lang::Zh => "未知", Lang::En => "Unknown" }));
         }
+    }
+    #[test]
+    fn argon_never_overwrites_shared_columns_and_unknown_is_not_zero() {
+        let mut account: AccountView = serde_json::from_value(serde_json::json!({
+            "id":"fixture","email":"fixture@example.invalid","quota":{"last_updated":1,"models":[],"quota_groups":[
+                {"display_name":"Gemini Models","buckets":[{"bucket_id":"gemini-weekly","window":"weekly","remaining_fraction":0.9,"reset_time":""}]},
+                {"display_name":"Gemini 4 Argon","buckets":[{"bucket_id":"gemini-argon-wtu-weekly","window":"weekly","remaining_fraction":0.1,"remaining_fraction_known":true,"reset_time":""}]}
+            ]}
+        })).unwrap();
+        for lang in [Lang::Zh, Lang::En] {
+            let rendered = build_accounts_table(&[serde_json::from_value(serde_json::to_value(&account).unwrap()).unwrap()], lang, None).render();
+            assert!(rendered.contains("90%"));
+            assert!(rendered.contains("Argon: 10%"));
+            assert!(quota_brief(account.quota.as_ref(), lang).contains("Gemini 4 Argon: 10%"));
+        }
+        let quota = account.quota.as_mut().unwrap();
+        let bucket = &mut quota.quota_groups.as_mut().unwrap()[1].buckets[0];
+        bucket.remaining_fraction = 0.0;
+        bucket.remaining_fraction_known = Some(false);
+        assert!(quota.human("fixture@example.invalid").contains("— remaining"));
+        quota.quota_groups = None;
+        quota.models = serde_json::from_value(serde_json::json!([{"name":"gemini-4-argon-high","percentage":100,"percentage_known":false,"reset_time":""}])).unwrap();
+        assert!(!quota.human("fixture@example.invalid").contains("100%"));
+        assert!(quota_brief(Some(quota), Lang::En).contains("—"));
+        quota.models[0].percentage = 0;
+        quota.models[0].percentage_known = Some(true);
+        assert!(quota.human("fixture@example.invalid").contains("0% remaining"));
     }
 }

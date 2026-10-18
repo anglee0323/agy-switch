@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
+const dependency = ts.transpileModule(readFileSync(new URL("../src/utils/accountDashboard.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.ES2022 } }).outputText;
 const source = ts.transpileModule(
   readFileSync(
     new URL("../src/utils/menuBarQuota.ts", import.meta.url),
@@ -12,10 +13,12 @@ const source = ts.transpileModule(
       target: ts.ScriptTarget.ES2022,
     },
   },
-).outputText;
+).outputText.replaceAll("'./accountDashboard'", JSON.stringify(`data:text/javascript;base64,${Buffer.from(dependency).toString('base64')}`));
 const {
   compactQuotaGroups,
+  weeklyQuotaItems,
   observedPercentage,
+  observedModelPercentage,
   validPercentage,
   lowestKnownQuota,
   isAccountSwitchable,
@@ -36,6 +39,19 @@ const test = (name, check) => {
   passed++;
   console.log(`PASS ${name}`);
 };
+test('account weekly labels and knownness preserve a dedicated Argon pool', () => {
+  const q={quota_groups:[{display_name:'Gemini 4 Argon',buckets:[{bucket_id:'gemini-argon-wtu-weekly',window:'weekly',remaining_fraction:0,remaining_fraction_known:false,reset_time:''}]}]};
+  assert.equal(weeklyQuotaItems(q)[0].title,'Gemini 4 Argon');
+  assert.equal(weeklyQuotaItems(q)[0].shared,false);
+  assert.equal(weeklyQuotaItems(q)[0].percentage,null);
+  q.quota_groups[0].buckets[0].remaining_fraction_known=true;
+  assert.equal(weeklyQuotaItems(q)[0].percentage,0);
+});
+test('unknown fused model quota cannot expose an old percentage', () => {
+  assert.equal(observedModelPercentage({name:'gemini-4-argon-high',percentage:100,percentage_known:false,reset_time:''}),null);
+  assert.equal(observedModelPercentage({name:'gemini-4-argon-high',percentage:0,percentage_known:true,reset_time:''}),0);
+  assert.equal(observedModelPercentage(undefined),null);
+});
 test("unknown percentages remain unknown", () => {
   for (const value of [undefined, null, NaN, Infinity, -1, 101, "50"])
     assert.equal(validPercentage(value), null);

@@ -3,6 +3,7 @@
 use super::account_dashboard::{DashboardEntry, DashboardSnapshot};
 use crate::models::config::MenuBarQuotaScope;
 use std::collections::HashMap;
+use crate::models::quota::{quota_pool, QuotaPool};
 use crate::models::config::{MenuBarPreferences, MenuBarLabelStyle};
 
 #[derive(Debug, PartialEq, Eq)]
@@ -43,9 +44,11 @@ pub fn saved_quota_lines(account: Option<&DashboardEntry>, now: i64, freshness_m
         if account.quota.as_ref().is_some_and(|quota| quota.is_forbidden) { return vec![texts.forbidden]; }
         let windows = account_windows(account, now, freshness_minutes);
         let periods = if language.starts_with("zh") { ["5 小时", "每周"] } else { ["5 hours", "Weekly"] };
-        return windows.iter().enumerate().flat_map(|(period, values)| values.iter().enumerate().map(move |(family, value)| {
+        let mut lines: Vec<_> = windows.iter().enumerate().flat_map(|(period, values)| values.iter().enumerate().map(move |(family, value)| {
             format!("{}  {}: {}", if family == 0 { "Gemini" } else { "Claude / GPT" }, periods[period], percent(*value))
         })).collect();
+        if argon_reported(account) { lines.push(format!("Gemini 4 Argon  {}: {}", periods[1], percent(argon_weekly(account, now, freshness_minutes)))); }
+        return lines;
     }
     vec![format!("{}: {}", texts.quota, texts.unknown_quota)]
 }
@@ -69,32 +72,62 @@ pub fn account_heading_summary(count: usize, current: Option<&str>, source: &str
     format!("{count}  {status}")
 }
 
+pub fn argon_reported(account: &DashboardEntry) -> bool {
+    account.quota.iter().flat_map(|q| q.groups.iter().flatten()).any(|g|
+        g.buckets.iter().any(|b| quota_pool(&b.bucket_id, &g.display_name) == Some(QuotaPool::Argon)))
+}
+pub fn argon_weekly(account: &DashboardEntry, now: i64, freshness_minutes: i32) -> Option<f64> {
+    pool_windows(account, now, freshness_minutes, QuotaPool::Argon)[1]
+}
+pub fn argon_reset_label(account: &DashboardEntry, now: i64, zh: bool) -> String {
+    if account.disabled { return if zh { "禁用" } else { "Disabled" }.into(); }
+    let resets: std::collections::BTreeSet<_> = account.quota.iter().flat_map(|q| q.groups.iter().flatten())
+        .flat_map(|g| g.buckets.iter().filter(move |b| quota_pool(&b.bucket_id, &g.display_name) == Some(QuotaPool::Argon)))
+        .filter(|b| b.window.eq_ignore_ascii_case("weekly")).map(|b| b.reset_time.as_str()).collect();
+    if resets.len() > 1 { return if zh { "多组" } else { "Multiple" }.into(); }
+    reset_summary(resets.first().copied().unwrap_or(""), now, zh)
+}
 pub fn account_windows(account: &DashboardEntry, now: i64, freshness_minutes: i32) -> [[Option<f64>; 2]; 2] {
+    let gemini = pool_windows(account, now, freshness_minutes, QuotaPool::Gemini);
+    let other = pool_windows(account, now, freshness_minutes, QuotaPool::ThirdParty);
+    [[gemini[0], other[0]], [gemini[1], other[1]]]
+}
+fn pool_windows(account: &DashboardEntry, now: i64, freshness_minutes: i32, family: QuotaPool) -> [Option<f64>; 2] {
     let unavailable = account.read_status != "loaded" || account.disabled
         || (account.validation_blocked && account.validation_blocked_until.is_none_or(|until| until > now))
         || !account.protected_models.is_empty();
-    let Some(quota) = &account.quota else { return [[None; 2]; 2]; };
+    let Some(quota) = &account.quota else { return [None; 2]; };
     let freshness = i64::from(freshness_minutes.max(1)) * 60;
     if unavailable || quota.is_forbidden || quota.last_updated <= 0
         || quota.last_updated > now + 300 || now - quota.last_updated > freshness {
-        return [[None; 2]; 2];
+        return [None; 2];
     }
-    let mut result = [[None; 2]; 2];
+    let mut result = [None; 2];
     for (period, window) in ["5h", "weekly"].iter().enumerate() {
-        for family in 0..2 {
+        {
             let mut rows: HashMap<&str, (f64, &str)> = HashMap::new();
-            let mut owners: HashMap<&str, usize> = HashMap::new();
+            let mut owners: HashMap<&str, QuotaPool> = HashMap::new();
             let mut invalid = false;
+            // Even an unclassified group can repeat a known bucket with conflicting data.
+            let mut observations = HashMap::new();
+            let mut conflicts = std::collections::HashSet::new();
+            for bucket in quota.groups.iter().flatten().flat_map(|g| &g.buckets) {
+                if bucket.window.trim().to_lowercase() != *window || bucket.bucket_id.is_empty() { continue; }
+                let observation = (bucket.remaining_fraction, bucket.reset_time.as_str());
+                if observations.insert(bucket.bucket_id.as_str(), observation).is_some_and(|old| old != observation) {
+                    conflicts.insert(bucket.bucket_id.as_str());
+                }
+            }
             for group in quota.groups.iter().flatten() {
-                let name = group.display_name.to_lowercase();
-                let owner = if name.contains("gemini") { 0 } else if name.contains("claude") || name.contains("gpt") { 1 } else { continue };
                 for bucket in &group.buckets {
+                    let Some(owner) = quota_pool(&bucket.bucket_id, &group.display_name) else { continue; };
                     if bucket.window.trim().to_lowercase() != *window { continue; }
                     if bucket.bucket_id.is_empty() { if owner == family { invalid = true; } continue; }
                     if let Some(previous) = owners.insert(&bucket.bucket_id, owner) {
                         if previous != owner { invalid = true; }
                     }
                     if owner != family { continue; }
+                    if conflicts.contains(bucket.bucket_id.as_str()) { invalid = true; }
                     let valid_reset = chrono::DateTime::parse_from_rfc3339(&bucket.reset_time)
                         .is_ok_and(|time| time.timestamp() > now);
                     let Some(value) = bucket.remaining_fraction.filter(|value| value.is_finite() && (0.0..=1.0).contains(value)) else {
@@ -107,7 +140,7 @@ pub fn account_windows(account: &DashboardEntry, now: i64, freshness_minutes: i3
                 }
             }
             if !invalid && !rows.is_empty() {
-                result[period][family] = Some(rows.values().map(|(value, _)| value * 100.0).sum::<f64>() / rows.len() as f64);
+                result[period] = Some(rows.values().map(|(value, _)| value * 100.0).sum::<f64>() / rows.len() as f64);
             }
         }
     }
@@ -149,8 +182,8 @@ pub fn account_reset_labels(account: &DashboardEntry, now: i64, zh: bool) -> [[S
         if account.disabled { return if zh { "禁用" } else { "Disabled" }.into(); }
         let window = if period == 0 { "5h" } else { "weekly" };
         let resets: std::collections::BTreeSet<_> = account.quota.iter().flat_map(|quota| quota.groups.iter().flatten())
-            .filter(|group| { let name = group.display_name.to_lowercase(); if family == 0 { name.contains("gemini") } else { name.contains("claude") || name.contains("gpt") } })
-            .flat_map(|group| &group.buckets).filter(|bucket| bucket.window.trim().eq_ignore_ascii_case(window)).map(|bucket| bucket.reset_time.as_str()).collect();
+            .flat_map(|group| group.buckets.iter().filter(move |bucket| quota_pool(&bucket.bucket_id, &group.display_name) == Some(if family == 0 { QuotaPool::Gemini } else { QuotaPool::ThirdParty })))
+            .filter(|bucket| bucket.window.trim().eq_ignore_ascii_case(window)).map(|bucket| bucket.reset_time.as_str()).collect();
         if resets.len() > 1 { return if zh { "多组" } else { "Multiple" }.into(); }
         let summary = reset_summary(resets.first().copied().unwrap_or(""), now, false);
         if let Some(countdown) = summary.strip_prefix("Resets in ") { countdown.into() }
@@ -163,6 +196,23 @@ pub fn account_reset_labels(account: &DashboardEntry, now: i64, zh: bool) -> [[S
 mod tests {
     use super::*;
     use crate::modules::account_dashboard::{ReadOnlyQuota, ReadOnlyGroup, ReadOnlyBucket};
+    #[test]
+    fn argon_is_a_separate_weekly_observation_with_the_same_freshness_guards() {
+        let mut a = account();
+        let now = a.quota.as_ref().unwrap().last_updated;
+        let original = account_windows(&a, now, 15);
+        a.quota.as_mut().unwrap().groups.as_mut().unwrap().push(ReadOnlyGroup {
+            display_name: "Gemini 4 Argon".into(), buckets: vec![ReadOnlyBucket {
+                bucket_id: "gemini-argon-wtu-weekly".into(), window: "weekly".into(), remaining_fraction: Some(0.1), reset_time: "2030-01-01T00:00:00Z".into(),
+            }],
+        });
+        assert_eq!(account_windows(&a, now, 15), original);
+        assert_eq!(argon_weekly(&a, now, 15), Some(10.0));
+        assert!(argon_reported(&a));
+        assert_eq!(argon_weekly(&a, now + 301, 5), None);
+        a.disabled = true;
+        assert_eq!(argon_weekly(&a, now, 15), None);
+    }
     #[test] fn identity_heading_explains_failures_and_recovers_without_claiming_a_current_account() {
         assert_eq!(account_heading_summary(5, None, "checking", true), "5 个账号  识别中");
         assert_eq!(account_heading_summary(5, None, "unavailable", true), "5 个账号  当前未识别");

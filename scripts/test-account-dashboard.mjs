@@ -3,11 +3,21 @@ import {readFileSync} from "node:fs";
 import test from "node:test";
 import ts from "typescript";
 const source = ts.transpileModule(readFileSync(new URL("../src/utils/accountDashboard.ts", import.meta.url), "utf8"), {compilerOptions:{module:ts.ModuleKind.ES2022,target:ts.ScriptTarget.ES2022}}).outputText;
-const {dashboardPools,dashboardAccountState,dashboardCounts} = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
+const {dashboardPools,dashboardAccountState,dashboardCounts,quotaPoolKind} = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`);
 const now = Date.parse("2026-10-02T12:00:00Z");
 const bucket = (id,remaining=0.8) => ({bucket_id:id,window:id,remaining_fraction:remaining,reset_time:"2026-10-03T12:00:00Z"});
 const quota = () => ({last_updated:now/1000-20,is_forbidden:false,subscription_tier:"PRO",provenance:"observed",models:[],groups:[{key:'buckets:["5h","weekly"]',display_name:"Shared",buckets:[bucket("5h"),bucket("weekly",0.5)]}]});
 const account = () => ({id:"fixture",email:"fixture@example.test",name:null,custom_label:null,read_status:"loaded",read_error:null,disabled:false,validation_blocked:false,validation_blocked_until:null,protected_models:[],quota:quota()});
+test('canonical quota pools agree with Rust and keep future model pools separate', () => {
+  const cases = JSON.parse(readFileSync(new URL('../tests/fixtures/quota-pool-cases.json', import.meta.url), 'utf8'));
+  for (const c of cases) assert.equal(quotaPoolKind(c.id, c.name), c.pool);
+});
+test('a reported Argon weekly pool is complete without an invented five-hour window', () => {
+  const a = account();
+  a.quota.groups.push({display_name:'Gemini 4 Argon',buckets:[{bucket_id:'gemini-argon-wtu-weekly',window:'weekly',remaining_fraction:0.1,reset_time:'2026-10-03T12:00:00Z'}]});
+  assert.equal(dashboardAccountState(a,now).quota,'reported');
+  assert.equal(dashboardPools(a.quota).at(-1).windows[0].remaining,10);
+});
 test("null is unknown; explicitly reported zero is exhausted",()=>{
   const a=account(); a.quota.groups[0].buckets[0].remaining_fraction=null;
   assert.equal(dashboardPools(a.quota)[0].windows[0].remaining,null);

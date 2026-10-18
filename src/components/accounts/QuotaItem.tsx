@@ -7,7 +7,7 @@ import { getQuotaColor, formatTimeRemaining } from '../../utils/format';
 interface QuotaItemProps {
     label: React.ReactNode;
     title?: string;
-    percentage: number;
+    percentage: number | null;
     resetTime?: string;
     isProtected?: boolean;
     className?: string;
@@ -47,9 +47,9 @@ export function QuotaItem({ label, title, percentage, resetTime, isProtected, cl
             <div
                 className={cn(
                     "absolute inset-y-0 left-0 transition-all duration-700 ease-out opacity-15 dark:opacity-20",
-                    getBgColorClass(percentage)
+                    percentage === null ? 'bg-gray-400' : getBgColorClass(percentage)
                 )}
-                style={{ width: `${percentage}%` }}
+                style={{ width: `${percentage ?? 0}%` }}
             />
 
             {/* Content */}
@@ -78,12 +78,12 @@ export function QuotaItem({ label, title, percentage, resetTime, isProtected, cl
                 <span className={cn(
                     "text-right font-bold transition-colors flex items-center justify-end gap-0.5 shrink-0",
                     "w-[28px]",
-                    getTextColorClass(percentage)
+                    percentage === null ? 'text-gray-500' : getTextColorClass(percentage)
                 )}>
                     {isProtected && (
                         <span title={t('accounts.quota_protected')}><Lock className="w-2.5 h-2.5 text-amber-500" /></span>
                     )}
-                    {percentage}%
+                    {percentage === null ? '—' : `${Math.round(percentage)}%`}
                 </span>
             </div>
         </div>

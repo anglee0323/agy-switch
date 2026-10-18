@@ -1,4 +1,17 @@
-import type { Account, QuotaData } from "../types/account";
+import type { Account, QuotaData, ModelQuota } from "../types/account";
+import { quotaPoolKind } from './accountDashboard';
+
+/** Shared by account cards and tables; preserve dedicated and future pool names. */
+export function weeklyQuotaItems(quota?: QuotaData) {
+  return (quota?.quota_groups || []).flatMap(group => group.buckets
+    .filter(b => b.window.trim().toLowerCase() === 'weekly' || b.bucket_id.toLowerCase().endsWith('-weekly'))
+    .map(b => {
+      const kind = quotaPoolKind(b.bucket_id, group.display_name);
+      return { id: `${group.display_name}-${b.bucket_id}`, title: kind === 'argon' ? 'Gemini 4 Argon' : kind === 'gemini' ? 'Gemini' : kind === 'other' ? 'Claude / GPT' : group.display_name || b.display_name || b.bucket_id,
+        shared: kind === 'gemini' || kind === 'other', isClaude: kind === 'other',
+        percentage: observedPercentage(b.remaining_fraction, b.remaining_fraction_known, true), resetTime: b.reset_time };
+    }));
+}
 
 export interface CompactQuotaRow {
   id: string;
@@ -27,6 +40,13 @@ export function observedPercentage(value: unknown, known?: boolean, fraction = f
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
   const scaled = fraction ? value * 100 : value;
   return scaled >= 0 && scaled <= 100 ? scaled : null;
+}
+
+export function observedModelPercentage(model?: ModelQuota): number | null {
+  if (!model) return null;
+  return model.observed_remaining_fraction !== undefined
+    ? observedPercentage(model.observed_remaining_fraction, model.percentage_known, true)
+    : observedPercentage(model.percentage, model.percentage_known);
 }
 
 /** Independent pools stay independent. Unknown data never becomes an empty bar. */

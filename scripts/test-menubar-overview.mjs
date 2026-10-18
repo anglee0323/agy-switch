@@ -8,7 +8,7 @@ const url = source => `data:text/javascript;base64,${Buffer.from(source).toStrin
 const dependency = url(compile('../src/utils/accountDashboard.ts'));
 const config = url(compile('../src/types/config.ts'));
 const source = compile('../src/utils/menuBarOverview.ts').replaceAll("'./accountDashboard'", JSON.stringify(dependency)).replaceAll("'../types/config'", JSON.stringify(config));
-const { menuBarAccount, aggregateMenuBar, quotaDisplay, quotaTone } = await import(url(source));
+const { menuBarAccount, aggregateMenuBar, aggregateArgon, quotaDisplay, quotaTone } = await import(url(source));
 const now = Date.parse('2026-10-04T12:00:00Z');
 const clone = value => structuredClone(value);
 function account(id, gemini = [.8,.6], other = [.4,.2]) {
@@ -20,6 +20,20 @@ function account(id, gemini = [.8,.6], other = [.4,.2]) {
 let passed=0;
 function test(name,fn){fn();console.log(`PASS ${name}`);passed++;}
 const views = (saved,interval=15) => saved.map(a=>menuBarAccount(a,now,interval));
+test('Argon is a separate mean and does not dilute shared Gemini or require five-hour data',()=>{
+  const a=account('a',[.8,.9]);
+  a.quota.groups.unshift({display_name:'Gemini 4 Argon',buckets:[{bucket_id:'gemini-argon-wtu-weekly',window:'weekly',remaining_fraction:.1,reset_time:new Date(now+86400000).toISOString()}]});
+  const b=account('b');
+  assert.equal(menuBarAccount(a,now).windows.weekly.gemini.remaining,90);
+  assert.equal(menuBarAccount(a,now).argonWeekly.remaining,10);
+  assert.deepEqual(aggregateArgon(views([a,b])),{remaining:10,used:90,covered:1,total:1});
+  a.quota.groups[0].buckets[0].remaining_fraction=null;
+  assert.deepEqual(aggregateArgon(views([a,b])),{remaining:null,used:null,covered:0,total:1});
+  a.quota.groups[0].buckets[0].remaining_fraction=0;
+  assert.equal(menuBarAccount(a,now).argonWeekly.remaining,0);
+  a.quota.last_updated-=3600;
+  assert.equal(menuBarAccount(a,now).argonWeekly.remaining,null);
+});
 test('two scopes and two periods remain independent; all uses an equal-weight mean',()=>{
   const data=views([account('a'),account('b',[1,.8],[.6,.4])]);
   assert.equal(aggregateMenuBar(data,'gemini','5h').remaining,90);

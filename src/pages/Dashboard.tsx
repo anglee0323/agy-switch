@@ -609,8 +609,8 @@ function Dashboard() {
             locale={locale}
         >
             <div className="space-y-1">
-                {(['5h', 'weekly'] as const).map(window => {
-                    const used = overview?.windows[window].used ?? null;
+                {(['5h', 'weekly', ...(overview?.argonWeekly.total ? ['argon' as const] : [])] as const).map(window => {
+                    const used = (window === 'argon' ? overview?.argonWeekly.used : overview?.windows[window].used) ?? null;
                     const label = t(`local_dashboard.quota_used_${window}`);
                     const tone = quotaTone(used === null ? null : 100 - used, quotaPreferences);
                     const fill = { healthy: 'bg-emerald-500', warning: 'bg-amber-500', critical: 'bg-red-500', unknown: '' }[tone];
