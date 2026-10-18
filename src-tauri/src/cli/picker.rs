@@ -340,8 +340,11 @@ pub(crate) fn quota_brief(quota: Option<&QuotaView>, lang: Lang) -> String {
         let mut parts = Vec::new();
         if let Some(groups) = &q.quota_groups {
             for g in groups {
-                if let Some(b) = g.buckets.first() {
-                    let pct = observed_quota_percentage(b.remaining_fraction, b.remaining_fraction_known);
+                if !g.buckets.is_empty() {
+                    let pct = g.buckets.iter()
+                        .map(|b| observed_quota_percentage(b.remaining_fraction, b.remaining_fraction_known))
+                        .try_fold(i32::MAX, |acc, v| v.map(|n| acc.min(n)))
+                        .filter(|&v| v != i32::MAX);
                     let short_name = crate::models::quota::quota_group_label(&g.display_name);
                     parts.push(format!("{}: {}", short_name, percentage_text(pct)));
                 }

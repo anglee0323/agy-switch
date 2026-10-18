@@ -419,8 +419,13 @@ export function getDisplayQuotaModels(
     const results: DisplayQuotaModelItem[] = [];
 
     for (const canonKey of pinnedKeys) {
-        const rawModel = accountCanonMap.get(canonKey);
-        const label = getCanonicalModelDisplayName(canonKey);
+        let rawModel = accountCanonMap.get(canonKey);
+        if (!rawModel && canonKey === 'gemini-3.1-pro' && !pinnedKeys.includes('gemini-2.5-pro')) {
+            rawModel = accountCanonMap.get('gemini-2.5-pro');
+        } else if (!rawModel && canonKey === 'gemini-2.5-pro' && !pinnedKeys.includes('gemini-3.1-pro')) {
+            rawModel = accountCanonMap.get('gemini-3.1-pro');
+        }
+        const label = getCanonicalModelDisplayName(rawModel?.name || canonKey);
         const protectedKey = getModelProtectionKey(canonKey) || canonKey;
 
         let Icon = Gemini.Color;

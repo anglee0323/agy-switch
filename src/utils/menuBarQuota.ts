@@ -1,5 +1,5 @@
 import type { Account, QuotaData, ModelQuota } from "../types/account";
-import { quotaPoolKind } from './accountDashboard';
+import { quotaPoolKind, type QuotaPoolKind } from './accountDashboard';
 
 /** Shared by account cards and tables; preserve dedicated and future pool names. */
 export function weeklyQuotaItems(quota?: QuotaData) {
@@ -47,6 +47,58 @@ export function observedModelPercentage(model?: ModelQuota): number | null {
   return model.observed_remaining_fraction !== undefined
     ? observedPercentage(model.observed_remaining_fraction, model.percentage_known, true)
     : observedPercentage(model.percentage, model.percentage_known);
+}
+
+export function modelQuotaPoolKind(name: string, displayName?: string): QuotaPoolKind | null {
+  const lower = (name || '').trim().toLowerCase();
+  if (lower.startsWith('gemini')) {
+    const argon = [name, displayName || ''].some(value =>
+      value.split(/[^a-z0-9]+/i).some(word => word.toLowerCase() === 'argon'),
+    );
+    return argon ? 'argon' : 'gemini';
+  }
+  if (lower.startsWith('claude') || lower.startsWith('gpt')) return 'other';
+  return null;
+}
+
+export function effectiveModelQuota(
+  model?: ModelQuota,
+  quota?: QuotaData,
+): { percentage: number | null; resetTime?: string } {
+  const basePercentage = observedModelPercentage(model);
+  const baseResetTime = model?.reset_time;
+  if (basePercentage === null || !model?.name || !quota?.quota_groups?.length) {
+    return { percentage: basePercentage, resetTime: baseResetTime };
+  }
+  const pool = modelQuotaPoolKind(model.name, model.display_name);
+  if (!pool) {
+    return { percentage: basePercentage, resetTime: baseResetTime };
+  }
+  const buckets = quota.quota_groups.flatMap(group =>
+    (group.buckets || []).filter(bucket => quotaPoolKind(bucket.bucket_id, group.display_name) === pool),
+  );
+  if (!buckets.length) {
+    return { percentage: basePercentage, resetTime: baseResetTime };
+  }
+  let best: { percentage: number; resetTime: string; is5h: boolean } | null = null;
+  for (const bucket of buckets) {
+    const pct = observedPercentage(bucket.remaining_fraction, bucket.remaining_fraction_known, true);
+    if (pct === null) {
+      return { percentage: null, resetTime: baseResetTime };
+    }
+    const is5h = bucket.window.trim().toLowerCase() === '5h';
+    if (
+      !best ||
+      pct < best.percentage ||
+      (pct === best.percentage && is5h && !best.is5h)
+    ) {
+      best = { percentage: pct, resetTime: bucket.reset_time || baseResetTime || '', is5h };
+    }
+  }
+  if (!best || basePercentage < best.percentage) {
+    return { percentage: basePercentage, resetTime: baseResetTime };
+  }
+  return { percentage: best.percentage, resetTime: best.resetTime };
 }
 
 /** Independent pools stay independent. Unknown data never becomes an empty bar. */

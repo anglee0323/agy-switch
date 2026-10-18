@@ -1,4 +1,4 @@
-import { weeklyQuotaItems, observedModelPercentage } from '../../utils/menuBarQuota';
+import { weeklyQuotaItems, effectiveModelQuota } from '../../utils/menuBarQuota';
 /**
  * 账号表格组件
  * 支持拖拽排序功能，用户可以通过拖拽行来调整账号顺序
@@ -162,8 +162,9 @@ function extractAccountResetTime(account: Account, quotaWindow?: '5h' | 'weekly'
         // 5h 或常规视图下，从 models 中获取最近的 reset_time
         const models = account.quota?.models || [];
         for (const model of models) {
-            if (model.reset_time) {
-                const t = new Date(model.reset_time).getTime();
+            const { resetTime } = effectiveModelQuota(model, account.quota);
+            if (resetTime) {
+                const t = new Date(resetTime).getTime();
                 if (!isNaN(t) && (earliestTime === null || t < earliestTime)) {
                     earliestTime = t;
                 }
@@ -438,14 +439,14 @@ function AccountRowContent({
                             ))
                         ) : (
                             displayModels.map((model) => {
-                                const modelData = model.data;
+                                const resolved = effectiveModelQuota(model.data, account.quota);
 
                                 return (
                                     <QuotaItem
                                         key={model.id}
                                         label={model.label}
-                                        percentage={observedModelPercentage(modelData)}
-                                        resetTime={modelData?.reset_time}
+                                        percentage={resolved.percentage}
+                                        resetTime={resolved.resetTime}
                                         isProtected={Boolean(config?.quota_protection?.enabled && isModelProtected(account.protected_models, model.protectedKey))}
                                         Icon={model.Icon || Bot}
                                     />
