@@ -1,4 +1,4 @@
-import { weeklyQuotaItems } from '../../utils/menuBarQuota';
+import { weeklyQuotaItems, observedModelPercentage } from '../../utils/menuBarQuota';
 /**
  * 账号表格组件
  * 支持拖拽排序功能，用户可以通过拖拽行来调整账号顺序
@@ -444,7 +444,7 @@ function AccountRowContent({
                                     <QuotaItem
                                         key={model.id}
                                         label={model.label}
-                                        percentage={modelData?.percentage || 0}
+                                        percentage={observedModelPercentage(modelData)}
                                         resetTime={modelData?.reset_time}
                                         isProtected={Boolean(config?.quota_protection?.enabled && isModelProtected(account.protected_models, model.protectedKey))}
                                         Icon={model.Icon || Bot}

@@ -34,6 +34,8 @@ pub(super) struct QuotaView {
 pub(super) struct ModelView {
     pub(super) name: String,
     pub(super) percentage: i32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) percentage_known: Option<bool>,
     pub(super) reset_time: String,
 }
 #[derive(Debug, Deserialize, Serialize)]
@@ -246,9 +248,9 @@ impl QuotaView {
         }
         for model in &self.models {
             lines.push(format!(
-                "  {}: {}% remaining; resets {}",
+                "  {}: {} remaining; resets {}",
                 terminal_text(&model.name),
-                model.percentage,
+                percentage_text(crate::models::quota::observed_quota_percentage(model.percentage as f64 / 100.0, model.percentage_known)),
                 terminal_text(&model.reset_time)
             ));
         }

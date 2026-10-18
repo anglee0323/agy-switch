@@ -1,4 +1,4 @@
-import { weeklyQuotaItems } from '../../utils/menuBarQuota';
+import { weeklyQuotaItems, observedModelPercentage } from '../../utils/menuBarQuota';
 import { useMemo } from 'react';
 import { Download, ArrowRightLeft, RefreshCw, Trash2, Lock, Ban, Diamond, Gem, Circle, Sparkles, Tag, Clock, GripVertical, BrainCircuit, CheckCircle2 } from 'lucide-react';
 import { Account } from '../../types/account';
@@ -229,7 +229,7 @@ function AccountCard({
                             <QuotaItem
                                 key={model.id}
                                 label={model.label}
-                                percentage={model.data?.percentage || 0}
+                                percentage={observedModelPercentage(model.data)}
                                 resetTime={model.data?.reset_time}
                                 isProtected={isModelProtected(model.protectedKey)}
                                 Icon={model.Icon}

@@ -18,6 +18,7 @@ const {
   compactQuotaGroups,
   weeklyQuotaItems,
   observedPercentage,
+  observedModelPercentage,
   validPercentage,
   lowestKnownQuota,
   isAccountSwitchable,
@@ -45,6 +46,11 @@ test('account weekly labels and knownness preserve a dedicated Argon pool', () =
   assert.equal(weeklyQuotaItems(q)[0].percentage,null);
   q.quota_groups[0].buckets[0].remaining_fraction_known=true;
   assert.equal(weeklyQuotaItems(q)[0].percentage,0);
+});
+test('unknown fused model quota cannot expose an old percentage', () => {
+  assert.equal(observedModelPercentage({name:'gemini-4-argon-high',percentage:100,percentage_known:false,reset_time:''}),null);
+  assert.equal(observedModelPercentage({name:'gemini-4-argon-high',percentage:0,percentage_known:true,reset_time:''}),0);
+  assert.equal(observedModelPercentage(undefined),null);
 });
 test("unknown percentages remain unknown", () => {
   for (const value of [undefined, null, NaN, Infinity, -1, 101, "50"])

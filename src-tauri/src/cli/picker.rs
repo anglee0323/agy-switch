@@ -348,7 +348,7 @@ pub(crate) fn quota_brief(quota: Option<&QuotaView>, lang: Lang) -> String {
             }
         } else {
             for m in q.models.iter().take(2) {
-                parts.push(format!("{}: {}%", m.name, m.percentage));
+                parts.push(format!("{}: {}", m.name, percentage_text(observed_quota_percentage(m.percentage as f64 / 100.0, m.percentage_known))));
             }
         }
         if !parts.is_empty() {
@@ -876,8 +876,8 @@ fn build_accounts_table(accounts: &[AccountView], lang: Lang, selected_idx: Opti
             } else {
                 for m in &q.models {
                     let text = match lang {
-                        Lang::Zh => format!("5小时: {}%\n周限:  -", m.percentage),
-                        Lang::En => format!("5-Hour: {}%\nWeekly: -", m.percentage),
+                        Lang::Zh => format!("5小时: {}\n周限:  -", percentage_text(observed_quota_percentage(m.percentage as f64 / 100.0, m.percentage_known))),
+                        Lang::En => format!("5-Hour: {}\nWeekly: -", percentage_text(observed_quota_percentage(m.percentage as f64 / 100.0, m.percentage_known))),
                     };
                     if m.name.to_lowercase().contains("gemini") {
                         gemini_quota = text;
@@ -1753,11 +1753,11 @@ fn show_single_account_quota(acc: &AccountView, lang: Lang) {
             }
         } else if !q.models.is_empty() {
             for m in &q.models {
-                let bar = progress_bar(m.percentage, 10);
+                let bar = observed_quota_percentage(m.percentage as f64 / 100.0, m.percentage_known).map(|pct| progress_bar(pct, 10)).unwrap_or_else(|| "—".into());
                 let cd = format_countdown(&m.reset_time, lang);
                 q_table.add_row(vec![
                     m.name.clone(),
-                    format!("{}%", m.percentage),
+                    percentage_text(observed_quota_percentage(m.percentage as f64 / 100.0, m.percentage_known)),
                     bar,
                     if cd.is_empty() { "-".into() } else { cd },
                 ]);
@@ -2101,7 +2101,7 @@ fn show_refresh_quotas(root: &Path, lang: Lang) {
                             let cd = format_countdown(&m.reset_time, lang);
                             q_table.add_row(vec![
                                 m.name.clone(),
-                                format!("{}%", m.percentage),
+                                percentage_text(observed_quota_percentage(m.percentage as f64 / 100.0, m.percentage_known)),
                                 if cd.is_empty() { "-".into() } else { cd },
                             ]);
                         }
@@ -2218,7 +2218,7 @@ fn show_refresh_quotas(root: &Path, lang: Lang) {
                             let cd = format_countdown(&m.reset_time, lang);
                             q_table.add_row(vec![
                                 m.name.clone(),
-                                format!("{}%", m.percentage),
+                                percentage_text(observed_quota_percentage(m.percentage as f64 / 100.0, m.percentage_known)),
                                 if cd.is_empty() { "-".into() } else { cd },
                             ]);
                         }
@@ -2640,5 +2640,12 @@ mod presentation_tests {
         bucket.remaining_fraction = 0.0;
         bucket.remaining_fraction_known = Some(false);
         assert!(quota.human("fixture@example.invalid").contains("— remaining"));
+        quota.quota_groups = None;
+        quota.models = serde_json::from_value(serde_json::json!([{"name":"gemini-4-argon-high","percentage":100,"percentage_known":false,"reset_time":""}])).unwrap();
+        assert!(!quota.human("fixture@example.invalid").contains("100%"));
+        assert!(quota_brief(Some(quota), Lang::En).contains("—"));
+        quota.models[0].percentage = 0;
+        quota.models[0].percentage_known = Some(true);
+        assert!(quota.human("fixture@example.invalid").contains("0% remaining"));
     }
 }

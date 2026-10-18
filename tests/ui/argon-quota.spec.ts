@@ -1,6 +1,25 @@
 import { expect, test } from '@playwright/test';
 import { setupSettingsFixture } from './settings-fixture';
 
+for (const language of ['zh', 'en']) for (const view of ['grid', 'list']) test(`unknown Argon model never displays its old percentage in ${view} (${language})`, async ({ page }) => {
+  await page.addInitScript(setupSettingsFixture, { language });
+  await page.addInitScript(({ view }) => {
+    localStorage.setItem('accounts_view_mode', view);
+    localStorage.setItem('accounts_quota_window', '5h');
+    const w = window as any, original = w.__TAURI_INTERNALS__.invoke;
+    w.__TAURI_INTERNALS__.invoke = async (command: string, args: any = {}) => {
+      const value = await original(command, args);
+      if (command === 'load_config') return { ...value, pinned_quota_models: {models:['gemini-4-argon-high']} };
+      if (command === 'list_accounts') return [{id:'fixture',email:'fixture@example.invalid',protected_models:[],created_at:1,last_used:1,
+        quota:{last_updated:1,models:[{name:'gemini-4-argon-high',percentage:100,percentage_known:false,reset_time:''}]}}];
+      return value;
+    };
+  }, { view });
+  await page.goto('/accounts');
+  await expect(page.getByText('—', {exact:true})).toHaveCount(1);
+  await expect(page.getByText('100%', {exact:true})).toHaveCount(0);
+});
+
 for (const language of ['zh', 'en']) for (const view of ['grid', 'list']) test(`Argon has a dedicated weekly bar in account ${view} (${language})`, async ({ page }, info) => {
   await page.addInitScript(setupSettingsFixture, { language });
   await page.addInitScript(({ view }) => {
