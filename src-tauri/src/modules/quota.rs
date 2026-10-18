@@ -106,9 +106,66 @@ struct LoadProjectResponse {
 
 #[derive(Debug, Deserialize)]
 struct Tier {
+    #[serde(rename = "isDefault")]
     is_default: Option<bool>,
     id: Option<String>,
     name: Option<String>,
+}
+
+fn tier_label(tier: &Tier) -> Option<String> {
+    tier.name
+        .as_deref()
+        .or(tier.id.as_deref())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+}
+
+fn extract_subscription_tier(data: &LoadProjectResponse) -> Option<String> {
+    // 1. Paid Tier (Google AI Pro / Google AI Ultra) always takes precedence
+    if let Some(paid) = data.paid_tier.as_ref().and_then(tier_label) {
+        return Some(paid);
+    }
+
+    let is_ineligible = data
+        .ineligible_tiers
+        .as_ref()
+        .is_some_and(|tiers| !tiers.is_empty());
+
+    let default_allowed = data.allowed_tiers.as_ref().and_then(|allowed| {
+        allowed
+            .iter()
+            .find(|t| t.is_default == Some(true))
+            .or_else(|| allowed.first())
+            .and_then(tier_label)
+    });
+
+    if !is_ineligible {
+        // 2. Current Tier or default Allowed Tier
+        data.current_tier
+            .as_ref()
+            .and_then(tier_label)
+            .or(default_allowed)
+    } else {
+        // 3. Account has ineligibleTiers (e.g. VALIDATION_REQUIRED): extract default allowed tier or ineligible tier name
+        default_allowed
+            .or_else(|| data.current_tier.as_ref().and_then(tier_label))
+            .or_else(|| {
+                data.ineligible_tiers
+                    .as_ref()?
+                    .iter()
+                    .find_map(|entry| {
+                        entry
+                            .get("tierName")
+                            .or_else(|| entry.get("tierId"))
+                            .and_then(|v| v.as_str())
+                            .map(str::trim)
+                            .filter(|s| !s.is_empty())
+                            .map(str::to_string)
+                    })
+            })
+            .map(|label| format!("{} (Restricted)", label))
+    }
 }
 
 /// Get shared HTTP Client (15s timeout) for quota and project requests.
@@ -148,46 +205,7 @@ async fn fetch_project_id(access_token: &str, email: &str) -> (Option<String>, O
                 if res.status().is_success() {
                     if let Ok(data) = res.json::<LoadProjectResponse>().await {
                         let project_id = data.project_id.clone();
-
-                        // Core logic: Multi-level fallback for tier extraction
-                        // 1. Paid Tier (Google One AI Premium etc.)
-                        // 2. Current Tier (If not ineligible)
-                        // 3. Allowed tiers (restricted/default account access)
-                        let mut subscription_tier = data
-                            .paid_tier
-                            .as_ref()
-                            .and_then(|t| t.name.clone())
-                            .or_else(|| data.paid_tier.as_ref().and_then(|t| t.id.clone()));
-
-                        let is_ineligible = data.ineligible_tiers.is_some()
-                            && !data.ineligible_tiers.as_ref().unwrap().is_empty();
-
-                        if subscription_tier.is_none() {
-                            if !is_ineligible {
-                                subscription_tier = data
-                                    .current_tier
-                                    .as_ref()
-                                    .and_then(|t| t.name.clone())
-                                    .or_else(|| {
-                                        data.current_tier.as_ref().and_then(|t| t.id.clone())
-                                    });
-                            } else {
-                                // If account is marked as INELIGIBLE, drop to allowedTiers and extract default
-                                if let Some(mut allowed) = data.allowed_tiers {
-                                    if let Some(default_tier) =
-                                        allowed.iter_mut().find(|t| t.is_default == Some(true))
-                                    {
-                                        if let Some(name) = &default_tier.name {
-                                            subscription_tier =
-                                                Some(format!("{} (Restricted)", name));
-                                        } else if let Some(id) = &default_tier.id {
-                                            subscription_tier =
-                                                Some(format!("{} (Restricted)", id));
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        let subscription_tier = extract_subscription_tier(&data);
 
                         if let Some(ref tier) = subscription_tier {
                             crate::modules::logger::log_info(&format!(
@@ -244,12 +262,10 @@ pub async fn fetch_quota_with_cache(
 ) -> crate::error::AppResult<(QuotaData, Option<String>)> {
     use crate::error::AppError;
 
-    // Optimization: Skip loadCodeAssist call if project_id is cached to save API quota
-    let (project_id, subscription_tier) = if let Some(pid) = cached_project_id {
-        (Some(pid.to_string()), None)
-    } else {
-        fetch_project_id(access_token, email).await
-    };
+    // Always query loadCodeAssist so subscription tier upgrades/changes are detected on refresh,
+    // falling back to cached_project_id if loadCodeAssist does not return a project_id.
+    let (fetched_project_id, subscription_tier) = fetch_project_id(access_token, email).await;
+    let project_id = fetched_project_id.or_else(|| cached_project_id.map(str::to_string));
 
     // We keep project_id to store in the DB, but we NO LONGER force inject it into payload if it's absent
 
@@ -439,79 +455,95 @@ async fn fetch_quota_summary(
     project_id: Option<&str>,
 ) -> Option<Vec<crate::models::quota::QuotaGroup>> {
     let client = create_standard_client().await.ok()?;
-    let payload = if let Some(pid) = project_id {
-        json!({ "project": pid })
-    } else {
-        json!({})
-    };
+    let default_project = project_id
+        .map(str::trim)
+        .filter(|pid| !pid.is_empty())
+        .unwrap_or("aicode-consumers");
+    let primary_payload = json!({ "project": default_project });
 
     for ep_url in QUOTA_SUMMARY_ENDPOINTS.iter() {
-        let res = client
-            .post(*ep_url)
-            .bearer_auth(access_token)
-            .header(
-                rquest::header::USER_AGENT,
+        let attempts = [
+            (
                 crate::constants::NATIVE_OAUTH_USER_AGENT.as_str(),
-            )
-            .json(&payload)
-            .send()
-            .await;
+                primary_payload.clone(),
+            ),
+            ("antigravity", primary_payload.clone()),
+            (
+                crate::constants::NATIVE_OAUTH_USER_AGENT.as_str(),
+                json!({}),
+            ),
+        ];
 
-        match res {
-            Ok(response) => {
-                let status = response.status();
-                if !status.is_success() {
-                    crate::modules::logger::log_warn(&format!(
-                        "QuotaSummary API {} returned {}, trying next endpoint",
-                        ep_url, status
-                    ));
-                    continue;
-                }
+        for (attempt_idx, (user_agent, current_payload)) in attempts.iter().enumerate() {
+            let res = client
+                .post(*ep_url)
+                .bearer_auth(access_token)
+                .header(rquest::header::USER_AGENT, *user_agent)
+                .json(current_payload)
+                .send()
+                .await;
 
-                let summary: QuotaSummaryResponse = match response.json().await {
-                    Ok(s) => s,
-                    Err(e) => {
-                        crate::modules::logger::log_warn(&format!(
-                            "QuotaSummary JSON parse failed for {}: {}",
-                            email, e
-                        ));
-                        return None;
+            match res {
+                Ok(response) => {
+                    let status = response.status();
+                    if status == rquest::StatusCode::FORBIDDEN && attempt_idx + 1 < attempts.len() {
+                        continue;
                     }
-                };
+                    if !status.is_success() {
+                        crate::modules::logger::log_warn(&format!(
+                            "QuotaSummary API {} returned {}, trying next endpoint",
+                            ep_url, status
+                        ));
+                        break;
+                    }
 
-                let groups: Vec<crate::models::quota::QuotaGroup> = summary
-                    .groups
-                    .into_iter()
-                    .map(|g| crate::models::quota::QuotaGroup {
-                        display_name: g.display_name.unwrap_or_default(),
-                        description: g.description,
-                        buckets: g
-                            .buckets
-                            .into_iter()
-                            .map(|b| crate::models::quota::QuotaBucket {
-                                bucket_id: b.bucket_id.unwrap_or_default(),
-                                window: b.window.unwrap_or_default(),
-                                remaining_fraction: b.remaining_fraction.unwrap_or(0.0),
-                                remaining_fraction_known: Some(
-                                    crate::models::quota::fraction_is_known(b.remaining_fraction),
-                                ),
-                                reset_time: b.reset_time.unwrap_or_default(),
-                                display_name: b.display_name,
-                                description: b.description,
-                            })
-                            .collect(),
-                    })
-                    .collect();
+                    let summary: QuotaSummaryResponse = match response.json().await {
+                        Ok(s) => s,
+                        Err(e) => {
+                            crate::modules::logger::log_warn(&format!(
+                                "QuotaSummary JSON parse failed for {}: {}",
+                                email, e
+                            ));
+                            return None;
+                        }
+                    };
 
-                tracing::debug!("[{}] QuotaSummary fetched {} groups", email, groups.len());
-                return Some(groups);
-            }
-            Err(e) => {
-                crate::modules::logger::log_warn(&format!(
-                    "QuotaSummary API request failed at {}: {}",
-                    ep_url, e
-                ));
-                continue;
+                    let groups: Vec<crate::models::quota::QuotaGroup> = summary
+                        .groups
+                        .into_iter()
+                        .map(|g| crate::models::quota::QuotaGroup {
+                            display_name: g.display_name.unwrap_or_default(),
+                            description: g.description,
+                            buckets: g
+                                .buckets
+                                .into_iter()
+                                .map(|b| crate::models::quota::QuotaBucket {
+                                    bucket_id: b.bucket_id.unwrap_or_default(),
+                                    window: b.window.unwrap_or_default(),
+                                    remaining_fraction: b.remaining_fraction.unwrap_or(0.0),
+                                    remaining_fraction_known: Some(
+                                        crate::models::quota::fraction_is_known(
+                                            b.remaining_fraction,
+                                        ),
+                                    ),
+                                    reset_time: b.reset_time.unwrap_or_default(),
+                                    display_name: b.display_name,
+                                    description: b.description,
+                                })
+                                .collect(),
+                        })
+                        .collect();
+
+                    tracing::debug!("[{}] QuotaSummary fetched {} groups", email, groups.len());
+                    return Some(groups);
+                }
+                Err(e) => {
+                    crate::modules::logger::log_warn(&format!(
+                        "QuotaSummary API request failed at {}: {}",
+                        ep_url, e
+                    ));
+                    break;
+                }
             }
         }
     }
@@ -618,6 +650,41 @@ mod tests {
         assert_eq!(models[1].percentage, 1);
         assert_eq!(models[1].quota_bucket_id.as_deref(), Some("3p-weekly"));
         assert_eq!(models[1].reset_time, "2030-01-05T12:00:00Z");
+    }
+    #[test]
+    fn extract_subscription_tier_handles_camel_case_is_default_and_paid_tier() {
+        let restricted: LoadProjectResponse = serde_json::from_value(json!({
+            "allowedTiers": [
+                {
+                    "id": "standard-tier",
+                    "name": "Antigravity",
+                    "isDefault": true
+                }
+            ],
+            "ineligibleTiers": [
+                {
+                    "reasonCode": "VALIDATION_REQUIRED",
+                    "tierId": "free-tier",
+                    "tierName": "Antigravity"
+                }
+            ]
+        }))
+        .unwrap();
+        assert_eq!(
+            extract_subscription_tier(&restricted).as_deref(),
+            Some("Antigravity (Restricted)")
+        );
+
+        let ultra: LoadProjectResponse = serde_json::from_value(json!({
+            "cloudaicompanionProject": "aicode-consumers",
+            "currentTier": { "id": "free-tier", "name": "Antigravity" },
+            "paidTier": { "id": "g1-ultra-tier", "name": "Google AI Ultra" }
+        }))
+        .unwrap();
+        assert_eq!(
+            extract_subscription_tier(&ultra).as_deref(),
+            Some("Google AI Ultra")
+        );
     }
     #[test]
     fn production_summary_precedes_successful_but_incomplete_daily_endpoints() {
