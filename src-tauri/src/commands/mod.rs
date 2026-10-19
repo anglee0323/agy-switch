@@ -179,15 +179,33 @@ pub async fn save_account_export(account_ids: Vec<String>, path: String) -> Resu
         .await.map_err(|_| "Account export worker failed.".to_string())?
 }
 
-#[tauri::command]
-pub async fn import_account_transfer(app: tauri::AppHandle, item: crate::models::AccountExportItem) -> Result<Account, String> {
-    let response = modules::oauth::refresh_access_token(&item.refresh_token, item.oauth_client_key.as_deref()).await?;
+async fn import_account_transfer_item(
+    app: &tauri::AppHandle,
+    item: crate::models::AccountExportItem,
+) -> Result<Account, String> {
+    let response = modules::oauth::refresh_access_token_with_client(
+        &item.refresh_token,
+        None,
+        item.oauth_client_key.as_deref(),
+    )
+    .await?;
     let user = modules::oauth::get_user_info(&response.access_token).await?;
-    if user.email.trim().is_empty() || (!item.email.is_empty() && !item.email.eq_ignore_ascii_case(&user.email)) {
+    if user.email.trim().is_empty()
+        || (!item.email.is_empty() && !item.email.eq_ignore_ascii_case(&user.email))
+    {
         return Err("The imported credentials do not match the exported account identity.".into());
     }
-    let token = crate::models::TokenData::new(response.access_token, item.refresh_token, response.expires_in,
-        Some(user.email.clone()), item.project_id, None, item.is_gcp_tos, response.id_token).with_oauth_client_key(response.oauth_client_key);
+    let token = crate::models::TokenData::new(
+        response.access_token,
+        item.refresh_token,
+        response.expires_in,
+        Some(user.email.clone()),
+        item.project_id,
+        None,
+        item.is_gcp_tos,
+        response.id_token,
+    )
+    .with_oauth_client_key(response.oauth_client_key);
     let mut account = modules::account::upsert_account(user.email, item.name.or(user.name), token)?;
     if let Some(label) = item.custom_label {
         let _write = modules::account::lock_account_file_updates()?;
@@ -195,8 +213,41 @@ pub async fn import_account_transfer(app: tauri::AppHandle, item: crate::models:
         account.custom_label = Some(label);
         modules::account::save_account(&account)?;
     }
-    let _ = internal_refresh_account_quota(&app, &mut account).await;
+    let _ = internal_refresh_account_quota(app, &mut account).await;
     Ok(account)
+}
+
+fn parse_export_items_from_json(
+    text: &str,
+) -> Result<Vec<crate::models::AccountExportItem>, String> {
+    let trimmed = text.trim_start_matches('\u{feff}').trim();
+    if let Ok(resp) = serde_json::from_str::<crate::models::AccountExportResponse>(trimmed) {
+        if resp.schema_version != 0 && !matches!(resp.schema_version, 1 | 2) {
+            return Err("Unsupported account export schema version.".into());
+        }
+        if !resp.accounts.is_empty() {
+            return Ok(resp.accounts);
+        }
+    }
+    if let Ok(items) = serde_json::from_str::<Vec<crate::models::AccountExportItem>>(trimmed) {
+        if !items.is_empty() {
+            return Ok(items);
+        }
+    }
+    if let Ok(item) = serde_json::from_str::<crate::models::AccountExportItem>(trimmed) {
+        if !item.refresh_token.trim().is_empty() {
+            return Ok(vec![item]);
+        }
+    }
+    Err("Invalid account export file format.".into())
+}
+
+#[tauri::command]
+pub async fn import_account_transfer(
+    app: tauri::AppHandle,
+    item: crate::models::AccountExportItem,
+) -> Result<Account, String> {
+    import_account_transfer_item(&app, item).await
 }
 
 /// 内部辅助功能：在添加或导入账号后自动刷新一次额度
@@ -411,6 +462,37 @@ pub async fn import_from_db(
 
 #[tauri::command]
 pub async fn import_custom_db(app: tauri::AppHandle, path: String) -> Result<Account, String> {
+    let path_ref = std::path::Path::new(&path);
+    let is_json_ext = path_ref
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("json"));
+    let json_text = std::fs::read_to_string(path_ref).ok().filter(|text| {
+        let trimmed = text.trim_start_matches('\u{feff}').trim_start();
+        is_json_ext || trimmed.starts_with('{') || trimmed.starts_with('[')
+    });
+
+    if let Some(text) = json_text {
+        let items = parse_export_items_from_json(&text)?;
+        let mut last_account = None;
+        let mut errors = Vec::new();
+        for item in items {
+            match import_account_transfer_item(&app, item).await {
+                Ok(acc) => last_account = Some(acc),
+                Err(e) => errors.push(e),
+            }
+        }
+        crate::modules::tray::update_tray_menus(&app);
+        let _ = app.emit("accounts://refreshed", ());
+        if let Some(account) = last_account {
+            return Ok(account);
+        }
+        return Err(errors
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| "No accounts imported from export file.".into()));
+    }
+
     // 调用重构后的自定义导入函数
     let mut account = modules::migration::import_from_custom_db_path(path).await?;
 
