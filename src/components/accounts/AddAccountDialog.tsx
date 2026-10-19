@@ -421,6 +421,12 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
             const selected = await open({
                 multiple: false,
                 filters: [{
+                    name: 'Account Export / VSCode DB',
+                    extensions: ['json', 'vscdb']
+                }, {
+                    name: 'JSON Export',
+                    extensions: ['json']
+                }, {
                     name: 'VSCode DB',
                     extensions: ['vscdb']
                 }, {
