@@ -718,6 +718,7 @@ mod tests {
         let server = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
         let address = server.local_addr().unwrap();
         let pid = std::process::id();
+        let (release, released) = std::sync::mpsc::channel();
         let worker = std::thread::spawn(move || {
             let (stream, _) = server.accept().unwrap();
             stream
@@ -725,7 +726,8 @@ mod tests {
                 .unwrap();
             let mut ws = tungstenite::accept(stream).unwrap();
             let _ = ws.read().unwrap();
-            std::thread::sleep(TIMEOUT + Duration::from_millis(100));
+            // Keep the peer open until the client returns instead of racing its deadline.
+            released.recv_timeout(Duration::from_secs(10)).unwrap();
         });
         let listener = VerifiedListener::from_complete_observation(
             address.port(),
@@ -742,12 +744,12 @@ mod tests {
         )
         .unwrap();
         let started = Instant::now();
-        assert!(matches!(
-            CdpTransport::connect(endpoint),
-            Err(TransportError::Timeout)
-        ));
-        assert!(started.elapsed() < Duration::from_secs(5));
+        let error = CdpTransport::connect(endpoint).err();
+        let elapsed = started.elapsed();
+        release.send(()).unwrap();
         worker.join().unwrap();
+        assert_eq!(error, Some(TransportError::Timeout));
+        assert!(elapsed < Duration::from_secs(5));
     }
 
     #[test]
