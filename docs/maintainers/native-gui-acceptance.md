@@ -136,4 +136,13 @@ The [release CLI run](https://github.com/anglee0323/agy-switch/actions/runs/3732
 
 ## Integrated 4.9.1 test build
 
-The [final main Build](https://github.com/anglee0323/agy-switch/actions/runs/37356704254) checked out `a9b5bee75f4d0feaa4a181dc8b4a7ba73710cc0f`, the v4.9.1 release source. Windows and Linux each record `status: passed`, `passed: true`, seven native captures with no overflow, real Rust IPC and completed cleanup. The compact dashboard uses the full AntiGravity Switch name. These are hosted debug viewport tests, separate from actual package installation and live account switching. Current public-package results are in [4.9.1 verification](4.9.1-public-acceptance.md).
+The [final main Build](https://github.com/anglee0323/agy-switch/actions/runs/37356704254) checked out `a9b5bee75f4d0feaa4a181dc8b4a7ba73710cc0f`, the v4.9.1 release source. Windows and Linux each record `status: passed`, `passed: true`, seven native captures with no overflow, real Rust IPC and completed cleanup. The compact dashboard uses the full AntiGravity Switch name. These are hosted debug viewport tests, separate from actual package installation and live account switching. Its public-package results are in [4.9.1 verification](4.9.1-public-acceptance.md).
+
+## Integrated 4.10.9 release
+
+The final main Build and optimized CLI checks passed at `a4b521dc4dcfdd3d8d384dc79146b7a7fd568d75`.
+Windows and Linux native reports each contain seven SHA-verified captures, real
+Rust IPC and completed cleanup; representative final Dashboard/narrow Settings
+captures were inspected. The macOS AppKit lifecycle lane passed.
+See [4.10.9 public verification](4.10.9-public-acceptance.md) for the
+exact workflows, public byte/signature checks and live-account limits.
