@@ -1504,19 +1504,10 @@ pub(crate) fn write_account_export(export: &crate::models::AccountExportResponse
     Ok(export.accounts.len())
 }
 
-/// Reuse a cached project ID only after a subscription tier has been recorded.
-/// New accounts may already have the generic `aicode-consumers` project ID, but
-/// still need one loadCodeAssist request to discover whether they are PRO/ULTRA.
+/// Project fallback is independent of tier discovery: quota refresh always
+/// queries loadCodeAssist, including accounts whose plan is still unknown.
 fn cached_project_id_for_quota(account: &Account) -> Option<&str> {
-    let has_subscription_tier = account
-        .quota
-        .as_ref()
-        .and_then(|quota| quota.subscription_tier.as_deref())
-        .is_some_and(|tier| !tier.trim().is_empty());
-
-    has_subscription_tier
-        .then(|| account.token.project_id.as_deref())
-        .flatten()
+    account.token.project_id.as_deref().map(str::trim).filter(|id| !id.is_empty())
 }
 
 /// Quota query with retry (moved from commands to modules for reuse)
@@ -1590,9 +1581,7 @@ pub async fn fetch_quota_with_retry(account: &mut Account) -> crate::error::AppR
         }
     }
 
-    // 2. Query quota. A missing tier must trigger loadCodeAssist at least once;
-    // otherwise a newly added account with a cached project_id never gets its
-    // subscription tier persisted and the UI cannot show PRO/ULTRA.
+    // 2. Query fresh quota and subscription tier, retaining the project fallback.
     let cached_project_id = cached_project_id_for_quota(account);
     let result: crate::error::AppResult<(QuotaData, Option<String>)> =
         modules::fetch_quota_with_cache(

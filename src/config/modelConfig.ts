@@ -440,7 +440,7 @@ export function getDisplayQuotaModels(
             label,
             protectedKey,
             Icon,
-            data: rawModel || ({ name: canonKey, percentage: 0 } as ModelQuota),
+            data: rawModel || ({ name: canonKey, percentage: 0, percentage_known: false, reset_time: '' } as ModelQuota),
         });
     }
 

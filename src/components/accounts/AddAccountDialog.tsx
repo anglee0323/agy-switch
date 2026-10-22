@@ -436,10 +436,23 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
             });
 
             if (selected && typeof selected === 'string') {
-                handleAction(t('accounts.add.import.file_btn'), () => importFromCustomDb(selected));
+                setStatus('loading');
+                setMessage(t('accounts.add.import.file_btn') + '…');
+                const report = await importFromCustomDb(selected);
+                if (report.failed > 0) {
+                    setStatus(report.imported > 0 ? 'success' : 'error');
+                    setMessage(report.imported > 0
+                        ? t('accounts.add.token.batch_partial', { success: report.imported, fail: report.failed })
+                        : t('accounts.add.token.batch_fail'));
+                } else {
+                    setStatus('success');
+                    setMessage(t('accounts.add.token.batch_success', { count: report.imported }));
+                    closeTimerRef.current = setTimeout(() => { setIsOpen(false); resetState(); }, 1500);
+                }
             }
         } catch (err) {
-            console.error('Failed to open dialog:', err);
+            setStatus('error');
+            setMessage(String(err));
         }
     };
 

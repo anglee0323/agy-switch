@@ -67,11 +67,11 @@ export function effectiveModelQuota(
 ): { percentage: number | null; resetTime?: string } {
   const basePercentage = observedModelPercentage(model);
   const baseResetTime = model?.reset_time;
-  if (basePercentage === null || !model?.name || !quota?.quota_groups?.length) {
+  if (!model?.name || !quota?.quota_groups?.length) {
     return { percentage: basePercentage, resetTime: baseResetTime };
   }
   const pool = modelQuotaPoolKind(model.name, model.display_name);
-  if (!pool) {
+  if (!pool || (basePercentage === null && pool !== 'argon')) {
     return { percentage: basePercentage, resetTime: baseResetTime };
   }
   const buckets = quota.quota_groups.flatMap(group =>
@@ -81,12 +81,25 @@ export function effectiveModelQuota(
     return { percentage: basePercentage, resetTime: baseResetTime };
   }
   let best: { percentage: number; resetTime: string; is5h: boolean } | null = null;
+  const windows = new Map<string, typeof buckets[number]>();
   for (const bucket of buckets) {
+    const window = bucket.window.trim().toLowerCase();
+    if (!['5h', 'weekly'].includes(window) || (pool === 'argon' && window !== 'weekly')) {
+      return { percentage: null };
+    }
+    const previous = windows.get(window);
+    if (previous && (previous.bucket_id !== bucket.bucket_id ||
+      previous.remaining_fraction !== bucket.remaining_fraction ||
+      previous.remaining_fraction_known !== bucket.remaining_fraction_known ||
+      previous.reset_time !== bucket.reset_time)) {
+      return { percentage: null };
+    }
+    windows.set(window, bucket);
     const pct = observedPercentage(bucket.remaining_fraction, bucket.remaining_fraction_known, true);
     if (pct === null) {
       return { percentage: null, resetTime: baseResetTime };
     }
-    const is5h = bucket.window.trim().toLowerCase() === '5h';
+    const is5h = window === '5h';
     if (
       !best ||
       pct < best.percentage ||
@@ -95,7 +108,7 @@ export function effectiveModelQuota(
       best = { percentage: pct, resetTime: bucket.reset_time || baseResetTime || '', is5h };
     }
   }
-  if (!best || basePercentage < best.percentage) {
+  if (!best || (basePercentage !== null && basePercentage < best.percentage)) {
     return { percentage: basePercentage, resetTime: baseResetTime };
   }
   return { percentage: best.percentage, resetTime: best.resetTime };

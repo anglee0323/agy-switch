@@ -83,6 +83,11 @@ impl DesktopIntegration {
         if (is_ide_mode || is_vscode_mode) && candidate_dbs.is_empty() {
             return Err("No initialized database found for the selected client. Open and sign in to it first, or configure its executable path in Settings.".into());
         }
+        // A standalone agy Hub can outlive the App and retain its old session.
+        // Observe it before closing anything; unknown ownership must block writes.
+        let hubs = if is_ide_mode || is_vscode_mode { vec![] } else {
+            crate::modules::app_hub::snapshot().map_err(|_| "Cannot verify the Antigravity App Hub. Finish running agy commands before retrying.")?
+        };
         let app_running = if is_ide_mode || is_vscode_mode { false } else { process::is_antigravity_running(None) };
         let ide_running = if is_app_cli_mode || is_vscode_mode { false } else { process::is_antigravity_running(Some("ide")) };
 
@@ -105,7 +110,11 @@ impl DesktopIntegration {
             }
         }
 
-        write_client_storage(account, target_ide, &candidate_dbs, dirs::home_dir().as_deref(), || write_to_system_keyring(account, false))?;
+        update_client_credentials(
+            || crate::modules::app_hub::close(&hubs, false).map_err(|_| "Cannot stop the Antigravity App Hub; credentials were not changed.".into()),
+            || write_client_storage(account, target_ide, &candidate_dbs, dirs::home_dir().as_deref(), || write_to_system_keyring(account, false)),
+            || crate::modules::app_hub::restart(&hubs),
+        )?;
 
         // 3. 智能联动重启：刚才开着哪个，就重新拉起哪个（VS Code 插件免重启）
         if is_vscode_mode {
@@ -132,6 +141,19 @@ impl DesktopIntegration {
 
         Ok(())
     }
+}
+
+/// Restart the observed Hub even after a failed write. Start it before the App
+/// can reconnect, so its cached credentials cannot win a race with the switch.
+fn update_client_credentials(
+    stop: impl FnOnce() -> Result<(), String>,
+    write: impl FnOnce() -> Result<(), String>,
+    restart: impl FnOnce() -> Result<(), String>,
+) -> Result<(), String> {
+    stop()?;
+    let written = write();
+    let restarted = restart();
+    written.and(restarted)
 }
 
 /// Credential writes are scoped separately from process control for isolated verification.
@@ -623,6 +645,22 @@ mod linux_tests {
 mod scope_tests {
     use super::*;
     use crate::models::{Account, TokenData};
+
+    #[test]
+    fn manual_switch_stops_old_hub_before_writing_and_recovers_on_failure() {
+        use std::cell::RefCell;
+        for fail in ["", "stop", "write", "restart"] {
+            let calls = RefCell::new(Vec::new());
+            let operation = |name| {
+                calls.borrow_mut().push(name);
+                if fail == name { Err(format!("fixture-{name}")) } else { Ok(()) }
+            };
+            let result = update_client_credentials(|| operation("stop"), || operation("write"), || operation("restart"));
+            assert_eq!(result.is_ok(), fail.is_empty());
+            assert_eq!(*calls.borrow(), if fail == "stop" { vec!["stop"] } else { vec!["stop", "write", "restart"] });
+            if !fail.is_empty() { assert_eq!(result.unwrap_err(), format!("fixture-{fail}")); }
+        }
+    }
 
     #[test]
     fn shared_data_directories_are_rejected_before_switching() {
