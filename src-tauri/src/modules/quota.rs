@@ -3,11 +3,11 @@ use rquest;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-// Quota API endpoints (fallback order: Sandbox → Daily → Prod)
+// Prefer the production model catalog and fall back for endpoint availability.
 const QUOTA_API_ENDPOINTS: [&str; 3] = [
-    "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:fetchAvailableModels",
-    "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
     "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
+    "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
+    "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:fetchAvailableModels",
 ];
 
 // Production serves the complete shared quota; daily can return HTTP 200 with only 3p.
@@ -115,9 +115,9 @@ struct Tier {
 fn tier_label(tier: &Tier) -> Option<String> {
     tier.name
         .as_deref()
-        .or(tier.id.as_deref())
         .map(str::trim)
         .filter(|s| !s.is_empty())
+        .or_else(|| tier.id.as_deref().map(str::trim).filter(|s| !s.is_empty()))
         .map(str::to_string)
 }
 
@@ -136,7 +136,6 @@ fn extract_subscription_tier(data: &LoadProjectResponse) -> Option<String> {
         allowed
             .iter()
             .find(|t| t.is_default == Some(true))
-            .or_else(|| allowed.first())
             .and_then(tier_label)
     });
 
@@ -147,23 +146,9 @@ fn extract_subscription_tier(data: &LoadProjectResponse) -> Option<String> {
             .and_then(tier_label)
             .or(default_allowed)
     } else {
-        // 3. Account has ineligibleTiers (e.g. VALIDATION_REQUIRED): extract default allowed tier or ineligible tier name
+        // Restrictions do not establish entitlement to an offered paid tier.
         default_allowed
             .or_else(|| data.current_tier.as_ref().and_then(tier_label))
-            .or_else(|| {
-                data.ineligible_tiers
-                    .as_ref()?
-                    .iter()
-                    .find_map(|entry| {
-                        entry
-                            .get("tierName")
-                            .or_else(|| entry.get("tierId"))
-                            .and_then(|v| v.as_str())
-                            .map(str::trim)
-                            .filter(|s| !s.is_empty())
-                            .map(str::to_string)
-                    })
-            })
             .map(|label| format!("{} (Restricted)", label))
     }
 }
@@ -312,6 +297,9 @@ pub async fn fetch_quota_with_cache(
                                 continue;
                             }
 
+                            if has_next {
+                                break;
+                            }
                             crate::modules::logger::log_warn(&format!(
                                 "Account unauthorized (403 Forbidden), marking as forbidden"
                             ));
@@ -360,42 +348,8 @@ pub async fn fetch_quota_with_cache(
                     tracing::debug!("Quota API returned {} models", quota_response.models.len());
 
                     for (name, info) in quota_response.models {
-                        if let Some(quota_info) = info.quota_info {
-                            let percentage = quota_info
-                                .remaining_fraction
-                                .map(|f| (f * 100.0) as i32)
-                                .unwrap_or(0);
-
-                            let reset_time = quota_info.reset_time.clone().unwrap_or_default();
-
-                            // Only keep models we care about (exclude internal chat models)
-                            if name.starts_with("gemini")
-                                || name.starts_with("claude")
-                                || name.starts_with("gpt")
-                                || name.starts_with("image")
-                                || name.starts_with("imagen")
-                            {
-                                let model_quota = crate::models::quota::ModelQuota {
-                                    name,
-                                    percentage,
-                                    percentage_known: Some(
-                                        crate::models::quota::fraction_is_known(quota_info.remaining_fraction),
-                                    ),
-                                    observed_remaining_fraction: quota_info.remaining_fraction
-                                        .filter(|f| crate::models::quota::fraction_is_known(Some(*f))),
-                                    quota_bucket_id: None,
-                                    reset_time,
-                                    display_name: info.display_name,
-                                    supports_images: info.supports_images,
-                                    supports_thinking: info.supports_thinking,
-                                    thinking_budget: info.thinking_budget,
-                                    recommended: info.recommended,
-                                    max_tokens: info.max_tokens,
-                                    max_output_tokens: info.max_output_tokens,
-                                    supported_mime_types: info.supported_mime_types,
-                                };
-                                quota_data.add_model(model_quota);
-                            }
+                        if let Some(model) = model_from_info(name, info) {
+                            quota_data.add_model(model);
                         }
                     }
 
@@ -445,6 +399,25 @@ pub async fn fetch_quota_with_cache(
     }))
 }
 
+fn model_from_info(name: String, info: ModelInfo) -> Option<crate::models::quota::ModelQuota> {
+    if !["gemini", "claude", "gpt", "image", "imagen"].iter().any(|prefix| name.starts_with(prefix)) {
+        return None;
+    }
+    let observation = info.quota_info;
+    let fraction = observation.as_ref().and_then(|q| q.remaining_fraction)
+        .filter(|f| crate::models::quota::fraction_is_known(Some(*f)));
+    Some(crate::models::quota::ModelQuota {
+        name, percentage: fraction.map(|f| (f * 100.0).round() as i32).unwrap_or(0),
+        percentage_known: Some(fraction.is_some()), observed_remaining_fraction: fraction,
+        quota_bucket_id: None,
+        reset_time: observation.and_then(|q| q.reset_time).unwrap_or_default(),
+        display_name: info.display_name, supports_images: info.supports_images,
+        supports_thinking: info.supports_thinking, thinking_budget: info.thinking_budget,
+        recommended: info.recommended, max_tokens: info.max_tokens,
+        max_output_tokens: info.max_output_tokens, supported_mime_types: info.supported_mime_types,
+    })
+}
+
 /// Fetch grouped quota summary (weekly + 5h windows) via retrieveUserQuotaSummary.
 ///
 /// Best-effort: returns `None` on any failure so that the primary 5h quota fetch
@@ -455,13 +428,19 @@ async fn fetch_quota_summary(
     project_id: Option<&str>,
 ) -> Option<Vec<crate::models::quota::QuotaGroup>> {
     let client = create_standard_client().await.ok()?;
+    fetch_quota_summary_from_endpoints(&client, access_token, email, project_id, &QUOTA_SUMMARY_ENDPOINTS).await
+}
+
+async fn fetch_quota_summary_from_endpoints(
+    client: &rquest::Client, access_token: &str, email: &str, project_id: Option<&str>, endpoints: &[&str],
+) -> Option<Vec<crate::models::quota::QuotaGroup>> {
     let default_project = project_id
         .map(str::trim)
         .filter(|pid| !pid.is_empty())
         .unwrap_or("aicode-consumers");
     let primary_payload = json!({ "project": default_project });
 
-    for ep_url in QUOTA_SUMMARY_ENDPOINTS.iter() {
+    for ep_url in endpoints {
         let attempts = [
             (
                 crate::constants::NATIVE_OAUTH_USER_AGENT.as_str(),
@@ -504,7 +483,7 @@ async fn fetch_quota_summary(
                                 "QuotaSummary JSON parse failed for {}: {}",
                                 email, e
                             ));
-                            return None;
+                            break;
                         }
                     };
 
@@ -534,6 +513,7 @@ async fn fetch_quota_summary(
                         })
                         .collect();
 
+                    if groups.iter().all(|g| g.buckets.is_empty()) { break; }
                     tracing::debug!("[{}] QuotaSummary fetched {} groups", email, groups.len());
                     return Some(groups);
                 }
@@ -590,6 +570,15 @@ fn fuse_model_quotas(models: &mut [crate::models::quota::ModelQuota], groups: &[
             (None, None) => None,
         };
         let Some((bucket, conflict, known)) = selected else { continue; };
+        // The model response can carry an additional, tighter constraint. A
+        // shared summary must never increase that observed allowance.
+        if known && model.percentage_known != Some(false)
+            && model.observed_remaining_fraction.is_some_and(|fraction|
+                crate::models::quota::fraction_is_known(Some(fraction)) && fraction < bucket.remaining_fraction)
+        {
+            model.quota_bucket_id = None;
+            continue;
+        }
         model.percentage_known = Some(known);
         model.observed_remaining_fraction = known.then_some(bucket.remaining_fraction);
         model.quota_bucket_id = (!conflict && !bucket.bucket_id.is_empty()).then(|| bucket.bucket_id.clone());
@@ -685,6 +674,121 @@ mod tests {
             extract_subscription_tier(&ultra).as_deref(),
             Some("Google AI Ultra")
         );
+    }
+    #[test]
+    fn catalog_models_without_quota_info_remain_selectable_but_unknown() {
+        let info: ModelInfo = serde_json::from_value(json!({"displayName":"Gemini 4 Argon"})).unwrap();
+        let model = model_from_info("gemini-4-argon".into(), info).unwrap();
+        assert_eq!(model.percentage_known, Some(false));
+        assert_eq!(model.observed_remaining_fraction, None);
+        assert_eq!(model.display_name.as_deref(), Some("Gemini 4 Argon"));
+    }
+    #[test]
+    fn offered_tiers_are_not_proof_of_a_subscription() {
+        let offered: LoadProjectResponse = serde_json::from_value(json!({
+            "allowedTiers":[{"id":"g1-ultra-tier","name":"Google AI Ultra"}]
+        })).unwrap();
+        assert_eq!(extract_subscription_tier(&offered), None);
+        let blank: LoadProjectResponse = serde_json::from_value(json!({
+            "paidTier":{"id":"g1-pro-tier","name":"  "}
+        })).unwrap();
+        assert_eq!(extract_subscription_tier(&blank).as_deref(), Some("g1-pro-tier"));
+    }
+    #[test]
+    fn exhausted_weekly_and_conflicting_windows_never_appear_full() {
+        let mut groups: Vec<crate::models::quota::QuotaGroup> = serde_json::from_value(json!([
+            {"display_name":"Gemini","buckets":[
+                {"bucket_id":"gemini-5h","window":"5h","remaining_fraction":1.0,"remaining_fraction_known":true,"reset_time":"2030-01-01T00:00:00Z"},
+                {"bucket_id":"gemini-weekly","window":"weekly","remaining_fraction":0.0,"remaining_fraction_known":true,"reset_time":"2030-01-07T00:00:00Z"}
+            ]}
+        ])).unwrap();
+        let mut models: Vec<crate::models::quota::ModelQuota> = serde_json::from_value(json!([
+            {"name":"gemini-test","percentage":100,"reset_time":""}
+        ])).unwrap();
+        fuse_model_quotas(&mut models, &groups);
+        assert_eq!(models[0].percentage, 0);
+        assert_eq!(models[0].percentage_known, Some(true));
+        assert_eq!(models[0].reset_time, "2030-01-07T00:00:00Z");
+        let mut conflict = groups[0].buckets[1].clone();
+        conflict.remaining_fraction = 0.5;
+        groups[0].buckets.push(conflict);
+        fuse_model_quotas(&mut models, &groups);
+        assert_eq!(models[0].percentage_known, Some(false));
+        assert_eq!(models[0].observed_remaining_fraction, None);
+        assert_eq!(models[0].quota_bucket_id, None);
+    }
+    #[test]
+    fn shared_summary_cannot_increase_a_lower_model_observation() {
+        let mut model = model_from_info("gemini-test".into(), serde_json::from_value(json!({
+            "quotaInfo":{"remainingFraction":0.12,"resetTime":"2030-01-01T00:00:00Z"}
+        })).unwrap()).unwrap();
+        let groups = serde_json::from_value::<Vec<crate::models::quota::QuotaGroup>>(json!([
+            {"display_name":"Gemini","buckets":[{"bucket_id":"gemini-5h","window":"5h","remaining_fraction":1.0,"remaining_fraction_known":true,"reset_time":"2030-01-07T00:00:00Z"}]}
+        ])).unwrap();
+        fuse_model_quotas(std::slice::from_mut(&mut model), &groups);
+        assert_eq!(model.percentage, 12);
+        assert_eq!(model.reset_time, "2030-01-01T00:00:00Z");
+        assert_eq!(model.quota_bucket_id, None);
+    }
+
+    fn summary_server(responses: Vec<(u16, &'static str)>) -> (String, std::thread::JoinHandle<Vec<String>>) {
+        use std::io::{BufRead, Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let thread = std::thread::spawn(move || {
+            let mut requests = Vec::new();
+            for (status, body) in responses {
+                let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+                let mut socket = loop {
+                    if let Ok((socket, _)) = listener.accept() { break socket; }
+                    assert!(std::time::Instant::now() < deadline, "fixture request timed out");
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                };
+                socket.set_read_timeout(Some(std::time::Duration::from_secs(3))).unwrap();
+                let mut reader = std::io::BufReader::new(&mut socket);
+                let mut request = String::new();
+                let mut length = 0;
+                loop {
+                    let mut line = String::new();
+                    reader.read_line(&mut line).unwrap();
+                    if line.to_ascii_lowercase().starts_with("content-length:") {
+                        length = line.split_once(':').unwrap().1.trim().parse::<usize>().unwrap();
+                    }
+                    request.push_str(&line);
+                    if line == "\r\n" { break; }
+                }
+                let mut payload = vec![0; length];
+                reader.read_exact(&mut payload).unwrap();
+                request.push_str(std::str::from_utf8(&payload).unwrap());
+                requests.push(request);
+                write!(socket, "HTTP/1.1 {status} Fixture\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+            }
+            requests
+        });
+        (url, thread)
+    }
+    const SUMMARY: &str = r#"{"groups":[{"displayName":"Gemini","buckets":[{"bucketId":"gemini-weekly","window":"weekly","remainingFraction":0,"resetTime":"2030-01-07T00:00:00Z"}]}]}"#;
+
+    #[tokio::test]
+    async fn summary_permission_retry_preserves_project_and_known_zero() {
+        let (url, server) = summary_server(vec![(403,"{}"), (200,SUMMARY)]);
+        let client = rquest::Client::builder().no_proxy().build().unwrap();
+        let result = fetch_quota_summary_from_endpoints(&client, "fixture", "fixture@example.invalid", None, &[&url]).await.unwrap();
+        assert_eq!(result[0].buckets[0].remaining_fraction_known, Some(true));
+        assert_eq!(result[0].buckets[0].remaining_fraction, 0.0);
+        let requests = server.join().unwrap();
+        assert!(requests[1].to_ascii_lowercase().contains("user-agent: antigravity\r\n"));
+        assert!(requests.iter().all(|r| r.contains(r#""project":"aicode-consumers""#)));
+    }
+    #[tokio::test]
+    async fn invalid_and_empty_summaries_fall_back_without_merging_environments() {
+        let (url, server) = summary_server(vec![(200,"bad-json"), (200,r#"{"groups":[]}"#), (200,SUMMARY)]);
+        let endpoints = [format!("{url}/0"),format!("{url}/1"),format!("{url}/2")];
+        let client = rquest::Client::builder().no_proxy().build().unwrap();
+        let result = fetch_quota_summary_from_endpoints(&client, "fixture", "fixture@example.invalid", Some("fixture-project"), &endpoints.iter().map(String::as_str).collect::<Vec<_>>()).await.unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(server.join().unwrap().len(), 3);
     }
     #[test]
     fn production_summary_precedes_successful_but_incomplete_daily_endpoints() {

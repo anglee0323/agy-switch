@@ -74,3 +74,25 @@ test('network defaults to system and automatically applies a manual fallback', a
     await expect.poll(() => page.evaluate(() => (window as any).__settingsFixture.calls.filter((call: any) => call.command === 'save_config').at(-1)?.args.config.network)).toEqual({ proxy_mode: 'manual', proxy_url: 'socks5h://127.0.0.1:7891' });
     await page.screenshot({ path: info.outputPath('network-settings.png') });
 });
+
+for (const imported of [0, 1]) test(`native file picker reports JSON import failures (${imported} imported)`, async ({ page }) => {
+    await page.evaluate(imported => {
+        const w = window as any, original = w.__TAURI_INTERNALS__.invoke;
+        w.__TAURI_INTERNALS__.invoke = async (command: string, args: any = {}) => {
+            if (command === 'plugin:dialog|open') {
+                w.__fileFilters = args.options.filters;
+                return '/synthetic/antigravity-accounts.json';
+            }
+            if (command === 'import_custom_db') return { imported, failed: 1 };
+            return original(command, args);
+        };
+    }, imported);
+    await page.getByTitle('添加账号', { exact: true }).click();
+    await page.getByText('从本机导入', { exact: true }).click();
+    await page.getByRole('button', { name: '选择文件…', exact: true }).click();
+    await expect(page.getByText(imported ? '导入完成: 1 个成功, 1 个失败' : '导入失败', { exact: true })).toBeVisible();
+    expect(await page.evaluate(() => (window as any).__fileFilters.some((filter: any) => filter.extensions.includes('json')))).toBe(true);
+    await page.waitForTimeout(1600);
+    await expect(page.getByRole('heading', { name: '添加新账号', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: '取消', exact: true })).toBeEnabled();
+});

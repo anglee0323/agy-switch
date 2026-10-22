@@ -102,6 +102,7 @@ jobs:
 
       - name: Test native background schedules and coalescing
         run: |
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib modules::quota::tests
           cargo test --locked --manifest-path src-tauri/Cargo.toml --lib quota_refresh::tests
           cargo test --locked --manifest-path src-tauri/Cargo.toml --lib account_sync::tests
 

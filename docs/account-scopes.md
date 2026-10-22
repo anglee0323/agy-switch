@@ -6,6 +6,12 @@ long-running agy commands can retain an old session; start a new command after
 switching. IDE switching updates only the IDE databases and device data, closes
 and reopens only a running IDE, and keeps App/CLI and plugin credentials untouched.
 
+On macOS, manual switching also stops an independently running, verified App-data
+Hub before writing credentials and restarts it before reopening the App. Otherwise
+that process can retain the previous session after the window closes. Unverifiable
+Hub ownership or a failed close blocks the write. This does not establish live
+switching acceptance on every Antigravity version or platform.
+
 The account page and native menu switch App and CLI together without a client
 selector. Explicit IDE switching remains available through the management CLI
 and smart-switch policy. Selections are recorded separately; a saved selection
@@ -57,6 +63,11 @@ They omit access tokens, device identifiers and quota caches. On Unix the saved
 file uses mode 0600. The add-account dialog accepts that file, older token-only JSON
 and pasted refresh tokens; restored accounts are validated before saving.
 Exported files contain login credentials and should be kept private.
+
+The local-import file picker accepts JSON exports as well as SQLite databases.
+JSON batches are validated before importing; partial failures are counted and
+remain visible instead of being reported as complete success. The exported OAuth
+client key is used when validating restored credentials.
 
 ## Network routing
 

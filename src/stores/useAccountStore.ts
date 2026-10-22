@@ -24,7 +24,7 @@ interface AccountState {
     completeOAuthLogin: () => Promise<void>;
     cancelOAuthLogin: () => Promise<void>;
     importFromDb: () => Promise<void>;
-    importFromCustomDb: (path: string) => Promise<void>;
+    importFromCustomDb: (path: string) => Promise<accountService.AccountFileImportReport>;
     syncAccountFromDb: () => Promise<void>;
     updateAccountLabel: (accountId: string, label: string) => Promise<void>;
 }
@@ -226,12 +226,13 @@ export const useAccountStore = create<AccountState>((set, get) => ({
     importFromCustomDb: async (path: string) => {
         set({ loading: true, error: null });
         try {
-            await accountService.importFromCustomDb(path);
+            const report = await accountService.importFromCustomDb(path);
             await Promise.all([
                 get().fetchAccounts(),
                 get().fetchCurrentAccount()
             ]);
             set({ loading: false });
+            return report;
         } catch (error) {
             set({ error: String(error), loading: false });
             throw error;

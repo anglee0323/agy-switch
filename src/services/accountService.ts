@@ -132,7 +132,8 @@ export async function importFromDb(targetIde?: string): Promise<Account[]> {
     return res ? [res] : [];
 }
 
-export async function importFromCustomDb(path: string): Promise<Account> {
+export interface AccountFileImportReport { imported: number; failed: number; }
+export async function importFromCustomDb(path: string): Promise<AccountFileImportReport> {
     return await invoke('import_custom_db', { path });
 }
 

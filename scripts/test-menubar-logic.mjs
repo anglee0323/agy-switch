@@ -74,6 +74,20 @@ test('effective model quota caps 5h observation when weekly pool is more restric
   assert.equal(resolved.resetTime, '2030-01-05T12:00:00Z');
   assert.equal(effectiveModelQuota({ name: 'claude-sonnet-4-6', percentage: 0, reset_time: '' }, quota).percentage, null);
 });
+test('effective quota preserves Argon independence and rejects conflicting observations', () => {
+  const bucket = (id, window, remaining_fraction) => ({ bucket_id:id, window, remaining_fraction, remaining_fraction_known:true, reset_time:'2030-01-07T00:00:00Z' });
+  const quota = {quota_groups:[
+    {display_name:'Gemini',buckets:[bucket('gemini-5h','5h',1),bucket('gemini-weekly','weekly',0)]},
+    {display_name:'Gemini 4 Argon',buckets:[bucket('gemini-argon-wtu-weekly','weekly',.6)]},
+  ]};
+  const model = {name:'gemini-3.8-flash',percentage:100,percentage_known:true,reset_time:''};
+  assert.equal(effectiveModelQuota(model, quota).percentage,0);
+  assert.equal(effectiveModelQuota({name:'gemini-4-argon',percentage:0,percentage_known:false},quota).percentage,60);
+  assert.equal(effectiveModelQuota({name:'gemini-4-argon',percentage:0,percentage_known:false},{quota_groups:[]}).percentage,null);
+  quota.quota_groups[0].buckets.push(bucket('gemini-weekly','weekly',.3));
+  assert.equal(effectiveModelQuota(model,quota).percentage,null);
+  assert.equal(effectiveModelQuota({name:'gemini-4-argon',percentage:0,percentage_known:false},quota).percentage,60);
+});
 test("unknown percentages remain unknown", () => {
   for (const value of [undefined, null, NaN, Infinity, -1, 101, "50"])
     assert.equal(validPercentage(value), null);

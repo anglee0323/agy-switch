@@ -221,25 +221,28 @@ fn parse_export_items_from_json(
     text: &str,
 ) -> Result<Vec<crate::models::AccountExportItem>, String> {
     let trimmed = text.trim_start_matches('\u{feff}').trim();
-    if let Ok(resp) = serde_json::from_str::<crate::models::AccountExportResponse>(trimmed) {
+    let value: serde_json::Value = serde_json::from_str(trimmed)
+        .map_err(|_| "Invalid account export file format.".to_string())?;
+    let items = if value.get("accounts").is_some() {
+        let resp: crate::models::AccountExportResponse = serde_json::from_value(value)
+            .map_err(|_| "Invalid account export file format.".to_string())?;
         if resp.schema_version != 0 && !matches!(resp.schema_version, 1 | 2) {
             return Err("Unsupported account export schema version.".into());
         }
-        if !resp.accounts.is_empty() {
-            return Ok(resp.accounts);
-        }
+        resp.accounts
+    } else if value.is_array() {
+        serde_json::from_value(value).map_err(|_| "Invalid account export file format.".to_string())?
+    } else {
+        vec![serde_json::from_value(value).map_err(|_| "Invalid account export file format.".to_string())?]
+    };
+    if items.is_empty() || items.iter().any(|item| {
+        !item.refresh_token.starts_with("1//") || item.refresh_token.len() <= 3 ||
+        !item.refresh_token[3..].bytes().all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-'))
+    }) {
+        return Err("Invalid account export file format.".into());
     }
-    if let Ok(items) = serde_json::from_str::<Vec<crate::models::AccountExportItem>>(trimmed) {
-        if !items.is_empty() {
-            return Ok(items);
-        }
-    }
-    if let Ok(item) = serde_json::from_str::<crate::models::AccountExportItem>(trimmed) {
-        if !item.refresh_token.trim().is_empty() {
-            return Ok(vec![item]);
-        }
-    }
-    Err("Invalid account export file format.".into())
+    let mut seen = std::collections::HashSet::new();
+    Ok(items.into_iter().filter(|item| seen.insert(item.refresh_token.clone())).collect())
 }
 
 #[tauri::command]
@@ -461,7 +464,7 @@ pub async fn import_from_db(
 }
 
 #[tauri::command]
-pub async fn import_custom_db(app: tauri::AppHandle, path: String) -> Result<Account, String> {
+pub async fn import_custom_db(app: tauri::AppHandle, path: String) -> Result<AccountFileImportReport, String> {
     let path_ref = std::path::Path::new(&path);
     let is_json_ext = path_ref
         .extension()
@@ -474,24 +477,18 @@ pub async fn import_custom_db(app: tauri::AppHandle, path: String) -> Result<Acc
 
     if let Some(text) = json_text {
         let items = parse_export_items_from_json(&text)?;
-        let mut last_account = None;
-        let mut errors = Vec::new();
+        let mut report = AccountFileImportReport { imported: 0, failed: 0 };
         for item in items {
             match import_account_transfer_item(&app, item).await {
-                Ok(acc) => last_account = Some(acc),
-                Err(e) => errors.push(e),
+                Ok(_) => report.imported += 1,
+                Err(_) => report.failed += 1,
             }
         }
         crate::modules::tray::update_tray_menus(&app);
         let _ = app.emit("accounts://refreshed", ());
-        if let Some(account) = last_account {
-            return Ok(account);
-        }
-        return Err(errors
-            .into_iter()
-            .next()
-            .unwrap_or_else(|| "No accounts imported from export file.".into()));
+        return Ok(report);
     }
+    if is_json_ext { return Err("Cannot read account export file.".into()); }
 
     // 调用重构后的自定义导入函数
     let mut account = modules::migration::import_from_custom_db_path(path).await?;
@@ -502,7 +499,13 @@ pub async fn import_custom_db(app: tauri::AppHandle, path: String) -> Result<Acc
     // 刷新托盘图标展示
     crate::modules::tray::update_tray_menus(&app);
 
-    Ok(account)
+    Ok(AccountFileImportReport { imported: 1, failed: 0 })
+}
+
+#[derive(serde::Serialize)]
+pub struct AccountFileImportReport {
+    imported: usize,
+    failed: usize,
 }
 
 #[tauri::command]
@@ -720,4 +723,25 @@ pub fn get_running_version() -> String { env!("CARGO_PKG_VERSION").into() }
 #[tauri::command]
 pub async fn download_and_install_update(app: tauri::AppHandle, expected_version: String, progress: tauri::ipc::Channel<crate::modules::updater::UpdateProgress>) -> Result<(), String> {
     crate::modules::updater::download_and_install(app, expected_version, progress).await
+}
+
+#[cfg(test)]
+mod transfer_tests {
+    use super::*;
+    #[test]
+    fn export_file_parser_preserves_metadata_and_rejects_invalid_batches() {
+        let item = serde_json::json!({"email":"fixture@example.invalid","refresh_token":"1//fixture","oauth_client_key":"fixture-client","custom_label":"Fixture","is_gcp_tos":true});
+        for text in [format!("\u{feff}{}", serde_json::json!({"schema_version":2,"accounts":[item.clone()]})),
+            serde_json::json!([item.clone(), item.clone()]).to_string(), item.to_string()] {
+            let items = parse_export_items_from_json(&text).unwrap();
+            assert_eq!(items.len(), 1);
+            assert_eq!(items[0].oauth_client_key.as_deref(), Some("fixture-client"));
+            assert_eq!(items[0].custom_label.as_deref(), Some("Fixture"));
+            assert!(items[0].is_gcp_tos);
+        }
+        for text in ["{}", "[]", r#"{"accounts":[]}"#, r#"{"schema_version":99,"accounts":[]}"#,
+            r#"[{"refresh_token":"1//fixture"},{"refresh_token":""}]"#, r#"{"refresh_token":"invalid"}"#, "not-json"] {
+            assert!(parse_export_items_from_json(text).is_err(), "{text}");
+        }
+    }
 }

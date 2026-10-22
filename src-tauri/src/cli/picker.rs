@@ -2594,6 +2594,18 @@ fn show_system_status(snapshot: &Snapshot, root: &Path, lang: Lang) {
 mod presentation_tests {
     use super::*;
     #[test]
+    fn account_brief_cannot_hide_an_exhausted_week_behind_a_full_session() {
+        let q: QuotaView = serde_json::from_value(serde_json::json!({
+            "last_updated":1,"models":[],"quota_groups":[{"display_name":"Gemini","buckets":[
+                {"bucket_id":"gemini-5h","window":"5h","remaining_fraction":1.0,"remaining_fraction_known":true,"reset_time":""},
+                {"bucket_id":"gemini-weekly","window":"weekly","remaining_fraction":0.0,"remaining_fraction_known":true,"reset_time":""}
+            ]}]
+        })).unwrap();
+        for lang in [Lang::Zh, Lang::En] {
+            assert!(quota_brief(Some(&q), lang).contains("Gemini: 0%"));
+        }
+    }
+    #[test]
     fn keyboard_navigation_is_identical_across_platforms() {
         for (code, expected) in [(KeyCode::Up, KeyAction::Up), (KeyCode::Down, KeyAction::Down),
             (KeyCode::Left, KeyAction::Cancel), (KeyCode::Right, KeyAction::Enter),

@@ -352,6 +352,7 @@ fn remaining_single_model(q: &QuotaData, model: &str, now: i64) -> Result<f64, &
     let mut weekly = None::<f64>;
     let mut short = None::<f64>;
     let mut argon_observation = None;
+    let mut observations = HashMap::new();
     for bucket in groups.iter().flat_map(|g| &g.buckets) {
         let id = bucket.bucket_id.to_ascii_lowercase();
         if quota_pool(&id, "") != Some(pool) {
@@ -372,6 +373,10 @@ fn remaining_single_model(q: &QuotaData, model: &str, now: i64) -> Result<f64, &
             return Err("stale_quota");
         }
         let window = bucket.window.to_ascii_lowercase();
+        let observation = (bucket.remaining_fraction, bucket.reset_time.as_str(), bucket.bucket_id.as_str());
+        if observations.insert(window.clone(), observation).is_some_and(|old| old != observation) {
+            return Err("unknown_pool");
+        }
         let value = bucket.remaining_fraction * 100.0;
         if pool == QuotaPool::Argon {
             if window != "weekly" { return Err("unknown_pool"); }
@@ -1553,6 +1558,15 @@ mod tests {
         assert_eq!(remaining(&quota(0.08, 0.8), "claude", NOW), Err("unknown_pool"));
         let mut q = quota(0.8, 0.8);
         q.quota_groups.as_mut().unwrap()[0].buckets[0].bucket_id = "3p-weekly".into();
+        assert_eq!(remaining(&q, "gemini-test", NOW), Err("unknown_pool"));
+    }
+    #[test]
+    fn conflicting_shared_windows_cannot_trigger_a_switch() {
+        let mut q = quota(0.8, 0.8);
+        let duplicate = q.quota_groups.as_ref().unwrap()[0].buckets[0].clone();
+        q.quota_groups.as_mut().unwrap()[0].buckets.push(duplicate);
+        assert_eq!(remaining(&q, "gemini-test", NOW), Ok(80.0));
+        q.quota_groups.as_mut().unwrap()[0].buckets[2].remaining_fraction = 0.0;
         assert_eq!(remaining(&q, "gemini-test", NOW), Err("unknown_pool"));
     }
     #[test]

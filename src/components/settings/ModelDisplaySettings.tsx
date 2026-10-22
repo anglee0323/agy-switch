@@ -23,6 +23,7 @@ interface ModelOption {
 
 // 兜底基准主模型（已预先归并多档位）
 const BASELINE_CANONICAL_MODELS: ModelOption[] = [
+    { id: 'gemini-4-argon', label: 'Gemini 4 Argon', group: 'gemini', iconType: 'gemini' },
     { id: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro', group: 'gemini', iconType: 'gemini', tag: 'PRO' },
     { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', group: 'gemini', iconType: 'gemini', tag: 'FLASH' },
     { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash', group: 'gemini', iconType: 'gemini', tag: 'FLASH' },
@@ -232,6 +233,8 @@ export default function ModelDisplaySettings({ onClose, embedded = false }: Mode
                         </button>
                     </div>
                 </div>
+
+                <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">{t('model_display.availability_hint')}</p>
 
                 {/* 分组模型列表 */}
                 <div className="space-y-4">

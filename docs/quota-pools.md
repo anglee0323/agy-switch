@@ -12,6 +12,18 @@ that pool, respecting the Gemini/all aggregate scope. Shared summaries and accou
 availability retain their shared-pool meaning. Missing or invalid observations
 remain unknown; a missing pool is not evidence of either zero or full allowance.
 
+Model rows and switching decisions use the more restrictive reported five-hour
+and weekly allowances. A depleted week cannot appear available just because the
+short window has recovered. A lower primary model observation also remains a
+constraint; a shared summary cannot increase it. The grouped five-hour and weekly
+rows still show their individual source windows and reset times.
+
+Gemini 4 Argon is available as a display selection even before the catalog reports
+it. A reported dedicated pool can populate that selection without a catalog model;
+otherwise it shows unknown. Selecting or refreshing the row does not grant model
+access. Catalog models without a quota observation retain their names and metadata
+without inventing a percentage.
+
 Model-to-pool association is an inference, not a server-provided relationship.
 Canonical bucket IDs take precedence over display labels. Unknown model-specific
 Gemini IDs cannot fall back to the shared pool. The shared TS/Rust classification
@@ -19,11 +31,16 @@ cases are in `tests/fixtures/quota-pool-cases.json`.
 
 ## Data source and verification limits
 
-The account refresh uses `retrieveUserQuotaSummary` with the account's own OAuth
-token and project. Production (`cloudcode-pa.googleapis.com`) is queried before
-daily and sandbox endpoints: the latter can return HTTP 200 containing only the
+The account refresh uses `fetchAvailableModels` and `retrieveUserQuotaSummary`
+with the account's own OAuth token and project. Production
+(`cloudcode-pa.googleapis.com`) is queried before daily and sandbox endpoints:
+the latter can return HTTP 200 containing only the
 Claude/GPT group. Omitted groups stay omitted; results from different endpoint
 environments are not combined into a fabricated complete observation.
+Summary permission failures retry the native user agent and an empty project
+payload before falling back. Malformed or empty responses also try the next
+endpoint. Refresh queries the subscription tier again while retaining a cached
+project as a fallback; offered paid tiers alone never prove a paid subscription.
 
 A read-only probe on 2026-10-18 confirmed that difference. Available Pro accounts
 returned both shared pools on production, but no Argon pool or Argon model through
