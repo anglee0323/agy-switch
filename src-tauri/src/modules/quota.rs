@@ -746,6 +746,8 @@ mod tests {
                     assert!(std::time::Instant::now() < deadline, "fixture request timed out");
                     std::thread::sleep(std::time::Duration::from_millis(10));
                 };
+                // Accepted sockets can inherit the listener's nonblocking mode on Windows.
+                socket.set_nonblocking(false).unwrap();
                 socket.set_read_timeout(Some(std::time::Duration::from_secs(3))).unwrap();
                 let mut reader = std::io::BufReader::new(&mut socket);
                 let mut request = String::new();
