@@ -428,11 +428,12 @@ async fn fetch_quota_summary(
     project_id: Option<&str>,
 ) -> Option<Vec<crate::models::quota::QuotaGroup>> {
     let client = create_standard_client().await.ok()?;
-    fetch_quota_summary_from_endpoints(&client, access_token, email, project_id, &QUOTA_SUMMARY_ENDPOINTS).await
+    fetch_quota_summary_from_endpoints(&client, access_token, email, project_id, &QUOTA_SUMMARY_ENDPOINTS,
+        crate::constants::NATIVE_OAUTH_USER_AGENT.as_str()).await
 }
 
 async fn fetch_quota_summary_from_endpoints(
-    client: &rquest::Client, access_token: &str, email: &str, project_id: Option<&str>, endpoints: &[&str],
+    client: &rquest::Client, access_token: &str, email: &str, project_id: Option<&str>, endpoints: &[&str], user_agent: &str,
 ) -> Option<Vec<crate::models::quota::QuotaGroup>> {
     let default_project = project_id
         .map(str::trim)
@@ -443,12 +444,12 @@ async fn fetch_quota_summary_from_endpoints(
     for ep_url in endpoints {
         let attempts = [
             (
-                crate::constants::NATIVE_OAUTH_USER_AGENT.as_str(),
+                user_agent,
                 primary_payload.clone(),
             ),
             ("antigravity", primary_payload.clone()),
             (
-                crate::constants::NATIVE_OAUTH_USER_AGENT.as_str(),
+                user_agent,
                 json!({}),
             ),
         ];
@@ -774,7 +775,7 @@ mod tests {
     async fn summary_permission_retry_preserves_project_and_known_zero() {
         let (url, server) = summary_server(vec![(403,"{}"), (200,SUMMARY)]);
         let client = rquest::Client::builder().no_proxy().build().unwrap();
-        let result = fetch_quota_summary_from_endpoints(&client, "fixture", "fixture@example.invalid", None, &[&url]).await.unwrap();
+        let result = fetch_quota_summary_from_endpoints(&client, "fixture", "fixture@example.invalid", None, &[&url], "fixture-agent").await.unwrap();
         assert_eq!(result[0].buckets[0].remaining_fraction_known, Some(true));
         assert_eq!(result[0].buckets[0].remaining_fraction, 0.0);
         let requests = server.join().unwrap();
@@ -786,7 +787,7 @@ mod tests {
         let (url, server) = summary_server(vec![(200,"bad-json"), (200,r#"{"groups":[]}"#), (200,SUMMARY)]);
         let endpoints = [format!("{url}/0"),format!("{url}/1"),format!("{url}/2")];
         let client = rquest::Client::builder().no_proxy().build().unwrap();
-        let result = fetch_quota_summary_from_endpoints(&client, "fixture", "fixture@example.invalid", Some("fixture-project"), &endpoints.iter().map(String::as_str).collect::<Vec<_>>()).await.unwrap();
+        let result = fetch_quota_summary_from_endpoints(&client, "fixture", "fixture@example.invalid", Some("fixture-project"), &endpoints.iter().map(String::as_str).collect::<Vec<_>>(), "fixture-agent").await.unwrap();
         assert_eq!(result.len(), 1);
         assert_eq!(server.join().unwrap().len(), 3);
     }
