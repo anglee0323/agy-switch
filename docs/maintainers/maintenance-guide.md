@@ -130,6 +130,7 @@ cargo test --locked --manifest-path src-tauri/Cargo.toml --lib modules::config::
 node scripts/test-cli.mjs PATH_TO_BUILT_CONSOLE
 node scripts/test-cli-terminal.mjs PATH_TO_BUILT_CONSOLE
 node scripts/test-model-pricing.mjs
+node scripts/test-quota.mjs
 cargo test --locked --manifest-path src-tauri/Cargo.toml --lib menu_bar_usage::tests
 npx playwright test tests/ui/updater.spec.ts
 node --test scripts/test-release.mjs scripts/test-update-assets.mjs scripts/test-homebrew-generator.mjs
