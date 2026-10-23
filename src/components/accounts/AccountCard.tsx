@@ -1,4 +1,4 @@
-import { weeklyQuotaItems, effectiveModelQuota } from '../../utils/menuBarQuota';
+import { weeklyQuotaItems, modelQuotaForWindow } from '../../utils/menuBarQuota';
 import { useMemo } from 'react';
 import { Download, ArrowRightLeft, RefreshCw, Trash2, Lock, Ban, Diamond, Gem, Circle, Sparkles, Tag, Clock, GripVertical, BrainCircuit, CheckCircle2 } from 'lucide-react';
 import { Account } from '../../types/account';
@@ -226,13 +226,14 @@ function AccountCard({
                 ) : (
                     <div className="grid grid-cols-1 gap-2 content-start my-auto">
                         {displayModels.map((model) => {
-                            const resolved = effectiveModelQuota(model.data, account.quota);
+                            const resolved = modelQuotaForWindow(model.data, account.quota, quotaWindow);
                             return (
                                 <QuotaItem
                                     key={model.id}
                                     label={model.label}
                                     percentage={resolved.percentage}
                                     resetTime={resolved.resetTime}
+                                    windowLabel={resolved.window === 'weekly' ? t('accounts.quota_window_weekly_short') : undefined}
                                     isProtected={isModelProtected(model.protectedKey)}
                                     Icon={model.Icon}
                                 />

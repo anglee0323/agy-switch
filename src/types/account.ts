@@ -44,6 +44,8 @@ export interface ModelQuota {
     /** Existing fusion inference, not a verified API model-to-pool relationship. */
     quota_bucket_id?: string;
     observed_remaining_fraction?: number;
+    /** Model endpoint observation before shared-window effective limits are applied. */
+    primary_quota?: { remaining_fraction: number | null; reset_time: string };
     reset_time: string;
     display_name?: string;
     supports_images?: boolean;

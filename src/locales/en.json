@@ -201,7 +201,7 @@
     "switch_account": "Switch to this account",
     "refresh_quota": "Refresh this account's quota",
     "delete_account": "Delete this account",
-    "quota_window_5h": "5-hour quota",
+    "quota_window_5h": "Show five-hour quota and reset times; automatic switching still checks weekly limits. Argon is labelled Weekly separately.",
     "quota_window_weekly": "7-day quota",
     "quota_window_weekly_short": "Weekly",
     "shared_pool": "Shared Pool",

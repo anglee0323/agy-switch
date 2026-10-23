@@ -20,6 +20,7 @@ const {
   observedPercentage,
   observedModelPercentage,
   effectiveModelQuota,
+  modelQuotaForWindow,
   validPercentage,
   lowestKnownQuota,
   isAccountSwitchable,
@@ -40,6 +41,44 @@ const test = (name, check) => {
   passed++;
   console.log(`PASS ${name}`);
 };
+test('5h display resolves an already weekly-fused cache without changing effective quota', () => {
+  const quota = {quota_groups:[{display_name:'Gemini Models',buckets:[
+    {bucket_id:'gemini-weekly',window:'weekly',remaining_fraction:.25,remaining_fraction_known:true,reset_time:'2030-01-07T00:00:00Z'},
+    {bucket_id:'gemini-5h',window:'5h',remaining_fraction:.8,remaining_fraction_known:true,reset_time:'2030-01-01T02:00:00Z'},
+  ]}]};
+  const model={name:'gemini-3.8-flash',percentage:25,percentage_known:true,observed_remaining_fraction:.25,quota_bucket_id:'gemini-weekly',reset_time:'2030-01-07T00:00:00Z'};
+  assert.deepEqual(modelQuotaForWindow(model,quota,'5h'),{percentage:80,resetTime:'2030-01-01T02:00:00Z',window:'5h'});
+  assert.equal(modelQuotaForWindow(model,quota,'weekly').percentage,25);
+  assert.equal(effectiveModelQuota(model,quota).percentage,25);
+  assert.equal(modelQuotaForWindow(model,{quota_groups:[]},'5h').percentage,null);
+  assert.equal(modelQuotaForWindow(model,{quota_groups:[]},'5h').resetTime,undefined);
+  assert.equal(modelQuotaForWindow({...model,percentage_known:false,quota_bucket_id:undefined},quota,'5h').resetTime,undefined);
+});
+test('window display retains a tighter primary model observation and rejects conflicting 5h data', () => {
+  const bucket={bucket_id:'gemini-5h',window:'5h',remaining_fraction:.8,remaining_fraction_known:true,reset_time:'2030-01-01T04:00:00Z'};
+  const quota={quota_groups:[{display_name:'Gemini Models',buckets:[bucket,
+    {bucket_id:'gemini-weekly',window:'weekly',remaining_fraction:.1,remaining_fraction_known:true,reset_time:'2030-01-07T00:00:00Z'},
+  ]}]};
+  const model={name:'gemini-test',percentage:10,percentage_known:true,observed_remaining_fraction:.1,quota_bucket_id:'gemini-weekly',reset_time:'2030-01-07T00:00:00Z',primary_quota:{remaining_fraction:.12,reset_time:'2030-01-01T02:00:00Z'}};
+  assert.equal(modelQuotaForWindow(model,quota,'5h').percentage,12);
+  assert.equal(modelQuotaForWindow(model,quota,'5h').resetTime,'2030-01-01T02:00:00Z');
+  quota.quota_groups[0].buckets.push({...bucket,remaining_fraction:.3});
+  assert.equal(modelQuotaForWindow(model,quota,'5h').percentage,null);
+});
+test('unavailable 5h data never borrows weekly and Argon stays explicitly weekly', () => {
+  const model={name:'gemini-test',percentage:25,percentage_known:true,quota_bucket_id:'gemini-weekly',reset_time:'2030-01-07T00:00:00Z'};
+  const quota={quota_groups:[{display_name:'Gemini Models',buckets:[
+    {bucket_id:'gemini-5h',window:'5h',remaining_fraction:0,remaining_fraction_known:false,reset_time:''},
+    {bucket_id:'gemini-weekly',window:'weekly',remaining_fraction:.25,remaining_fraction_known:true,reset_time:model.reset_time},
+  ]},{display_name:'Gemini 4 Argon',buckets:[{bucket_id:'gemini-argon-wtu-weekly',window:'weekly',remaining_fraction:.6,remaining_fraction_known:true,reset_time:model.reset_time}]}]};
+  assert.equal(modelQuotaForWindow(model,quota,'5h').percentage,null);
+  assert.equal(modelQuotaForWindow({name:'gemini-4-argon',percentage:0,percentage_known:false},quota,'5h').window,'weekly');
+  assert.equal(modelQuotaForWindow({name:'gemini-4-argon',percentage:0,percentage_known:false},quota,'5h').percentage,60);
+  quota.quota_groups[0].buckets[0].remaining_fraction=1;
+  quota.quota_groups[0].buckets[0].remaining_fraction_known=true;
+  quota.quota_groups[0].buckets[1].remaining_fraction_known=false;
+  assert.equal(modelQuotaForWindow(model,quota,'5h').percentage,100);
+});
 test('account weekly labels and knownness preserve a dedicated Argon pool', () => {
   const q={quota_groups:[{display_name:'Gemini 4 Argon',buckets:[{bucket_id:'gemini-argon-wtu-weekly',window:'weekly',remaining_fraction:0,remaining_fraction_known:false,reset_time:''}]}]};
   assert.equal(weeklyQuotaItems(q)[0].title,'Gemini 4 Argon');
