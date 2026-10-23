@@ -146,3 +146,11 @@ Rust IPC and completed cleanup; representative final Dashboard/narrow Settings
 captures were inspected. The macOS AppKit lifecycle lane passed.
 See [4.10.9 public verification](4.10.9-public-acceptance.md) for the
 exact workflows, public byte/signature checks and live-account limits.
+
+## Integrated 4.10.10 release
+
+Source `11d1b1d0e4be2ddf59ea57d8bf42213386e14c67` passed the three-platform source, native lifecycle
+and package checks. Both Windows/Linux reports have seven hash-verified captures
+and completed cleanup. The public Mac package was independently verified and
+installed with saved-data preservation. See [4.10.10 public verification](4.10.10-public-acceptance.md)
+for exact hashes, workflows, window regressions and remaining native trust/account limits.
