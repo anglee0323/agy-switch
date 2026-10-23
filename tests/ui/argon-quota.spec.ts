@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { setupSettingsFixture } from './settings-fixture';
 
-for (const language of ['zh', 'en']) for (const view of ['grid', 'list']) test(`weekly cap applies immediately to cached account ${view} (${language})`, async ({ page }) => {
+for (const language of ['zh', 'en']) for (const view of ['grid', 'list']) test(`5h and weekly account views retain their own values in ${view} (${language})`, async ({ page }) => {
   await page.addInitScript(setupSettingsFixture, { language });
   await page.addInitScript(({ view }) => {
     localStorage.setItem('accounts_view_mode', view);
@@ -20,6 +20,9 @@ for (const language of ['zh', 'en']) for (const view of ['grid', 'list']) test(`
     };
   }, {view});
   await page.goto('/accounts');
+  await expect(page.getByText('100%',{exact:true})).toHaveCount(1);
+  await expect(page.getByText('0%',{exact:true})).toHaveCount(0);
+  await page.getByTitle(language === 'zh' ? '7 天配额' : '7-day quota', {exact:true}).click();
   await expect(page.getByText('0%',{exact:true})).toHaveCount(1);
   await expect(page.getByText('100%',{exact:true})).toHaveCount(0);
 });
@@ -34,7 +37,7 @@ for (const language of ['zh','en']) test(`Argon selection is available before th
     : 'Selecting a model does not grant access. Argon uses its own weekly quota; an unreported allowance shows —. Refreshing does not unlock models.', {exact:true})).toBeVisible();
 });
 
-for (const view of ['grid','list']) test(`Argon model selector uses a reported dedicated pool without a catalog model (${view})`, async({page})=>{
+for (const view of ['grid','list']) test(`Argon model selector uses a reported dedicated pool without a catalog model (${view})`, async({page},info)=>{
   await page.addInitScript(setupSettingsFixture,{language:'en'});
   await page.addInitScript(view=>{
     localStorage.setItem('accounts_view_mode',view);
@@ -50,6 +53,8 @@ for (const view of ['grid','list']) test(`Argon model selector uses a reported d
   },view);
   await page.goto('/accounts');
   await expect(page.getByText('23%',{exact:true})).toHaveCount(1);
+  await expect(page.locator('div[title="Gemini 4 Argon"]')).toContainText('Weekly');
+  await page.screenshot({path:info.outputPath(`argon-weekly-model-${view}.png`)});
 });
 
 for (const language of ['zh', 'en']) for (const view of ['grid', 'list']) test(`unknown Argon model never displays its old percentage in ${view} (${language})`, async ({ page }) => {

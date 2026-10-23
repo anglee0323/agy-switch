@@ -114,6 +114,36 @@ export function effectiveModelQuota(
   return { percentage: best.percentage, resetTime: best.resetTime };
 }
 
+/** Account window views must not display an effective weekly limit as a 5h observation. */
+export function modelQuotaForWindow(
+  model: ModelQuota | undefined,
+  quota: QuotaData | undefined,
+  requestedWindow: '5h' | 'weekly' = '5h',
+): { percentage: number | null; resetTime?: string; window: '5h' | 'weekly' } {
+  const pool = modelQuotaPoolKind(model?.name || '', model?.display_name);
+  if (pool === 'argon') return { ...effectiveModelQuota(model, quota), window: 'weekly' };
+  const window = requestedWindow;
+  const isWeeklyCache = model?.quota_bucket_id?.toLowerCase().endsWith('-weekly');
+  const primary = model?.primary_quota;
+  const base = window === 'weekly' || (isWeeklyCache && !primary) ? null
+    : primary ? observedPercentage(primary.remaining_fraction, true, true) : observedModelPercentage(model);
+  const baseReset = base === null ? undefined : primary?.reset_time ?? model?.reset_time;
+  const fallback = { percentage: base, resetTime: baseReset, window };
+  // A configured selector without a reported model remains unknown.
+  if (!pool || !model || (!primary && !model.quota_bucket_id && observedModelPercentage(model) === null)) return fallback;
+  const buckets = (quota?.quota_groups || []).flatMap(group => group.buckets.filter(bucket =>
+    quotaPoolKind(bucket.bucket_id, group.display_name) === pool && bucket.window.trim().toLowerCase() === window));
+  const first = buckets[0];
+  if (!first) return fallback;
+  if (buckets.some(b => b.bucket_id !== first.bucket_id || b.remaining_fraction !== first.remaining_fraction ||
+    b.remaining_fraction_known !== first.remaining_fraction_known || b.reset_time !== first.reset_time)) {
+    return { percentage: null, window };
+  }
+  const percentage = observedPercentage(first.remaining_fraction, first.remaining_fraction_known, true);
+  if (percentage !== null && base !== null && base < percentage) return fallback;
+  return { percentage, resetTime: first.reset_time || undefined, window };
+}
+
 /** Independent pools stay independent. Unknown data never becomes an empty bar. */
 export function compactQuotaGroups(
   quota?: QuotaData,

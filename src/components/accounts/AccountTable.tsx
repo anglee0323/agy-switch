@@ -1,4 +1,4 @@
-import { weeklyQuotaItems, effectiveModelQuota } from '../../utils/menuBarQuota';
+import { weeklyQuotaItems, modelQuotaForWindow } from '../../utils/menuBarQuota';
 /**
  * 账号表格组件
  * 支持拖拽排序功能，用户可以通过拖拽行来调整账号顺序
@@ -159,10 +159,10 @@ function extractAccountResetTime(account: Account, quotaWindow?: '5h' | 'weekly'
             }
         }
     } else {
-        // 5h 或常规视图下，从 models 中获取最近的 reset_time
+        // Sort by the displayed window, never by a fused weekly limit in the 5h view.
         const models = account.quota?.models || [];
         for (const model of models) {
-            const { resetTime } = effectiveModelQuota(model, account.quota);
+            const { resetTime } = modelQuotaForWindow(model, account.quota, quotaWindow);
             if (resetTime) {
                 const t = new Date(resetTime).getTime();
                 if (!isNaN(t) && (earliestTime === null || t < earliestTime)) {
@@ -439,7 +439,7 @@ function AccountRowContent({
                             ))
                         ) : (
                             displayModels.map((model) => {
-                                const resolved = effectiveModelQuota(model.data, account.quota);
+                                const resolved = modelQuotaForWindow(model.data, account.quota, quotaWindow);
 
                                 return (
                                     <QuotaItem
@@ -447,6 +447,7 @@ function AccountRowContent({
                                         label={model.label}
                                         percentage={resolved.percentage}
                                         resetTime={resolved.resetTime}
+                                        windowLabel={resolved.window === 'weekly' ? t('accounts.quota_window_weekly_short') : undefined}
                                         isProtected={Boolean(config?.quota_protection?.enabled && isModelProtected(account.protected_models, model.protectedKey))}
                                         Icon={model.Icon || Bot}
                                     />

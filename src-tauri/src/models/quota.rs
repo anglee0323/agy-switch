@@ -69,6 +69,13 @@ pub struct QuotaGroup {
     pub buckets: Vec<QuotaBucket>,
 }
 
+/// Original model-endpoint observation, retained separately from effective limits.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PrimaryModelQuota {
+    pub remaining_fraction: Option<f64>,
+    pub reset_time: String,
+}
+
 /// 模型配额信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ModelQuota {
@@ -79,6 +86,8 @@ pub struct ModelQuota {
     /// Exact valid API observation for read-only views; never used by policy.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub observed_remaining_fraction: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub primary_quota: Option<PrimaryModelQuota>,
     /// Bucket association inferred by the existing fusion rule, not an API pool ID.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quota_bucket_id: Option<String>,

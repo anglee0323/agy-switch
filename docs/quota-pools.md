@@ -12,11 +12,18 @@ that pool, respecting the Gemini/all aggregate scope. Shared summaries and accou
 availability retain their shared-pool meaning. Missing or invalid observations
 remain unknown; a missing pool is not evidence of either zero or full allowance.
 
-Model rows and switching decisions use the more restrictive reported five-hour
-and weekly allowances. A depleted week cannot appear available just because the
-short window has recovered. A lower primary model observation also remains a
-constraint; a shared summary cannot increase it. The grouped five-hour and weekly
-rows still show their individual source windows and reset times.
+The account 5H view shows the five-hour allowance and its reset time; the weekly
+view shows the weekly allowance and its own reset time. An effective weekly value
+cached by 4.10.9 must not replace the five-hour value or countdown. A missing
+five-hour observation stays unknown instead of borrowing the week. Argon keeps
+its dedicated weekly observation and is explicitly labelled Weekly in model rows.
+The original model-endpoint observation is retained separately so a lower primary
+allowance is not increased by a shared five-hour summary.
+
+Switching decisions and CLI effective model values still use the more restrictive
+reported five-hour and weekly allowances. A depleted week cannot trigger switching
+to an account just because its short window has recovered. Grouped menu/tray rows
+continue to show their individual source windows and reset times.
 
 Gemini 4 Argon is available as a display selection even before the catalog reports
 it. A reported dedicated pool can populate that selection without a catalog model;

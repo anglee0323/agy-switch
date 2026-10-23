@@ -406,9 +406,14 @@ fn model_from_info(name: String, info: ModelInfo) -> Option<crate::models::quota
     let observation = info.quota_info;
     let fraction = observation.as_ref().and_then(|q| q.remaining_fraction)
         .filter(|f| crate::models::quota::fraction_is_known(Some(*f)));
+    let primary_quota = Some(crate::models::quota::PrimaryModelQuota {
+        remaining_fraction: fraction,
+        reset_time: observation.as_ref().and_then(|q| q.reset_time.clone()).unwrap_or_default(),
+    });
     Some(crate::models::quota::ModelQuota {
         name, percentage: fraction.map(|f| (f * 100.0).round() as i32).unwrap_or(0),
         percentage_known: Some(fraction.is_some()), observed_remaining_fraction: fraction,
+        primary_quota,
         quota_bucket_id: None,
         reset_time: observation.and_then(|q| q.reset_time).unwrap_or_default(),
         display_name: info.display_name, supports_images: info.supports_images,
@@ -591,6 +596,27 @@ fn fuse_model_quotas(models: &mut [crate::models::quota::ModelQuota], groups: &[
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn effective_weekly_fusion_preserves_primary_model_observation_for_window_display() {
+        let mut model = model_from_info("gemini-test".into(), serde_json::from_value(json!({
+            "quotaInfo":{"remainingFraction":0.12,"resetTime":"2030-01-01T02:00:00Z"}
+        })).unwrap()).unwrap();
+        let groups = serde_json::from_value::<Vec<crate::models::quota::QuotaGroup>>(json!([
+            {"display_name":"Gemini Models","buckets":[
+                {"bucket_id":"gemini-5h","window":"5h","remaining_fraction":0.8,"remaining_fraction_known":true,"reset_time":"2030-01-01T04:00:00Z"},
+                {"bucket_id":"gemini-weekly","window":"weekly","remaining_fraction":0.1,"remaining_fraction_known":true,"reset_time":"2030-01-07T00:00:00Z"}
+            ]}
+        ])).unwrap();
+        fuse_model_quotas(std::slice::from_mut(&mut model), &groups);
+        let saved = serde_json::to_value(&model).unwrap();
+        let restored: crate::models::quota::ModelQuota = serde_json::from_value(saved).unwrap();
+        assert_eq!(restored.percentage, 10);
+        assert_eq!(restored.quota_bucket_id.as_deref(), Some("gemini-weekly"));
+        assert_eq!(restored.reset_time, "2030-01-07T00:00:00Z");
+        let primary = restored.primary_quota.unwrap();
+        assert_eq!(primary.remaining_fraction, Some(0.12));
+        assert_eq!(primary.reset_time, "2030-01-01T02:00:00Z");
+    }
     #[test]
     fn argon_quota_fusion_is_independent_of_group_order_and_shared_pool() {
         let fixture = |id: &str, fraction: f64| serde_json::json!({

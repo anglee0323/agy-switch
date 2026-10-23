@@ -201,7 +201,7 @@
     "switch_account": "切换到此账号",
     "refresh_quota": "刷新此账号配额",
     "delete_account": "删除此账号",
-    "quota_window_5h": "5 小时配额",
+    "quota_window_5h": "显示五小时窗口的额度和重置时间；自动切换仍同时检查周额度。Argon 单独标为周配额。",
     "quota_window_weekly": "7 天配额",
     "quota_window_weekly_short": "周配额",
     "shared_pool": "共享池",
