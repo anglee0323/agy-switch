@@ -846,36 +846,15 @@ impl Environment for NativeEnvironment {
 
         for db_path in candidate_dbs {
             if db_path.exists() {
-                let backup_path = db_path.with_extension("vscdb.backup");
-                if let Err(e) = std::fs::copy(&db_path, &backup_path) {
-                    // A missing backup must not block the switch, but silently
-                    // losing it hides why a later manual restore is impossible.
-                    crate::modules::logger::log_warn(&format!(
-                        "[AutoSwitch] Failed to back up {}: {}",
-                        backup_path.display(),
-                        e
-                    ));
-                }
-                if let Err(e) = db::inject_token(
-                    &db_path,
-                    &target.token.access_token,
-                    &target.token.refresh_token,
-                    target.token.expiry_timestamp,
-                    &target.email,
-                    target.token.is_gcp_tos,
-                    target.token.project_id.as_deref(),
-                    &target.token.id_token.as_deref(),
-                    &target.token.oauth_client_key.as_deref(),
-                ) {
-                    // The switch still reports success (keyring/session carry the
-                    // credentials), but a failed injection means the relaunched
-                    // client may read stale credentials from this database.
+                // Propagate partial writes into the durable switch-failure pause.
+                // Do not restart a client or update the selected index on failure.
+                integration::inject_client_database(target, &db_path).map_err(|error| {
                     crate::modules::logger::log_error(&format!(
-                        "[AutoSwitch] Failed to inject credentials into {}: {}. The client may show the previous account after relaunch.",
-                        db_path.display(),
-                        e
+                        "[AutoSwitch] Client database write failed for {}. Credentials may be partially updated; automatic switching is paused.",
+                        db_path.display()
                     ));
-                }
+                    error
+                })?;
             }
         }
 
@@ -2303,6 +2282,10 @@ mod tests {
             );
             assert!(read_pause().unwrap().failed);
             assert!(r.data.lock().unwrap().failed);
+            assert_eq!(r.data.lock().unwrap().status.phase, "blocked");
+            assert_eq!(r.data.lock().unwrap().status.reason.as_deref(), Some("switch_failed"));
+            assert_eq!(env.starts.load(SeqCst), 0);
+            assert_eq!(env.hub_starts.load(SeqCst), 0);
             env.now.store(NOW + 70, SeqCst);
             evaluate_core(&r, env.clone(), false).await.unwrap();
             assert_eq!(env.writes.load(SeqCst), 1);

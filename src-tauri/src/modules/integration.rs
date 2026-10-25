@@ -178,10 +178,17 @@ fn write_client_storage(
         if storage.is_file() {
             if let Some(profile) = &account.device_profile { device::write_profile(&storage, profile)?; }
         }
-        fs::copy(path, path.with_extension("vscdb.backup")).map_err(|e| format!("Cannot back up client database: {e}"))?;
-        db::inject_token(path, &account.token.access_token, &account.token.refresh_token, account.token.expiry_timestamp,
-            &account.email, account.token.is_gcp_tos, account.token.project_id.as_deref(), account.token.id_token.as_deref(), account.token.oauth_client_key.as_deref())?;
+        inject_client_database(account, path)?;
     }
+    Ok(())
+}
+
+/// Manual and automatic switches must fail before reporting an incomplete write as success.
+pub(crate) fn inject_client_database(account: &crate::models::Account, path: &std::path::PathBuf) -> Result<(), String> {
+    fs::copy(path, path.with_extension("vscdb.backup"))
+        .map_err(|e| format!("Cannot back up client database: {e}"))?;
+    db::inject_token(path, &account.token.access_token, &account.token.refresh_token, account.token.expiry_timestamp,
+        &account.email, account.token.is_gcp_tos, account.token.project_id.as_deref(), account.token.id_token.as_deref(), account.token.oauth_client_key.as_deref())?;
     Ok(())
 }
 
@@ -682,6 +689,23 @@ mod scope_tests {
         let path = dir.join("state.vscdb");
         rusqlite::Connection::open(&path).unwrap().execute("CREATE TABLE ItemTable (key TEXT PRIMARY KEY, value TEXT)", []).unwrap();
         path
+    }
+
+    #[test]
+    fn credential_database_failures_propagate_without_touching_real_stores() {
+        let temp = tempfile::tempdir().unwrap();
+        let account = Account::new("fixture".into(), "fixture@example.invalid".into(),
+            TokenData::new("fixture-access".into(), "fixture-refresh".into(), 3600, None, None, None, false, None));
+        let path = database(temp.path(), "client");
+        let original = fs::read(&path).unwrap();
+        fs::create_dir(path.with_extension("vscdb.backup")).unwrap();
+        assert!(inject_client_database(&account, &path).unwrap_err().starts_with("Cannot back up"));
+        assert_eq!(fs::read(&path).unwrap(), original);
+        fs::remove_dir(path.with_extension("vscdb.backup")).unwrap();
+        // A successful backup must not hide an injection failure on a corrupt DB.
+        fs::write(&path, b"not a SQLite database").unwrap();
+        assert!(inject_client_database(&account, &path).is_err());
+        assert_eq!(fs::read(path.with_extension("vscdb.backup")).unwrap(), b"not a SQLite database");
     }
 
     #[test]

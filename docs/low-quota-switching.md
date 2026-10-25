@@ -13,6 +13,8 @@ The tool records which affected clients were open before closing them, then reop
 
 **Cancel this switch** suppresses another attempt for that source account until its quota recovers to the configured backup minimum. Saving the settings clears the cancellation. Cancellations survive application restart. A failed or uncertain credential commit pauses automatic attempts until the settings are saved again; inspect both clients first.
 
+Client-database backup and injection errors use the same failure boundary as manual switching. An automatic failure leaves the recorded selected account unchanged, does not relaunch the client or report completion, and pauses further attempts. The shared credential store may already have changed, so check the live account before re-enabling the policy.
+
 The current-source CLI also edits this policy and candidate order through `agy-switch policy` and its Settings & Order menu. It does not run the scheduler itself. See [CLI coverage and package availability](cli.md#policy-ordering-and-updates).
 
 ## Eligibility and safety
