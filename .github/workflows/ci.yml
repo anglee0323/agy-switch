@@ -103,6 +103,12 @@ jobs:
       - name: Test quota HTTP fixtures without native data access
         run: node scripts/test-quota.mjs
 
+      - name: Test OAuth callbacks, protobuf bounds and bounded client exit
+        run: |
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib modules::oauth_server::tests
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib utils::protobuf::tests
+          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib modules::process::close_wait_tests
+
       - name: Test native background schedules and coalescing
         run: |
           cargo test --locked --manifest-path src-tauri/Cargo.toml --lib quota_refresh::tests
