@@ -37,11 +37,12 @@ async function send(keys, text) { output = ''; terminal.write(keys); await until
 async function viewport(keys, selected, rows, width, prompt) {
   const scrollback = screen.buffer.active.baseY;
   output = ''; terminal.write(keys);
-  await until(() => frame().includes(`u${selected}@`) && frame().includes('/ 40') && frame().includes(prompt));
+  const selection = new RegExp(`➤\\s*${selected + 1}\\.\\s+u${selected}@`);
+  await until(() => selection.test(frame()) && frame().includes('/ 40') && frame().includes(prompt));
   const rendered = frame();
   assert.equal(screen.buffer.active.baseY, scrollback, 'account repaint must not scroll the terminal');
   assert.ok(rendered.split(/\r?\n/).every(line => line.length < width), 'frame must not wrap');
-  assert.ok(!rendered.includes(`u${selected === 39 ? 0 : 39}@`), 'offscreen accounts must not be rendered');
+  assert.ok(!rendered.includes(`u${selected >= 20 ? 0 : 39}@`), 'the opposite end of the list must remain offscreen');
   checks++;
 }
 try {
