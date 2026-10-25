@@ -20,6 +20,9 @@ pub fn read_varint(data: &[u8], offset: usize) -> Result<(u64, usize), String> {
             return Err("incomplete_data".to_string());
         }
         let byte = data[pos];
+        if shift >= 64 {
+            return Err("varint_too_long".to_string());
+        }
         result |= ((byte & 0x7F) as u64) << shift;
         pos += 1;
         if byte & 0x80 == 0 {
@@ -33,6 +36,13 @@ pub fn read_varint(data: &[u8], offset: usize) -> Result<(u64, usize), String> {
 
 /// Skip Protobuf Field
 pub fn skip_field(data: &[u8], offset: usize, wire_type: u8) -> Result<usize, String> {
+    let bounded_end = |end: usize| -> Result<usize, String> {
+        if end > data.len() {
+            Err("incomplete_data".to_string())
+        } else {
+            Ok(end)
+        }
+    };
     match wire_type {
         0 => {
             // Varint
@@ -41,16 +51,19 @@ pub fn skip_field(data: &[u8], offset: usize, wire_type: u8) -> Result<usize, St
         }
         1 => {
             // 64-bit
-            Ok(offset + 8)
+            bounded_end(offset.checked_add(8).ok_or("incomplete_data".to_string())?)
         }
         2 => {
             // Length-delimited
             let (length, content_offset) = read_varint(data, offset)?;
-            Ok(content_offset + length as usize)
+            let end = content_offset
+                .checked_add(length as usize)
+                .ok_or("incomplete_data".to_string())?;
+            bounded_end(end)
         }
         5 => {
             // 32-bit
-            Ok(offset + 4)
+            bounded_end(offset.checked_add(4).ok_or("incomplete_data".to_string())?)
         }
         _ => Err(format!("unknown_wire_type: {}", wire_type)),
     }
@@ -71,9 +84,13 @@ pub fn find_field(data: &[u8], target_field: u32) -> Result<Option<Vec<u8>>, Str
 
         if field_num == target_field && wire_type == 2 {
             let (length, content_offset) = read_varint(data, new_offset)?;
-            return Ok(Some(
-                data[content_offset..content_offset + length as usize].to_vec(),
-            ));
+            let end = content_offset
+                .checked_add(length as usize)
+                .ok_or("incomplete_data".to_string())?;
+            if end > data.len() {
+                return Err("incomplete_data".to_string());
+            }
+            return Ok(Some(data[content_offset..end].to_vec()));
         }
 
         // Skip field
@@ -358,4 +375,58 @@ fn unified_topic_entry_key(data: &[u8]) -> Option<&str> {
     }
 
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn truncated_length_delimited_field_fails_instead_of_panicking() {
+        // Field 1 (wire type 2) declaring 15 content bytes with only 1 present.
+        let truncated: &[u8] = &[0x0A, 0x0F, 0x01];
+        assert!(find_field(truncated, 1).is_err());
+        assert!(skip_field(truncated, 1, 2).is_err());
+
+        // A length that overflows usize arithmetic must fail, not slice out of range.
+        let oversized: &[u8] = &[0x0A, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F, 0x00];
+        assert!(find_field(oversized, 1).is_err());
+    }
+
+    #[test]
+    fn oversized_varint_is_rejected() {
+        // 11 continuation bytes exceed the 64-bit varint payload.
+        let mut data = vec![0xFF; 11];
+        data.push(0x01);
+        assert!(read_varint(&data, 0).is_err());
+        assert_eq!(read_varint(&[0xFF, 0x01], 0), Ok((255, 2)));
+    }
+
+    #[test]
+    fn skip_field_rejects_truncated_fixed_width_fields() {
+        assert!(skip_field(&[0x00], 0, 1).is_err());
+        assert!(skip_field(&[0x00, 0x00], 0, 5).is_err());
+        assert!(skip_field(&[0x00, 0x00, 0x00, 0x00], 0, 5).is_ok());
+    }
+
+    #[test]
+    fn valid_fields_still_parse() {
+        // Field 1 string "hi", then field 2 varint 150.
+        let data: &[u8] = &[0x0A, 0x02, b'h', b'i', 0x10, 0x96, 0x01];
+        assert_eq!(find_field(data, 1), Ok(Some(b"hi".to_vec())));
+        assert_eq!(find_varint_field(data, 2), Ok(Some(150)));
+        assert_eq!(find_field(data, 3), Ok(None));
+        assert_eq!(read_varint(&[0x96, 0x01], 0), Ok((150, 2)));
+    }
+
+    #[test]
+    fn malformed_outer_entries_surface_as_decode_errors() {
+        // decode_unified_state_entry must fail cleanly on corrupt base64 payloads
+        // instead of panicking deep inside field parsing.
+        use base64::{engine::general_purpose, Engine as _};
+        let corrupt = general_purpose::STANDARD.encode([0x0A, 0x7F, 0x01]);
+        assert!(decode_unified_state_entry(&corrupt).is_err());
+        let valid = create_unified_state_entry("sentinel", &[0x01, 0x02]);
+        assert!(decode_unified_state_entry(&valid).is_ok());
+    }
 }
