@@ -1770,8 +1770,8 @@ fn show_single_account_quota(acc: &AccountView, lang: Lang) {
         println!("\n{}", q_table.render());
     } else {
         let msg = match lang {
-            Lang::Zh => "\n\x1b[33m暂无本地缓存额度，请使用主菜单 [4] 刷新配额。\x1b[0m\n",
-            Lang::En => "\n\x1b[33mNo cached quota data. Use [4] to refresh live quotas.\x1b[0m\n",
+            Lang::Zh => "\n\x1b[33m暂无本地缓存额度，请使用主菜单 [3] 刷新配额。\x1b[0m\n",
+            Lang::En => "\n\x1b[33mNo cached quota data. Use [3] to refresh live quotas.\x1b[0m\n",
         };
         println!("{}", msg);
     }
