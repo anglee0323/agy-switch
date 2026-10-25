@@ -448,8 +448,36 @@ pub fn close_antigravity(timeout_secs: u64, target_ide: Option<&str>) -> Result<
                     .creation_flags(0x08000000) // CREATE_NO_WINDOW
                     .output();
             }
-            // Give some time for system to clean up PIDs
-            thread::sleep(Duration::from_millis(200));
+            // Wait for the killed PIDs to disappear, mirroring the macOS/Linux
+            // poll loops. A fixed 200ms nap intermittently lost the race with
+            // Electron teardown and failed the final running check.
+            let deadline = std::time::Instant::now()
+                + Duration::from_millis(timeout_secs.saturating_mul(700));
+            while is_antigravity_running(target_ide) && std::time::Instant::now() < deadline {
+                thread::sleep(Duration::from_millis(200));
+            }
+            // Phase 2: re-kill stragglers and wait out the remaining budget.
+            if is_antigravity_running(target_ide) {
+                let remaining = get_antigravity_pids(target_ide);
+                if !remaining.is_empty() {
+                    crate::modules::logger::log_warn(&format!(
+                        "Force-closing {} remaining processes on Windows...",
+                        remaining.len()
+                    ));
+                    for pid in remaining {
+                        let _ = Command::new("taskkill")
+                            .args(["/F", "/PID", &pid.to_string()])
+                            .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                            .output();
+                    }
+                }
+                let hard_deadline = std::time::Instant::now()
+                    + Duration::from_millis(timeout_secs.saturating_mul(300));
+                while is_antigravity_running(target_ide) && std::time::Instant::now() < hard_deadline
+                {
+                    thread::sleep(Duration::from_millis(200));
+                }
+            }
         }
     }
 
