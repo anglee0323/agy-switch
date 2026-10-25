@@ -71,6 +71,9 @@ Use the relevant rows, not the whole table for every small patch.
    `src-tauri/tauri.conf.json`. Prepare both-language user-facing changes and
    installation instructions. Current-release references and the Brew checksum
    must continue to name the actually published package until the new one is verified.
+   When updating Tauri, align the JavaScript API and native crate major/minor
+   versions, and update the CLI plus its explicitly pinned platform packages.
+   A passing `cargo check` alone does not run Tauri's bundle compatibility guard.
 3. Finish the applicable checks and merge the release preparation into `main`.
    Record the exact commit. Publish only when the current task authorizes that
    version, using the existing workflow and checklist.
