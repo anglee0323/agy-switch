@@ -100,6 +100,13 @@ jobs:
       - name: Test read-only account dashboard contract
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib account_dashboard::tests
 
+      - name: Diagnose Windows test-loader failures
+        if: failure() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $binary = Get-ChildItem src-tauri/target/debug/deps/antigravity_tools_lib-*.exe | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if ($binary) { ./scripts/diagnose-windows-loader.ps1 -Binary $binary.FullName }
+
       - name: Test quota HTTP fixtures without native data access
         run: node scripts/test-quota.mjs
 
