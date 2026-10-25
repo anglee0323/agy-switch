@@ -80,3 +80,8 @@ try {
   await delay(200);
   rmSync(root, {recursive: true, force: true});
 }
+
+// ConPTY's native output worker can retain a handle after the child exits. This
+// standalone harness owns the Node process; reach this only after every assertion,
+// the observed zero child exit code, emulator disposal and fixture cleanup.
+if (process.platform === 'win32') process.exit(0);
