@@ -471,8 +471,8 @@ pub async fn exchange_code_with_client(
 
                 if should_fallback {
                     crate::modules::logger::log_warn(&format!(
-                        "OAuth code exchange failed for client [{}], trying next client: {}",
-                        client_cfg.key, err_msg
+                        "OAuth code exchange failed for client [{}], trying next client (HTTP {:?})",
+                        client_cfg.key, status_opt.map(|status| status.as_u16())
                     ));
                     continue;
                 }
@@ -621,8 +621,8 @@ pub async fn refresh_access_token_with_client(
 
             if should_fallback {
                 crate::modules::logger::log_warn(&format!(
-                    "Refresh failed for client [{}], trying next client: {}",
-                    client_cfg.key, err_msg
+                    "Refresh failed for client [{}], trying next client (HTTP {:?})",
+                    client_cfg.key, status_opt.map(|status| status.as_u16())
                 ));
                 continue;
             }
