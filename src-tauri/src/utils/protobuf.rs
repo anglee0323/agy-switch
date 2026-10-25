@@ -20,7 +20,7 @@ pub fn read_varint(data: &[u8], offset: usize) -> Result<(u64, usize), String> {
             return Err("incomplete_data".to_string());
         }
         let byte = data[pos];
-        if shift >= 64 {
+        if shift >= 64 || (shift == 63 && byte > 1) {
             return Err("varint_too_long".to_string());
         }
         result |= ((byte & 0x7F) as u64) << shift;
@@ -57,7 +57,7 @@ pub fn skip_field(data: &[u8], offset: usize, wire_type: u8) -> Result<usize, St
             // Length-delimited
             let (length, content_offset) = read_varint(data, offset)?;
             let end = content_offset
-                .checked_add(length as usize)
+                .checked_add(usize::try_from(length).map_err(|_| "incomplete_data".to_string())?)
                 .ok_or("incomplete_data".to_string())?;
             bounded_end(end)
         }
@@ -74,10 +74,7 @@ pub fn find_field(data: &[u8], target_field: u32) -> Result<Option<Vec<u8>>, Str
     let mut offset = 0;
 
     while offset < data.len() {
-        let (tag, new_offset) = match read_varint(data, offset) {
-            Ok(v) => v,
-            Err(_) => break, // Incomplete data, stop
-        };
+        let (tag, new_offset) = read_varint(data, offset)?;
 
         let wire_type = (tag & 7) as u8;
         let field_num = (tag >> 3) as u32;
@@ -85,7 +82,7 @@ pub fn find_field(data: &[u8], target_field: u32) -> Result<Option<Vec<u8>>, Str
         if field_num == target_field && wire_type == 2 {
             let (length, content_offset) = read_varint(data, new_offset)?;
             let end = content_offset
-                .checked_add(length as usize)
+                .checked_add(usize::try_from(length).map_err(|_| "incomplete_data".to_string())?)
                 .ok_or("incomplete_data".to_string())?;
             if end > data.len() {
                 return Err("incomplete_data".to_string());
@@ -336,11 +333,12 @@ pub fn remove_unified_topic_entry(data: &[u8], target_key: &str) -> Result<Vec<u
 
         let should_remove = if field_num == 1 && wire_type == 2 {
             let (length, content_offset) = read_varint(data, new_offset)?;
-            let length = length as usize;
-            if content_offset + length > data.len() {
+            let end = content_offset.checked_add(usize::try_from(length).map_err(|_| "incomplete_data")?)
+                .ok_or("incomplete_data")?;
+            if end > data.len() {
                 return Err("Topic.data entry 数据不完整".to_string());
             }
-            let entry = &data[content_offset..content_offset + length];
+            let entry = &data[content_offset..end];
             unified_topic_entry_key(entry) == Some(target_key)
         } else {
             false
@@ -364,11 +362,11 @@ fn unified_topic_entry_key(data: &[u8]) -> Option<&str> {
 
         if field_num == 1 && wire_type == 2 {
             let (length, content_offset) = read_varint(data, new_offset).ok()?;
-            let length = length as usize;
-            if content_offset + length > data.len() {
+            let end = content_offset.checked_add(usize::try_from(length).ok()?)?;
+            if end > data.len() {
                 return None;
             }
-            return std::str::from_utf8(&data[content_offset..content_offset + length]).ok();
+            return std::str::from_utf8(&data[content_offset..end]).ok();
         }
 
         offset = skip_field(data, new_offset, wire_type).ok()?;
@@ -391,6 +389,13 @@ mod tests {
         // A length that overflows usize arithmetic must fail, not slice out of range.
         let oversized: &[u8] = &[0x0A, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F, 0x00];
         assert!(find_field(oversized, 1).is_err());
+        let mut maximum_length = vec![0x0a];
+        maximum_length.extend(encode_varint(u64::MAX));
+        assert!(find_field(&maximum_length, 1).is_err());
+        assert!(remove_unified_topic_entry(&maximum_length, "fixture").is_err());
+        assert_eq!(unified_topic_entry_key(&maximum_length), None);
+        let nested = encode_len_delim_field(1, &maximum_length);
+        assert!(remove_unified_topic_entry(&nested, "fixture").is_ok());
     }
 
     #[test]
@@ -400,6 +405,13 @@ mod tests {
         data.push(0x01);
         assert!(read_varint(&data, 0).is_err());
         assert_eq!(read_varint(&[0xFF, 0x01], 0), Ok((255, 2)));
+        for last in [2, 0x7f, 0x80, 0x81, 0xff] {
+            let mut overflow = vec![0x80; 9];
+            overflow.push(last);
+            assert!(read_varint(&overflow, 0).is_err());
+            assert!(find_field(&overflow, 1).is_err());
+        }
+        assert_eq!(read_varint(&encode_varint(u64::MAX), 0), Ok((u64::MAX, 10)));
     }
 
     #[test]
