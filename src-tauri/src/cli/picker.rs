@@ -827,6 +827,10 @@ pub fn select_menu_interactive(title: &str, items: &[&str], initial: usize, lang
 }
 
 fn build_accounts_table(accounts: &[AccountView], lang: Lang, selected_idx: Option<usize>) -> Table {
+    build_accounts_table_at(accounts, lang, selected_idx, 0)
+}
+
+fn build_accounts_table_at(accounts: &[AccountView], lang: Lang, selected_idx: Option<usize>, offset: usize) -> Table {
     let headers = match lang {
         Lang::Zh => vec!["邮箱", "备注", "Gemini", "Claude/GPT", "状态"],
         Lang::En => vec!["Account / Email", "Label", "Gemini", "Claude/GPT", "Status"],
@@ -835,17 +839,17 @@ fn build_accounts_table(accounts: &[AccountView], lang: Lang, selected_idx: Opti
 
     for (i, acc) in accounts.iter().enumerate() {
         let is_selected = selected_idx == Some(i);
-        let prefix = if accounts.len() >= 10 {
+        let prefix = if accounts.len() + offset >= 10 {
             if is_selected {
-                format!("➤{:>2}. ", i + 1)
+                format!("➤{:>2}. ", i + offset + 1)
             } else {
-                format!(" {:>2}. ", i + 1)
+                format!(" {:>2}. ", i + offset + 1)
             }
         } else {
             if is_selected {
-                format!("➤{}. ", i + 1)
+                format!("➤{}. ", i + offset + 1)
             } else {
-                format!(" {}. ", i + 1)
+                format!(" {}. ", i + offset + 1)
             }
         };
 
@@ -935,6 +939,50 @@ fn build_accounts_table(accounts: &[AccountView], lang: Lang, selected_idx: Opti
     table
 }
 
+fn account_picker_frame(accounts: &[AccountView], lang: Lang, selected: usize, width: usize, height: usize, title: &str, footer: &[&str]) -> String {
+    if accounts.is_empty() { return String::new(); }
+    let selected = selected.min(accounts.len() - 1);
+    // Leave the last column/row free: terminal auto-wrap and scrolling would
+    // invalidate any cursor-based repaint, especially after resizing.
+    let width = width.saturating_sub(1).max(1);
+    let limit = height.saturating_sub(1).max(1);
+    let budget = limit.saturating_sub(footer.len() + 2);
+    let render = |start, end| build_accounts_table_at(&accounts[start..end], lang, Some(selected - start), start).render_with_max_width(width);
+    let mut start = selected;
+    let mut end = selected + 1;
+    let mut table = render(start, end);
+    let mut lines = vec![title.to_string()];
+    if width >= 60 && table.lines().count() <= budget {
+        while start > 0 {
+            let candidate = render(start - 1, end);
+            if candidate.lines().count() > budget { break; }
+            start -= 1; table = candidate;
+        }
+        while end < accounts.len() {
+            let candidate = render(start, end + 1);
+            if candidate.lines().count() > budget { break; }
+            end += 1; table = candidate;
+        }
+        lines.extend(table.lines().map(str::to_string));
+    } else {
+        // Very narrow/short terminals retain a visible selection and global
+        // numbering; quota details remain available through the action menu.
+        let visible = budget.max(1).min(accounts.len());
+        start = selected.saturating_sub(visible - 1);
+        end = (start + visible).min(accounts.len());
+        if limit == 1 { lines.clear(); }
+        for (index, account) in accounts.iter().enumerate().take(end).skip(start) {
+            lines.push(format!("{}{}. {}", if index == selected { "➤" } else { " " }, index + 1, account.email));
+        }
+    }
+    lines.push(match lang {
+        Lang::Zh => format!("账号 {}–{} / {}", start + 1, end, accounts.len()),
+        Lang::En => format!("Accounts {}–{} / {}", start + 1, end, accounts.len()),
+    });
+    lines.extend(footer.iter().map(|line| line.to_string()));
+    lines.into_iter().take(limit).map(|line| truncate_display_width(&line, width)).collect::<Vec<_>>().join("\r\n")
+}
+
 pub fn select_account_interactive<'a>(
     accounts: &'a [AccountView],
     lang: Lang,
@@ -956,21 +1004,10 @@ pub fn select_account_interactive<'a>(
                 Lang::En => "? Select account (↑/↓ Navigate  |  Enter Select  |  Numbers  |  Esc/0 Cancel):",
             };
 
-            let render = |sel: usize, initial: bool| {
+            let render = |sel: usize, _initial: bool| {
                 let mut out = io::stdout();
-                let table_str = build_accounts_table(accounts, lang, Some(sel)).render();
-                let table_lines = table_str.lines().count();
-                let total_lines = table_lines + 1;
-
-                if !initial {
-                    let _ = write!(out, "\x1b[{}A", total_lines);
-                }
-
-                for line in table_str.lines() {
-                    let _ = writeln!(out, "\x1b[2K\r{}", line);
-                }
-                let _ = writeln!(out, "\x1b[2K\r\x1b[1m{}\x1b[0m", prompt_text);
-                let _ = write!(out, "\x1b[2K\r");
+                let frame = account_picker_frame(accounts, lang, sel, get_terminal_width(), get_terminal_height(), match lang { Lang::Zh => "请选择账号", Lang::En => "Select account" }, &[prompt_text]);
+                let _ = write!(out, "\x1b[2J\x1b[H{}", frame);
                 let _ = out.flush();
             };
 
@@ -1306,22 +1343,10 @@ fn select_account_hub_action(
                 Lang::En => "Action: (↑/↓ Move  |  Enter Actions  |  S Switch  |  V Details  |  R Label  |  T Toggle  |  X Delete  |  Esc/0 Back)",
             };
 
-            let render = |sel: usize, initial: bool| {
+            let render = |sel: usize, _initial: bool| {
                 let mut out = io::stdout();
-                let table_str = build_accounts_table(accounts, lang, Some(sel)).render();
-                let table_lines = table_str.lines().count();
-                let total_lines = table_lines + 3;
-
-                if !initial {
-                    let _ = write!(out, "\x1b[{}A", total_lines);
-                }
-
-                for line in table_str.lines() {
-                    let _ = writeln!(out, "\x1b[2K\r{}", line);
-                }
-                let _ = writeln!(out, "\x1b[2K\r\x1b[90m{}\x1b[0m\n", note);
-                let _ = writeln!(out, "\x1b[2K\r\x1b[1m{}\x1b[0m", prompt_text);
-                let _ = write!(out, "\x1b[2K\r");
+                let frame = account_picker_frame(accounts, lang, sel, get_terminal_width(), get_terminal_height(), match lang { Lang::Zh => "账号与配额管理", Lang::En => "Accounts & Quotas Hub" }, &[note, prompt_text]);
+                let _ = write!(out, "\x1b[2J\x1b[H{}", frame);
                 let _ = out.flush();
             };
 
@@ -1489,11 +1514,12 @@ fn show_accounts_and_quotas_hub(root: &Path, lang: Lang) {
 
                 let target_ide = Some("app");
 
-                match runtime.block_on(crate::modules::account::switch_account(
-                    &target_acc.id,
-                    target_ide,
-                    &HeadlessIntegration,
-                )) {
+                let result = super::check_cli_switch_target(target_ide).and_then(|()| {
+                    runtime.block_on(crate::modules::account::switch_account(
+                        &target_acc.id, target_ide, &HeadlessIntegration,
+                    ))
+                });
+                match result {
                     Ok(_) => {
                         let succ_msg = match lang {
                             Lang::Zh => format!(
@@ -1512,6 +1538,12 @@ fn show_accounts_and_quotas_hub(root: &Path, lang: Lang) {
                         }
                     }
                     Err(err) => {
+                        let err = if err == "cli_app_installation_required" {
+                            match lang {
+                                Lang::Zh => "未找到 Antigravity App。请安装 App 或在设置中指定程序路径；Linux 也支持已初始化的原生 agy 会话。".to_string(),
+                                Lang::En => super::switch_error(&err).message.to_string(),
+                            }
+                        } else { err };
                         let fail_msg = match lang {
                             Lang::Zh => format!("\x1b[31m账号切换失败: {}\x1b[0m", err),
                             Lang::En => format!("\x1b[31mAccount switch failed: {}\x1b[0m", err),
@@ -2593,6 +2625,28 @@ fn show_system_status(snapshot: &Snapshot, root: &Path, lang: Lang) {
 #[cfg(test)]
 mod presentation_tests {
     use super::*;
+    #[test]
+    fn large_account_lists_keep_the_selection_inside_the_terminal_viewport() {
+        let accounts: Vec<AccountView> = (0..40).map(|index| serde_json::from_value(serde_json::json!({
+            "id": format!("fixture-{index}"), "email": format!("u{index}@example.invalid"),
+            "quota": {"last_updated": 1, "models": [], "quota_groups": [{"display_name": "Gemini Models", "buckets": [
+                {"bucket_id":"gemini-weekly", "window":"weekly", "remaining_fraction":0.5, "reset_time":""},
+                {"bucket_id":"gemini-5h", "window":"5h", "remaining_fraction":0.8, "reset_time":""}
+            ]}]}
+        })).unwrap()).collect();
+        for lang in [Lang::En, Lang::Zh] {
+            for (width, height) in [(110, 24), (72, 12), (48, 8), (72, 2)] {
+                for selected in [0, 9, 20, 39] {
+                    let frame = account_picker_frame(&accounts, lang, selected, width, height, "Accounts", &["Actions"]);
+                    assert!(frame.lines().count() < height, "{width}x{height}: {frame}");
+                    assert!(frame.lines().all(|line| display_width(line) < width));
+                    assert!(frame.contains(&format!("u{selected}@")), "selection must remain visible: {frame}");
+                    assert!(!frame.contains("\x1b[40A"));
+                    if height > 2 { assert!(!frame.contains(&format!("u{}@", if selected == 39 { 0 } else { 39 }))); }
+                }
+            }
+        }
+    }
     #[test]
     fn account_brief_cannot_hide_an_exhausted_week_behind_a_full_session() {
         let q: QuotaView = serde_json::from_value(serde_json::json!({

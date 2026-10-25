@@ -429,6 +429,15 @@ fn get_antigravity_pids(target_ide: Option<&str>) -> Vec<u32> {
     pids
 }
 
+#[cfg(any(target_os = "windows", test))]
+fn wait_until_stopped(deadline: std::time::Instant, mut running: impl FnMut() -> bool) -> bool {
+    loop {
+        if !running() { return true; }
+        let Some(remaining) = deadline.checked_duration_since(std::time::Instant::now()) else { return false; };
+        thread::sleep(remaining.min(Duration::from_millis(200)));
+    }
+}
+
 /// Close Antigravity processes
 pub fn close_antigravity(timeout_secs: u64, target_ide: Option<&str>) -> Result<(), String> {
     crate::modules::logger::log_info(&format!("Closing Antigravity ({:?})...", target_ide));
@@ -438,6 +447,9 @@ pub fn close_antigravity(timeout_secs: u64, target_ide: Option<&str>) -> Result<
         // Windows: Precise kill by PID to support multiple versions or custom filenames
         let pids = get_antigravity_pids(target_ide);
         if !pids.is_empty() {
+            let started = std::time::Instant::now();
+            let deadline = started + Duration::from_millis(timeout_secs.saturating_mul(700));
+            let hard_deadline = started + Duration::from_millis(timeout_secs.saturating_mul(1000));
             crate::modules::logger::log_info(&format!(
                 "Precisely closing {} identified processes on Windows...",
                 pids.len()
@@ -451,13 +463,8 @@ pub fn close_antigravity(timeout_secs: u64, target_ide: Option<&str>) -> Result<
             // Wait for the killed PIDs to disappear, mirroring the macOS/Linux
             // poll loops. A fixed 200ms nap intermittently lost the race with
             // Electron teardown and failed the final running check.
-            let deadline = std::time::Instant::now()
-                + Duration::from_millis(timeout_secs.saturating_mul(700));
-            while is_antigravity_running(target_ide) && std::time::Instant::now() < deadline {
-                thread::sleep(Duration::from_millis(200));
-            }
             // Phase 2: re-kill stragglers and wait out the remaining budget.
-            if is_antigravity_running(target_ide) {
+            if !wait_until_stopped(deadline, || is_antigravity_running(target_ide)) {
                 let remaining = get_antigravity_pids(target_ide);
                 if !remaining.is_empty() {
                     crate::modules::logger::log_warn(&format!(
@@ -471,12 +478,7 @@ pub fn close_antigravity(timeout_secs: u64, target_ide: Option<&str>) -> Result<
                             .output();
                     }
                 }
-                let hard_deadline = std::time::Instant::now()
-                    + Duration::from_millis(timeout_secs.saturating_mul(300));
-                while is_antigravity_running(target_ide) && std::time::Instant::now() < hard_deadline
-                {
-                    thread::sleep(Duration::from_millis(200));
-                }
+                wait_until_stopped(hard_deadline, || is_antigravity_running(target_ide));
             }
         }
     }
@@ -1317,4 +1319,23 @@ fn check_standard_locations(target_ide: Option<&str>) -> Option<std::path::PathB
 fn is_ide_name(value: &str) -> bool {
     let value = value.to_lowercase().replace(['-', '_'], " ");
     value.contains("antigravity ide")
+}
+
+#[cfg(test)]
+mod close_wait_tests {
+    use super::*;
+
+    #[test]
+    fn exit_wait_observes_delayed_exit_and_respects_the_deadline() {
+        let now = std::time::Instant::now();
+        assert!(wait_until_stopped(now, || false));
+        assert!(!wait_until_stopped(now, || true));
+        let mut polls = 0;
+        assert!(wait_until_stopped(std::time::Instant::now() + Duration::from_millis(2), || {
+            polls += 1;
+            polls < 2
+        }));
+        assert_eq!(polls, 2);
+        assert!(!wait_until_stopped(std::time::Instant::now() + Duration::from_millis(2), || true));
+    }
 }

@@ -165,6 +165,7 @@ jobs:
           BINARY=src-tauri/target/debug/agy-switch
           if [[ "$RUNNER_OS" == Windows ]]; then BINARY="$BINARY.exe"; fi
           node scripts/test-cli-terminal.mjs "$BINARY"
+          node scripts/test-cli-account-window.mjs "$BINARY"
 
       - name: Validate native GUI fixture and screenshot checks
         run: |

@@ -55,6 +55,7 @@ jobs:
           BINARY=src-tauri/target/release/agy-switch
           if [[ "$RUNNER_OS" == Windows ]]; then BINARY="$BINARY.exe"; fi
           node scripts/test-cli-terminal.mjs "$BINARY"
+          node scripts/test-cli-account-window.mjs "$BINARY"
 
       - name: Test dedicated Windows console CLI in PowerShell
         if: runner.os == 'Windows'

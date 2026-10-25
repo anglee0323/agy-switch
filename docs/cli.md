@@ -23,6 +23,8 @@ cargo build --locked --manifest-path src-tauri/Cargo.toml --bin agy-switch
 
 Use ↑/↓ to select, Enter/→ to enter and Esc/← to return. Number shortcuts, j/k and q remain supported. Terminal input is restored on exit. Secret entry refuses to proceed if the terminal cannot disable echo. In a pipe, bare `agy-switch` prints help. Launching the original desktop executable without arguments preserves GUI startup.
 
+Account pickers show only the rows that fit the terminal. The selected account stays visible while using arrows, Home/End or resizing; numbering still refers to the full saved list. Narrow terminals use a compact account list, with quota details available from the account menu.
+
 Policy editing, ordering and update checks described below are available from **4.9.0**. Older v4.8.1 binaries do not include them. Check `agy-switch --version` before using these commands.
 
 ## Commands
@@ -68,6 +70,8 @@ There is no `--target cli` mode. The APP and Google’s `agy` may share a system
 
 Switching is an explicit mutating command. It reuses the GUI's token validation/refresh, credential synchronization, process handling and account-index update. The default `--target app` switches App and the initialized native `agy` session together, closing and restarting only a running App. On Linux an initialized agy session can be used without an installed App; the shared credential store is still updated. `--target ide` changes only IDE credentials and restarts only a running IDE. App/CLI and IDE have separate recorded selections; `current --target app|ide` reads the corresponding record. See [account scopes and import](account-scopes.md).
 
+On macOS/Windows the App target requires an installed App, including an explicit `--target app`. This is checked before token validation or credential writes; the interactive menu uses the same guard. Linux retains its initialized native agy + Secret Service alternative.
+
 When the CLI relaunches an APP or IDE, child stdin/stdout/stderr are detached so the command returns promptly and JSON output stays machine-readable. GUI launches preserve their existing I/O behavior.
 
 Save work in Antigravity before switching. Start a new `agy` invocation afterward; a running invocation may retain the previous token. A failure can follow a partial external credential change, so inspect both clients before retrying. CLI errors intentionally omit raw server details; use the GUI for detailed troubleshooting.
@@ -110,6 +114,7 @@ cargo test --locked --manifest-path src-tauri/Cargo.toml --lib cli::
 cargo build --locked --manifest-path src-tauri/Cargo.toml
 node scripts/test-cli.mjs ./src-tauri/target/debug/agy-switch
 node scripts/test-cli-terminal.mjs ./src-tauri/target/debug/agy-switch
+node scripts/test-cli-account-window.mjs ./src-tauri/target/debug/agy-switch
 node scripts/test-cli-launch.mjs
 node --test scripts/test-homebrew-generator.mjs
 ```
@@ -132,4 +137,4 @@ Policy editing, candidate ordering, account ordering and update checks share the
 
 ## CLI scope
 
-Account management, cached quotas, refresh, switching, local usage, policy configuration, ordering and update checks are terminal workflows. Appearance, desktop startup, update installation and the background smart-switch scheduler remain desktop features. Linux terminal-only users can inspect/add/refresh accounts without a display; APP switching still requires an installed APP and its credential backend. No file-only agy switch or background CLI daemon is provided.
+Account management, cached quotas, refresh, switching, local usage, policy configuration, ordering and update checks are terminal workflows. Appearance, desktop startup, update installation and the background smart-switch scheduler remain desktop features. Linux terminal-only users can inspect/add/refresh accounts without a display; switching requires an installed App or an initialized native agy session with its shared credential backend. No file-only agy switch or background CLI daemon is provided.

@@ -116,6 +116,7 @@ jobs:
           node scripts/test-cli.mjs "$PAYLOAD/usr/bin/agy-switch-desktop"
           node scripts/test-cli.mjs "$PAYLOAD/usr/bin/agy-switch"
           node scripts/test-cli-terminal.mjs "$PAYLOAD/usr/bin/agy-switch"
+          node scripts/test-cli-account-window.mjs "$PAYLOAD/usr/bin/agy-switch"
           node scripts/package-cli.mjs "$PAYLOAD/usr/bin/agy-switch" artifacts/release "v$VERSION"
           [[ "$("$PAYLOAD/usr/bin/agy-switch-desktop" --version)" == "agy-switch $VERSION" ]]
           node scripts/release-assets.mjs checksum "$PACKAGE"
@@ -195,6 +196,7 @@ jobs:
           ./scripts/test-windows-cli.ps1 -Binary ./src-tauri/target/release/agy-switch-desktop.exe
           ./scripts/test-windows-cli.ps1 -Binary ./src-tauri/target/release/agy-switch.exe -Console
           node scripts/test-cli-terminal.mjs src-tauri/target/release/agy-switch.exe
+          node scripts/test-cli-account-window.mjs src-tauri/target/release/agy-switch.exe
           if ($LASTEXITCODE -ne 0) { throw 'Console terminal check failed' }
       - name: Stage Windows package
         shell: bash
