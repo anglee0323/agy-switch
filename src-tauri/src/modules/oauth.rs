@@ -405,11 +405,10 @@ async fn exchange_code_once(
             .map_err(|e| (None, format!("Token parsing failed: {}", e)))?;
         token_res.oauth_client_key = Some(client_cfg.key.clone());
 
-        // Add detailed logs
+        // Add detailed logs (never echo token material, even partially)
         crate::modules::logger::log_info(&format!(
-            "Token exchange successful via [{}]! access_token: {}..., refresh_token: {}",
+            "Token exchange successful via [{}]! (refresh_token: {})",
             client_cfg.key,
-            &token_res.access_token.chars().take(20).collect::<String>(),
             if token_res.refresh_token.is_some() {
                 "✓"
             } else {
