@@ -54,3 +54,10 @@ This builds both executables before bundling the console program as a resource. 
 CI separately exercises JSON/exit codes, a real ConPTY terminal, the actual NSIS installer, and native WebView2 windows with synthetic accounts. The native GUI test build explicitly enables `native-gui-test`; only debug Windows builds can pass a WebDriver port through the WebView2 API. Production builds cannot use this path. It addresses [the elevated WebView2 automation restriction](https://github.com/tauri-apps/wry/issues/1782) without registry changes or disabling OS security.
 
 Hosted Windows CI is not a substitute for every physical Windows 10/11 device, display arrangement, startup registration, real Google login or authenticated switching. Exact outcomes and source commits belong in [native acceptance](maintainers/native-gui-acceptance.md), [4.10.10 package verification](maintainers/4.10.10-public-acceptance.md) and release notes.
+
+MSVC binaries, unit tests and native examples share the Common Controls v6 manifest
+from `scripts/fixtures/windows-desktop.manifest`. The linker embeds it, while
+Tauri owns icon/version resources without adding a duplicate manifest. Missing
+test manifests can terminate the Windows loader before any test runs; see the
+[upstream Tauri report](https://github.com/tauri-apps/tauri/issues/13948).
+CI prints import-resolution diagnostics after a Windows test-loader failure.
