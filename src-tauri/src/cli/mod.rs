@@ -284,6 +284,7 @@ fn execute(command: Command, json: bool) -> Result<String> {
                 "ide" => Some("ide"),
                 _ => Some("app"),
             };
+            check_cli_switch_target(target_ide).map_err(|error| switch_error(&error))?;
             runtime
                 .block_on(crate::modules::account::switch_account(
                     &account.id,
@@ -396,6 +397,9 @@ fn execute(command: Command, json: bool) -> Result<String> {
 // Never forward server responses, credentials, or untrusted filenames to the terminal.
 fn switch_error(error: &str) -> CliError {
     if error.contains("cli_app_installation_required") {
+        #[cfg(target_os = "linux")]
+        return CliError::data("Install Antigravity App or initialize the native agy session before switching accounts.");
+        #[cfg(not(target_os = "linux"))]
         return CliError::data("Cannot find Antigravity APP. Set its executable path in Settings; CLI-only file synchronization is not supported.");
     }
     if error.contains("another_account_switch_in_progress") {
@@ -422,10 +426,26 @@ fn ensure_cli_switch_target(
     target: Option<&str>,
     app_available: bool,
 ) -> std::result::Result<(), String> {
-    if target.is_none() && !app_available {
+    if matches!(target, None | Some("app" | "all" | "agy" | "app_cli")) && !app_available {
         return Err("cli_app_installation_required".into());
     }
     Ok(())
+}
+
+fn check_cli_switch_target(target: Option<&str>) -> std::result::Result<(), String> {
+    check_cli_switch_target_with(target, || {
+        if crate::modules::process::get_antigravity_executable_path(None).is_some() { return true; }
+        // Preserve Linux's initialized native agy + Secret Service path.
+        #[cfg(target_os = "linux")]
+        if let Some(home) = dirs::home_dir() {
+            return crate::modules::cli_credentials::session_path(&home).ok().flatten().is_some();
+        }
+        false
+    })
+}
+
+fn check_cli_switch_target_with(target: Option<&str>, discover_app: impl FnOnce() -> bool) -> std::result::Result<(), String> {
+    ensure_cli_switch_target(target, discover_app())
 }
 
 pub(crate) struct HeadlessIntegration;
@@ -438,9 +458,7 @@ impl crate::modules::integration::SystemIntegration for HeadlessIntegration {
         let account = account.clone();
         let target = target_ide.map(str::to_owned);
         tokio::task::spawn_blocking(move || {
-            let app_available = target.is_some()
-                || crate::modules::process::get_antigravity_executable_path(None).is_some();
-            ensure_cli_switch_target(target.as_deref(), app_available)?;
+            check_cli_switch_target(target.as_deref())?;
             crate::modules::integration::DesktopIntegration::switch_sync(
                 &HeadlessIntegration,
                 &account,
@@ -544,6 +562,12 @@ mod tests {
         assert!(ensure_cli_switch_target(None, false).is_err());
         assert!(ensure_cli_switch_target(None, true).is_ok());
         assert!(ensure_cli_switch_target(Some("ide"), false).is_ok());
+        for target in [None, Some("app"), Some("all"), Some("agy"), Some("app_cli")] {
+            let called = std::cell::Cell::new(false);
+            assert!(check_cli_switch_target_with(target, || { called.set(true); false }).is_err());
+            assert!(called.get(), "explicit targets must still discover the installed App");
+            assert!(check_cli_switch_target_with(target, || true).is_ok());
+        }
     }
     #[test]
     fn errors_do_not_echo_secrets() {
