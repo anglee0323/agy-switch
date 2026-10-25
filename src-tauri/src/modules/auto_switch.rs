@@ -847,8 +847,16 @@ impl Environment for NativeEnvironment {
         for db_path in candidate_dbs {
             if db_path.exists() {
                 let backup_path = db_path.with_extension("vscdb.backup");
-                let _ = std::fs::copy(&db_path, &backup_path);
-                let _ = db::inject_token(
+                if let Err(e) = std::fs::copy(&db_path, &backup_path) {
+                    // A missing backup must not block the switch, but silently
+                    // losing it hides why a later manual restore is impossible.
+                    crate::modules::logger::log_warn(&format!(
+                        "[AutoSwitch] Failed to back up {}: {}",
+                        backup_path.display(),
+                        e
+                    ));
+                }
+                if let Err(e) = db::inject_token(
                     &db_path,
                     &target.token.access_token,
                     &target.token.refresh_token,
@@ -856,9 +864,18 @@ impl Environment for NativeEnvironment {
                     &target.email,
                     target.token.is_gcp_tos,
                     target.token.project_id.as_deref(),
-                    target.token.id_token.as_deref(),
-                    target.token.oauth_client_key.as_deref(),
-                );
+                    &target.token.id_token.as_deref(),
+                    &target.token.oauth_client_key.as_deref(),
+                ) {
+                    // The switch still reports success (keyring/session carry the
+                    // credentials), but a failed injection means the relaunched
+                    // client may read stale credentials from this database.
+                    crate::modules::logger::log_error(&format!(
+                        "[AutoSwitch] Failed to inject credentials into {}: {}. The client may show the previous account after relaunch.",
+                        db_path.display(),
+                        e
+                    ));
+                }
             }
         }
 
