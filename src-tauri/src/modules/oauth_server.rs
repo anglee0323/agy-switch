@@ -2,7 +2,9 @@ use crate::modules::oauth;
 use std::sync::{Mutex, OnceLock};
 use tauri::Url;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpListener;
+use tokio::net::{TcpListener, TcpStream};
+use tokio::task::JoinSet;
+use tokio::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tokio::sync::watch;
 
@@ -14,6 +16,7 @@ struct OAuthFlowState {
     cancel_tx: watch::Sender<bool>,
     code_tx: mpsc::Sender<Result<String, String>>,
     code_rx: Option<mpsc::Receiver<Result<String, String>>>,
+    expires_at: Instant,
 }
 
 static OAUTH_FLOW_STATE: OnceLock<Mutex<Option<OAuthFlowState>>> = OnceLock::new();
@@ -43,6 +46,115 @@ fn oauth_fail_html() -> &'static str {
     </html>"
 }
 
+/// Read a complete bounded header. Preconnects, fragments and unrelated requests
+/// must not consume the authorization channel or close the listener.
+async fn read_callback(mut stream: TcpStream, expected_state: String) -> Option<Result<String, String>> {
+    let header = tokio::time::timeout(Duration::from_secs(3), async {
+        let mut data = Vec::new();
+        let mut buffer = [0u8; 1024];
+        loop {
+            let count = stream.read(&mut buffer).await.ok()?;
+            if count == 0 { return None; }
+            data.extend_from_slice(&buffer[..count]);
+            if data.len() > 8192 { return None; }
+            if data.windows(4).any(|part| part == b"\r\n\r\n") { return Some(data); }
+        }
+    }).await.ok().flatten();
+    let result = header.and_then(|bytes| {
+        let request = std::str::from_utf8(&bytes).ok()?;
+        let mut parts = request.lines().next()?.split_whitespace();
+        if parts.next()? != "GET" { return None; }
+        let target = parts.next()?;
+        if !matches!(parts.next(), Some("HTTP/1.1" | "HTTP/1.0")) || parts.next().is_some() { return None; }
+        let url = Url::parse(&format!("http://localhost{target}")).ok()?;
+        if url.path() != "/oauth-callback" || url.fragment().is_some() { return None; }
+        let values = |key: &str| url.query_pairs().filter(|(name, _)| name == key).map(|(_, value)| value.into_owned()).collect::<Vec<_>>();
+        let states = values("state");
+        if states.len() != 1 || states[0] != expected_state { return None; }
+        let codes = values("code");
+        let errors = values("error");
+        if codes.len() == 1 && !codes[0].is_empty() && errors.is_empty() {
+            Some(Ok(codes[0].clone()))
+        } else if codes.is_empty() && errors.len() == 1 {
+            Some(Err("OAuth authorization was declined. Start a new authorization flow.".into()))
+        } else { None }
+    });
+    let response = if matches!(result, Some(Ok(_))) { oauth_success_html() } else { oauth_fail_html() };
+    let _ = tokio::time::timeout(Duration::from_secs(1), stream.write_all(response.as_bytes())).await;
+    result
+}
+
+async fn listen_for_callback(
+    listener: TcpListener, expected_state: String,
+    tx: mpsc::Sender<Result<String, String>>, mut cancel: watch::Receiver<bool>,
+    expires_at: Instant, app_handle: Option<tauri::AppHandle>,
+) {
+    let mut connections = JoinSet::new();
+    loop {
+        if *cancel.borrow() { break; }
+        tokio::select! {
+            _ = cancel.changed() => break,
+            _ = tokio::time::sleep_until(expires_at) => {
+                let _ = tx.try_send(Err("OAuth authorization timed out. Start a new authorization flow.".into()));
+                break;
+            }
+            completed = connections.join_next(), if !connections.is_empty() => {
+                if let Some(Ok(Some(result))) = completed {
+                    if tx.try_send(result).is_ok() {
+                        if let Some(h) = &app_handle {
+                            use tauri::Emitter;
+                            let _ = h.emit("oauth-callback-received", ());
+                        }
+                    }
+                    break;
+                }
+            }
+            accepted = listener.accept() => {
+                match accepted {
+                    Ok((stream, _)) if connections.len() < 8 => {
+                        connections.spawn(read_callback(stream, expected_state.clone()));
+                    }
+                    Ok(_) => {},
+                    Err(_) => {
+                        let _ = tx.try_send(Err("OAuth callback listener failed. Start a new authorization flow.".into()));
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    // Dropping JoinSet aborts idle readers; a cancelled flow releases its sockets.
+}
+
+async fn wait_for_code(
+    rx: &mut mpsc::Receiver<Result<String, String>>, cancel: &mut watch::Receiver<bool>, expires_at: Instant,
+) -> Result<String, String> {
+    if *cancel.borrow() { return Err("OAuth cancelled".into()); }
+    tokio::select! {
+        biased;
+        result = rx.recv() => result.unwrap_or_else(|| Err("OAuth flow channel closed unexpectedly".into())),
+        _ = cancel.changed() => Err("OAuth cancelled".into()),
+        _ = tokio::time::sleep_until(expires_at) => Err("OAuth authorization timed out. Start a new authorization flow.".into()),
+    }
+}
+
+async fn receive_oauth_code() -> Result<(String, String, String), String> {
+    let (mut rx, mut cancel, expires_at, redirect_uri, client_key, expected_state) = {
+        let mut lock = get_oauth_flow_state().lock().map_err(|_| "OAuth state lock corrupted")?;
+        let state = lock.as_mut().ok_or("OAuth state does not exist")?;
+        let rx = state.code_rx.take().ok_or("OAuth authorization already in progress")?;
+        (rx, state.cancel_tx.subscribe(), state.expires_at, state.redirect_uri.clone(), state.client_key.clone(), state.state.clone())
+    };
+    let result = wait_for_code(&mut rx, &mut cancel, expires_at).await;
+    if let Ok(mut lock) = get_oauth_flow_state().lock() {
+        // An older waiter must never clear a replacement authorization flow.
+        if lock.as_ref().is_some_and(|state| state.state == expected_state) {
+            if let Some(state) = lock.take() { let _ = state.cancel_tx.send(true); }
+        }
+    }
+    Ok((result?, redirect_uri, client_key))
+}
+
 async fn ensure_oauth_flow_prepared(
     app_handle: Option<tauri::AppHandle>,
     requested_client_key: Option<String>,
@@ -61,7 +173,7 @@ async fn ensure_oauth_flow_prepared(
     // Return URL if flow already exists and is still "fresh" (receiver hasn't been taken)
     if let Ok(mut state) = get_oauth_flow_state().lock() {
         if let Some(s) = state.as_mut() {
-            if s.code_rx.is_some() {
+            if s.code_rx.is_some() && Instant::now() < s.expires_at {
                 return Ok(s.auth_url.clone());
             } else {
                 // Flow is already "in progress" (rx taken), but user requested a NEW one.
@@ -145,204 +257,13 @@ async fn ensure_oauth_flow_prepared(
     // Use mpsc instead of oneshot to allow multiple senders (listener OR manual input)
     let (code_tx, code_rx) = mpsc::channel::<Result<String, String>>(1);
 
-    // Start listeners immediately: even if the user authorizes before clicking "Start OAuth",
-    // the browser can still hit our callback and finish the flow.
-    let app_handle_for_tasks = app_handle.clone();
-
-    if let Some(l4) = ipv4_listener {
-        let tx = code_tx.clone();
-        let mut rx = cancel_rx.clone();
-        let app_handle = app_handle_for_tasks.clone();
-        tokio::spawn(async move {
-            if let Ok((mut stream, _)) = tokio::select! {
-                res = l4.accept() => res.map_err(|e| format!("failed_to_accept_connection: {}", e)),
-                _ = rx.changed() => Err("OAuth cancelled".to_string()),
-            } {
-                // Reuse the existing parsing/response code by constructing a temporary listener task
-                // that sends into the shared mpsc channel.
-                let mut buffer = [0u8; 4096];
-                let bytes_read = stream.read(&mut buffer).await.unwrap_or(0);
-                let request = String::from_utf8_lossy(&buffer[..bytes_read]);
-
-                // [FIX #931/850/778] More robust parsing and detailed logging
-                let query_params = request
-                    .lines()
-                    .next()
-                    .and_then(|line| {
-                        let parts: Vec<&str> = line.split_whitespace().collect();
-                        if parts.len() >= 2 {
-                            Some(parts[1])
-                        } else {
-                            None
-                        }
-                    })
-                    .and_then(|path| {
-                        // Use a dummy base for parsing; redirect_uri is already set to localhost
-                        Url::parse(&format!("http://localhost{}", path)).ok()
-                    })
-                    .map(|url| {
-                        let mut code = None;
-                        let mut state = None;
-                        for (k, v) in url.query_pairs() {
-                            if k == "code" {
-                                code = Some(v.to_string());
-                            } else if k == "state" {
-                                state = Some(v.to_string());
-                            }
-                        }
-                        (code, state)
-                    });
-
-                let (code, received_state) = match query_params {
-                    Some((c, s)) => (c, s),
-                    None => (None, None),
-                };
-
-                if code.is_none() && bytes_read > 0 {
-                    crate::modules::logger::log_error(&format!(
-                        "OAuth callback failed to parse code. Read {} bytes; request target: {:?}",
-                        bytes_read,
-                        request.lines().next().unwrap_or_default().split('?').next()
-                    ));
-                }
-
-                // Verify state
-                let state_valid = {
-                    if let Ok(lock) = get_oauth_flow_state().lock() {
-                        if let Some(s) = lock.as_ref() {
-                            received_state.as_ref() == Some(&s.state)
-                        } else {
-                            false
-                        }
-                    } else {
-                        false
-                    }
-                };
-
-                let (result, response_html) = match (code, state_valid) {
-                    (Some(code), true) => {
-                        crate::modules::logger::log_info(
-                            "Successfully captured OAuth code from IPv4 listener",
-                        );
-                        (Ok(code), oauth_success_html())
-                    }
-                    (Some(_), false) => {
-                        crate::modules::logger::log_error(
-                            "OAuth callback state mismatch (CSRF protection)",
-                        );
-                        (Err("OAuth state mismatch".to_string()), oauth_fail_html())
-                    }
-                    (None, _) => (
-                        Err("Failed to get Authorization Code in callback".to_string()),
-                        oauth_fail_html(),
-                    ),
-                };
-
-                let _ = stream.write_all(response_html.as_bytes()).await;
-                let _ = stream.flush().await;
-
-                if let Some(h) = app_handle {
-                    use tauri::Emitter;
-                    let _ = h.emit("oauth-callback-received", ());
-                }
-                let _ = tx.send(result).await;
-            }
-        });
-    }
-
-    if let Some(l6) = ipv6_listener {
-        let tx = code_tx.clone();
-        let mut rx = cancel_rx;
-        let app_handle = app_handle_for_tasks;
-        tokio::spawn(async move {
-            if let Ok((mut stream, _)) = tokio::select! {
-                res = l6.accept() => res.map_err(|e| format!("failed_to_accept_connection: {}", e)),
-                _ = rx.changed() => Err("OAuth cancelled".to_string()),
-            } {
-                let mut buffer = [0u8; 4096];
-                let bytes_read = stream.read(&mut buffer).await.unwrap_or(0);
-                let request = String::from_utf8_lossy(&buffer[..bytes_read]);
-
-                let query_params = request
-                    .lines()
-                    .next()
-                    .and_then(|line| {
-                        let parts: Vec<&str> = line.split_whitespace().collect();
-                        if parts.len() >= 2 {
-                            Some(parts[1])
-                        } else {
-                            None
-                        }
-                    })
-                    .and_then(|path| Url::parse(&format!("http://localhost{}", path)).ok())
-                    .map(|url| {
-                        let mut code = None;
-                        let mut state = None;
-                        for (k, v) in url.query_pairs() {
-                            if k == "code" {
-                                code = Some(v.to_string());
-                            } else if k == "state" {
-                                state = Some(v.to_string());
-                            }
-                        }
-                        (code, state)
-                    });
-
-                let (code, received_state) = match query_params {
-                    Some((c, s)) => (c, s),
-                    None => (None, None),
-                };
-
-                if code.is_none() && bytes_read > 0 {
-                    crate::modules::logger::log_error(&format!(
-                        "OAuth callback failed to parse code (IPv6). Read {} bytes; request target: {:?}",
-                        bytes_read,
-                        request.lines().next().unwrap_or_default().split('?').next()
-                    ));
-                }
-
-                // Verify state
-                let state_valid = {
-                    if let Ok(lock) = get_oauth_flow_state().lock() {
-                        if let Some(s) = lock.as_ref() {
-                            received_state.as_ref() == Some(&s.state)
-                        } else {
-                            false
-                        }
-                    } else {
-                        false
-                    }
-                };
-
-                let (result, response_html) = match (code, state_valid) {
-                    (Some(code), true) => {
-                        crate::modules::logger::log_info(
-                            "Successfully captured OAuth code from IPv6 listener",
-                        );
-                        (Ok(code), oauth_success_html())
-                    }
-                    (Some(_), false) => {
-                        crate::modules::logger::log_error(
-                            "OAuth callback state mismatch (IPv6 CSRF protection)",
-                        );
-                        (Err("OAuth state mismatch".to_string()), oauth_fail_html())
-                    }
-                    (None, _) => (
-                        Err("Failed to get Authorization Code in callback".to_string()),
-                        oauth_fail_html(),
-                    ),
-                };
-
-                let _ = stream.write_all(response_html.as_bytes()).await;
-                let _ = stream.flush().await;
-
-                if let Some(h) = app_handle {
-                    use tauri::Emitter;
-                    let _ = h.emit("oauth-callback-received", ());
-                }
-                let _ = tx.send(result).await;
-            }
-        });
+    // Capture the expected state before accepting connections; do not race global state setup.
+    let expires_at = Instant::now() + Duration::from_secs(300);
+    for listener in [ipv4_listener, ipv6_listener].into_iter().flatten() {
+        tokio::spawn(listen_for_callback(
+            listener, state_str.clone(), code_tx.clone(), cancel_rx.clone(),
+            expires_at, app_handle.clone(),
+        ));
     }
 
     // Save state
@@ -355,6 +276,7 @@ async fn ensure_oauth_flow_prepared(
             cancel_tx,
             code_tx,
             code_rx: Some(code_rx),
+            expires_at,
         });
     }
 
@@ -401,34 +323,7 @@ pub async fn start_oauth_flow(
             .map_err(|e| format!("failed_to_open_browser: {}", e))?;
     }
 
-    // Take code_rx to wait for it
-    let (mut code_rx, redirect_uri, client_key) = {
-        let mut lock = get_oauth_flow_state()
-            .lock()
-            .map_err(|_| "OAuth state lock corrupted".to_string())?;
-        let Some(state) = lock.as_mut() else {
-            return Err("OAuth state does not exist".to_string());
-        };
-        let rx = state
-            .code_rx
-            .take()
-            .ok_or_else(|| "OAuth authorization already in progress".to_string())?;
-        (rx, state.redirect_uri.clone(), state.client_key.clone())
-    };
-
-    // Wait for code (if user has already authorized, this returns immediately)
-    // For mpsc, we use recv()
-    let code = match code_rx.recv().await {
-        Some(Ok(code)) => code,
-        Some(Err(e)) => return Err(e),
-        None => return Err("OAuth flow channel closed unexpectedly".to_string()),
-    };
-
-    // Clean up flow state (release cancel_tx, etc.)
-    if let Ok(mut lock) = get_oauth_flow_state().lock() {
-        *lock = None;
-    }
-
+    let (code, redirect_uri, client_key) = receive_oauth_code().await?;
     oauth::exchange_code_with_client(&code, &redirect_uri, Some(&client_key)).await
 }
 
@@ -441,31 +336,7 @@ pub async fn complete_oauth_flow(
     // Ensure URL + listeners exist
     let _ = ensure_oauth_flow_prepared(app_handle, None).await?;
 
-    // Take receiver to wait for code
-    let (mut code_rx, redirect_uri, client_key) = {
-        let mut lock = get_oauth_flow_state()
-            .lock()
-            .map_err(|_| "OAuth state lock corrupted".to_string())?;
-        let Some(state) = lock.as_mut() else {
-            return Err("OAuth state does not exist".to_string());
-        };
-        let rx = state
-            .code_rx
-            .take()
-            .ok_or_else(|| "OAuth authorization already in progress".to_string())?;
-        (rx, state.redirect_uri.clone(), state.client_key.clone())
-    };
-
-    let code = match code_rx.recv().await {
-        Some(Ok(code)) => code,
-        Some(Err(e)) => return Err(e),
-        None => return Err("OAuth flow channel closed unexpectedly".to_string()),
-    };
-
-    if let Ok(mut lock) = get_oauth_flow_state().lock() {
-        *lock = None;
-    }
-
+    let (code, redirect_uri, client_key) = receive_oauth_code().await?;
     oauth::exchange_code_with_client(&code, &redirect_uri, Some(&client_key)).await
 }
 
@@ -508,9 +379,100 @@ pub async fn submit_oauth_code(
     crate::modules::logger::log_info("Received manual OAuth code submission");
 
     // Send to the channel
-    tx.send(Ok(code))
-        .await
-        .map_err(|_| "Failed to send code to OAuth flow (receiver dropped)".to_string())?;
+    tx.try_send(Ok(code))
+        .map_err(|_| "OAuth flow already completed or is no longer waiting for a code".to_string())?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn fixture(lifetime: Duration) -> (std::net::SocketAddr, mpsc::Receiver<Result<String, String>>, watch::Sender<bool>, tokio::task::JoinHandle<()>) {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let (tx, rx) = mpsc::channel(1);
+        let (cancel, cancelled) = watch::channel(false);
+        let task = tokio::spawn(listen_for_callback(listener, "fixture-state".into(), tx, cancelled, Instant::now() + lifetime, None));
+        (address, rx, cancel, task)
+    }
+
+    async fn request(address: std::net::SocketAddr, text: &[u8]) {
+        let mut stream = TcpStream::connect(address).await.unwrap();
+        stream.write_all(text).await.unwrap();
+        let mut response = Vec::new();
+        let _ = tokio::time::timeout(Duration::from_secs(2), stream.read_to_end(&mut response)).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn preconnect_invalid_requests_and_fragmented_headers_do_not_consume_callback() {
+        let (address, mut rx, cancel, task) = fixture(Duration::from_secs(10)).await;
+        let idle = TcpStream::connect(address).await.unwrap();
+        drop(TcpStream::connect(address).await.unwrap());
+        for text in [
+            "GET /favicon.ico HTTP/1.1\r\n\r\n",
+            "GET /oauth-callback?code=fixture-code&state=wrong HTTP/1.1\r\n\r\n",
+            "GET /oauth-callback?code=a&code=b&state=fixture-state HTTP/1.1\r\n\r\n",
+        ] {
+            request(address, text.as_bytes()).await;
+            assert!(matches!(rx.try_recv(), Err(mpsc::error::TryRecvError::Empty)));
+        }
+        let mut stream = TcpStream::connect(address).await.unwrap();
+        stream.write_all(b"GET /oauth-callback?code=fixture-").await.unwrap();
+        tokio::task::yield_now().await;
+        stream.write_all(b"code&state=fixture-state HTTP/1.1\r\nHost: localhost\r\n\r\n").await.unwrap();
+        assert_eq!(tokio::time::timeout(Duration::from_secs(2), rx.recv()).await.unwrap(), Some(Ok("fixture-code".into())));
+        task.await.unwrap();
+        assert!(TcpStream::connect(address).await.is_err());
+        drop(idle);
+        drop(cancel);
+    }
+
+    #[tokio::test]
+    async fn authenticated_denial_is_terminal_but_never_echoes_provider_data() {
+        let (address, mut rx, _cancel, task) = fixture(Duration::from_secs(10)).await;
+        request(address, b"GET /oauth-callback?error=fixture-secret&state=fixture-state HTTP/1.1\r\n\r\n").await;
+        let error = rx.recv().await.unwrap().unwrap_err();
+        assert!(error.contains("declined"));
+        assert!(!error.contains("fixture-secret"));
+        task.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn oversized_headers_do_not_end_the_flow() {
+        let (address, mut rx, cancel, task) = fixture(Duration::from_secs(10)).await;
+        request(address, &vec![b'x'; 9000]).await;
+        request(address, b"GET /oauth-callback?code=ok&state=fixture-state HTTP/1.0\r\n\r\n").await;
+        assert_eq!(rx.recv().await, Some(Ok("ok".into())));
+        task.await.unwrap();
+        drop(cancel);
+    }
+
+    #[tokio::test]
+    async fn timeout_and_cancellation_release_listeners_and_waiters() {
+        for cancelled in [false, true] {
+            let (address, mut rx, cancel, task) = fixture(Duration::from_millis(50)).await;
+            let _idle = TcpStream::connect(address).await.unwrap();
+            let mut subscription = cancel.subscribe();
+            if cancelled { cancel.send(true).unwrap(); }
+            let error = tokio::time::timeout(Duration::from_secs(1), wait_for_code(&mut rx, &mut subscription, Instant::now() + Duration::from_millis(80))).await.unwrap().unwrap_err();
+            assert!(error.contains(if cancelled { "cancelled" } else { "timed out" }));
+            task.await.unwrap();
+            assert!(TcpStream::connect(address).await.is_err());
+        }
+    }
+
+    #[tokio::test]
+    async fn an_already_queued_manual_code_does_not_block_listener_cleanup() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let (tx, mut rx) = mpsc::channel(1);
+        tx.try_send(Ok("manual".into())).unwrap();
+        let (_cancel, cancelled) = watch::channel(false);
+        let task = tokio::spawn(listen_for_callback(listener, "fixture-state".into(), tx, cancelled, Instant::now() + Duration::from_secs(5), None));
+        request(address, b"GET /oauth-callback?code=browser&state=fixture-state HTTP/1.1\r\n\r\n").await;
+        tokio::time::timeout(Duration::from_secs(1), task).await.unwrap().unwrap();
+        assert_eq!(rx.recv().await, Some(Ok("manual".into())));
+    }
 }

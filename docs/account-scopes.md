@@ -52,6 +52,12 @@ to exactly one category. OAuth login already attempts a quota refresh; a failed 
 incomplete plan observation stays unknown across restarts until a later refresh
 reports it.
 
+OAuth loopback callbacks accept fragmented HTTP headers and tolerate unrelated
+requests or browser preconnections. Only a callback with the matching state can
+complete the flow. Individual reads and the five-minute flow are bounded;
+cancelling releases listeners and pending reads. Manual code submission remains
+available. Logs do not include callback request text or token fragments.
+
 ## Export and restore
 
 JSON export is the last action for each account and in the selected-account
