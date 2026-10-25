@@ -50,5 +50,8 @@
     "@tauri-apps/cli-darwin-x64": "2.10.0",
     "@tauri-apps/cli-linux-x64-gnu": "2.10.0",
     "@tauri-apps/cli-win32-x64-msvc": "2.10.0"
+  },
+  "overrides": {
+    "postcss-selector-parser": "^7.1.6"
   }
 }
