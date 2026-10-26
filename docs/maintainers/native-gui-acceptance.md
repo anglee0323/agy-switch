@@ -154,3 +154,7 @@ and package checks. Both Windows/Linux reports have seven hash-verified captures
 and completed cleanup. The public Mac package was independently verified and
 installed with saved-data preservation. See [4.10.10 public verification](4.10.10-public-acceptance.md)
 for exact hashes, workflows, window regressions and remaining native trust/account limits.
+
+## Integrated 4.10.11 release
+
+Source `f8e084f9c480ede711d57b52c63f1b9b745c5c56` passed three-platform source/lifecycle checks and optimized CLI checks. Windows and Linux native reports each contain seven hash-verified captures and completed fixture cleanup; representative layouts were inspected. The actual public Mac ZIP was verified and installed with preserved account index, preferences and startup identity. See [4.10.11 public verification](4.10.11-public-acceptance.md) for exact workflows, package hashes and account/trust limits.
