@@ -34,9 +34,9 @@
 .mb-usage-ring strong { font-size: 17px; font-weight: 650; }
 .mb-usage-metrics { flex: 1; min-width: 0; }
 .mb-usage-metrics { display: flex; flex-direction: column; gap: 6px; }
-.mb-usage-cost, .mb-usage-type { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 17px; line-height: 1.3; font-weight: 700; }
-.mb-usage-cost span, .mb-usage-type > span { color: var(--mb-text); font-size: inherit; font-weight: inherit; }
-.mb-usage-cost strong, .mb-usage-type strong { font-size: inherit; font-weight: inherit; font-variant-numeric: tabular-nums; }
+.mb-usage-cost, .mb-usage-type { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 13px; line-height: 1.5; }
+.mb-usage-cost span, .mb-usage-type > span { color: var(--mb-text); font-weight: 400; }
+.mb-usage-cost strong, .mb-usage-type strong { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
 .mb-usage-meta { display: flex; justify-content: space-between; gap: 8px; color: var(--mb-muted); font-size: 9px; margin-top: 3px; }
 .mb-overview { flex: none; padding-bottom: 12px; border-bottom: 1px solid var(--mb-line); }
 .mb-overview-heading h2 { font: inherit; font-weight: 600; color: var(--mb-text); margin: 0; }
@@ -111,8 +111,8 @@
 .mb-switch-detail-error { color: #c34738; }
 .mb-switch-details button { margin: 5px 5px 0 0; padding: 5px 6px; color: #007aff; }
 @media (max-width: 360px) { .menubar-app { padding: 14px; } .mb-account-identity small { max-width: 60px; } }
-@media (max-height: 520px) { .mb-usage-chart { width: 66px; } .mb-usage-ring { width: 66px; height: 66px; } .mb-usage-ring strong { font-size: 14px; } .mb-usage-cost, .mb-usage-type { font-size: 14px; line-height: 1.2; } .mb-usage-metrics { gap: 3px; } .mb-usage-overview { padding-bottom: 6px; } .mb-usage-summary { gap: 14px; } .mb-usage-overview .mb-overview-heading { margin-bottom: 3px; } }
-@media (max-height: 430px) { .menubar-app { gap: 4px; padding-top: 10px; } .mb-header h1 { font-size: 18px; } .mb-usage-cost, .mb-usage-type { font-size: 12px; } .mb-usage-meta { font-size: 8px; margin-top: 1px; } .mb-footer { padding-top: 6px; } .mb-footer-actions button { font-size: 10px; } .mb-header-actions button { padding: 4px; } .mb-overview-heading { margin-bottom: 4px; font-size: 10px; } .mb-aggregate strong { font-size: 13px; } .mb-aggregate > div:first-child { margin-bottom: 3px; } .mb-overview { padding-bottom: 4px; } .mb-aggregate + .mb-aggregate { margin-top: 4px; } }
+@media (max-height: 520px) { .mb-usage-chart { width: 66px; } .mb-usage-ring { width: 66px; height: 66px; } .mb-usage-ring strong { font-size: 14px; } .mb-usage-cost, .mb-usage-type { font-size: 12px; line-height: 1.2; } .mb-usage-cost strong, .mb-usage-type strong { font-size: 13px; } .mb-usage-metrics { gap: 3px; } .mb-usage-overview { padding-bottom: 6px; } .mb-usage-summary { gap: 14px; } .mb-usage-overview .mb-overview-heading { margin-bottom: 3px; } }
+@media (max-height: 430px) { .menubar-app { gap: 4px; padding-top: 10px; } .mb-header h1 { font-size: 18px; } .mb-usage-cost, .mb-usage-type { font-size: 11px; } .mb-usage-cost strong, .mb-usage-type strong { font-size: 12px; } .mb-usage-meta { font-size: 8px; margin-top: 1px; } .mb-footer { padding-top: 6px; } .mb-footer-actions button { font-size: 10px; } .mb-header-actions button { padding: 4px; } .mb-overview-heading { margin-bottom: 4px; font-size: 10px; } .mb-aggregate strong { font-size: 13px; } .mb-aggregate > div:first-child { margin-bottom: 3px; } .mb-overview { padding-bottom: 4px; } .mb-aggregate + .mb-aggregate { margin-top: 4px; } }
 @media (prefers-reduced-motion: reduce) { .menubar-app .animate-spin { animation: none; } }
 
 .mb-meter.disabled-quota { background: #ff3b30; }

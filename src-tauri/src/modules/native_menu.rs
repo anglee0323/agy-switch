@@ -352,15 +352,14 @@ fn usage_section(menu: &NSMenu, usage: Option<&modules::menu_bar_usage::MenuBarU
     unit.setAlignment(objc2_app_kit::NSTextAlignment::Center);
     let requests = label(&view, "—", 20.0, 100.0, 88.0, 10.0, false, true, marker);
     requests.setAlignment(objc2_app_kit::NSTextAlignment::Center);
-    // Cost, latency and speed share one size and weight, with primary-colour labels, on an even 31 pt pitch.
-    const ROW_SIZE: f64 = 17.0;
+    // Cost, latency and speed share one style: regular primary-colour names, bold 15 pt values, even 28 pt pitch.
     let mut rows = Vec::new();
     for (index, name) in [if zh { "API 费用估算" } else { "API estimate" }, if zh { "首字延迟" } else { "Latency" }, if zh { "输出速度" } else { "Output speed" }].iter().enumerate() {
-        let y = 5.0 + index as f64 * 31.0;
-        let title = label(&view, name, 130.0, y, 140.0, ROW_SIZE, true, false, marker);
-        title.setFrame(rect(128.0, y, 144.0, 22.0));
-        let value = label(&view, "—", WIDTH - 145.0, y, 125.0, ROW_SIZE, true, false, marker);
-        value.setFrame(rect(WIDTH - 147.0, y, 129.0, 22.0));
+        let y = 8.0 + index as f64 * 28.0;
+        let title = label(&view, name, 130.0, y + 1.0, 140.0, 13.0, false, false, marker);
+        title.setFrame(rect(128.0, y + 1.0, 144.0, 18.0));
+        let value = label(&view, "—", WIDTH - 145.0, y, 125.0, 15.0, true, false, marker);
+        value.setFrame(rect(WIDTH - 147.0, y, 129.0, 20.0));
         value.setAlignment(objc2_app_kit::NSTextAlignment::Right);
         rows.push(value);
     }
