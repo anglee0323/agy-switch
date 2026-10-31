@@ -7,7 +7,7 @@ test.beforeEach(async ({ page }) => {
     const w = window as any; const callbacks: Record<number, Function> = {}; const listeners: Record<number, any> = {}; let sequence = 1;
     let current: string | null = 'B'; let identity = 'running_app'; let preferences: any = JSON.parse(localStorage.getItem('fixture-menu-preferences') || '{"quota_scope":"all"}'); let theme = 'light'; let language = 'zh';
     let failRead = false, failRefresh = false, failSave = false, hold = false, release: (() => void) | null = null;
-    let usage: any = { today: { input_tokens: 12000, output_tokens: 1200, cached_tokens: 135000, total_tokens: 148200, request_count: 86 }, estimated_usd: 0.023625, unpriced_models: 0, pricing_stale: false, incomplete: false };
+    let usage: any = { today: { input_tokens: 12000, output_tokens: 1200, cached_tokens: 135000, total_tokens: 148200, request_count: 86 }, estimated_usd: 0.023625, unpriced_models: 0, pricing_stale: false, incomplete: false, performance: { sample_count: 10, first_text_seconds: 4.25, body_tokens_per_second: 112.44 } };
     const calls: any[] = [];
     const now = Math.floor(Date.now() / 1000);
     const account = (id: string, g = 80, c = 70) => ({ id, email: id.toLowerCase() + '@example.invalid', name: null, custom_label: '账号 ' + id, read_status: 'loaded', read_error: null, disabled: false, validation_blocked: false, validation_blocked_until: null, protected_models: [],
@@ -64,6 +64,9 @@ test('dedicated Argon weekly rows do not change shared summaries or clip compact
       // Pagination may put B on the next page at the smaller size.
       if (!await argon.count()) await page.getByRole('button', { name: language === 'zh' ? '下一页' : 'Next page' }).click();
       await expect(argon).toContainText('10%');
+      // Only the account reporting the pool is marked as having access.
+      await expect(page.locator('.mb-argon-dot')).toHaveCount(1);
+      await expect(page.locator('.mb-account-row', { has: page.locator('.mb-argon-dot') })).toContainText('b@example.invalid');
       await expect(argon.getByRole('meter')).toHaveAttribute('aria-valuenow', '10');
       await expect(page.locator('.mb-aggregate strong')).toHaveText(original);
       await bounded(page);
@@ -203,9 +206,12 @@ test('daily usage distinguishes empty records from unknown API pricing', async (
   const usage = page.getByRole('region', { name: '今日本机用量' });
   await expect(usage.getByRole('heading')).toHaveText('今日用量');
   await expect(usage.locator('.mb-usage-ring strong')).toHaveText('148.2K');
-  await expect(usage.locator('.mb-usage-type strong')).toHaveText(['12.0K', '1.2K', '135.0K']);
+  await expect(usage.locator('.mb-usage-type span')).toHaveText(['首字延迟', '输出速度']);
+  await expect(usage.locator('.mb-usage-type strong')).toHaveText(['4.25 s', '112.4 token/s']);
+  await expect(usage.locator('.mb-usage-ring')).toHaveAttribute('title', '输入 12.0K  ·  输出 1.2K  ·  缓存 135.0K');
   await expect(usage.getByText('USD', { exact: true })).toHaveCount(0);
   await page.evaluate(() => (window as any).__menuFixture.setUsage({ today: { input_tokens: 1000, output_tokens: 0, cached_tokens: 0, total_tokens: 1000, request_count: 1 }, estimated_usd: null, unpriced_models: 1, pricing_stale: true, incomplete: true }));
+  await expect(usage.locator('.mb-usage-type strong')).toHaveText(['—', '—']);
   await expect(usage.locator('.mb-usage-cost strong')).toHaveText('未计价');
   await expect(usage).toContainText('统计不完整');
   await page.evaluate(() => (window as any).__menuFixture.setUsage({ today: { input_tokens: 0, output_tokens: 0, cached_tokens: 0, total_tokens: 0, request_count: 0 }, estimated_usd: 0, unpriced_models: 0, pricing_stale: true, incomplete: false }));

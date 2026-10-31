@@ -1,6 +1,6 @@
 //! Today's local usage and API-equivalent estimate. The menu only reads the
 //! existing public pricing cache, so opening it never waits for a price fetch.
-use super::{api_pricing::{ApiPricing, ApiPricingSnapshot}, native_token_stats::{LocalTokenModel, LocalTokenTotals, LocalTokenUsageSummary}};
+use super::{api_pricing::{ApiPricing, ApiPricingSnapshot}, native_token_stats::{LocalTokenModel, LocalTokenTotals, LocalTokenUsageSummary, RecentPerformance}};
 use serde::Serialize;
 use std::{sync::{Mutex, OnceLock}, time::{Duration, Instant}};
 
@@ -43,6 +43,8 @@ pub struct MenuBarUsage {
     pub unpriced_models: usize,
     pub pricing_stale: bool,
     pub incomplete: bool,
+    /// Median of recent eligible responses, independent of the today totals.
+    pub performance: Option<RecentPerformance>,
 }
 
 pub fn project(summary: &LocalTokenUsageSummary, pricing: Option<&ApiPricingSnapshot>) -> MenuBarUsage {
@@ -52,6 +54,7 @@ pub fn project(summary: &LocalTokenUsageSummary, pricing: Option<&ApiPricingSnap
         today: summary.today.clone(), estimated_usd, unpriced_models,
         pricing_stale: pricing.is_none_or(|pricing| pricing.stale),
         incomplete: summary.unreadable_databases > 0 || summary.skipped_large_records > 0,
+        performance: summary.recent_performance.clone(),
     }
 }
 
@@ -122,7 +125,7 @@ mod tests {
     #[test]
     fn cached_usage_stays_visible_during_refresh_but_never_crosses_midnight() {
         let day = chrono::NaiveDate::from_ymd_opt(2026, 10, 5).unwrap();
-        let mut cache = CachedUsage { day, read_at: Instant::now(), value: MenuBarUsage { today: LocalTokenTotals::default(), estimated_usd: Some(0.0), unpriced_models: 0, pricing_stale: false, incomplete: false } };
+        let mut cache = CachedUsage { day, read_at: Instant::now(), value: MenuBarUsage { today: LocalTokenTotals::default(), estimated_usd: Some(0.0), unpriced_models: 0, pricing_stale: false, incomplete: false, performance: None } };
         assert!(cache.fresh(day));
         cache.read_at -= MAX_AGE;
         assert!(!cache.fresh(day)); assert!(cache.current(day));

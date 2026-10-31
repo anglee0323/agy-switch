@@ -33,14 +33,10 @@
 .mb-usage-ring > div { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .mb-usage-ring strong { font-size: 17px; font-weight: 650; }
 .mb-usage-metrics { flex: 1; min-width: 0; }
-.mb-usage-cost, .mb-usage-type { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.mb-usage-cost { margin-bottom: 4px; }
-.mb-usage-cost span { color: var(--mb-muted); font-size: 10px; }
-.mb-usage-cost strong { font-size: 14px; }
-.mb-usage-type { font-size: 10px; line-height: 1.4; }
-.mb-usage-type > span { display: inline-flex; align-items: center; gap: 5px; color: var(--mb-muted); }
-.mb-usage-type i { width: 8px; height: 3px; border-radius: 2px; flex: none; }
-.mb-usage-type strong { font-weight: 500; }
+.mb-usage-metrics { display: flex; flex-direction: column; gap: 6px; }
+.mb-usage-cost, .mb-usage-type { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 13px; line-height: 1.5; }
+.mb-usage-cost span, .mb-usage-type > span { color: var(--mb-text); font-weight: 400; }
+.mb-usage-cost strong, .mb-usage-type strong { font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; }
 .mb-usage-meta { display: flex; justify-content: space-between; gap: 8px; color: var(--mb-muted); font-size: 9px; margin-top: 3px; }
 .mb-overview { flex: none; padding-bottom: 12px; border-bottom: 1px solid var(--mb-line); }
 .mb-overview-heading h2 { font: inherit; font-weight: 600; color: var(--mb-text); margin: 0; }
@@ -64,6 +60,9 @@
 .mb-account-identity { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .mb-account-label { display: flex; flex-direction: column; gap: 0; align-items: flex-start; min-width: 0; padding: 1px 0; text-align: left; }
 .mb-account-label > span { font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.mb-account-label > .mb-account-name { display: flex; align-items: center; gap: 5px; overflow: visible; }
+.mb-account-name > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mb-argon-dot { width: 7px; height: 7px; border-radius: 50%; background: #34c759; flex: none; }
 .mb-account-row.has-families .mb-account-identity { min-height: 30px; align-items: flex-start; }
 .mb-account-families { position: absolute; top: 25px; left: 0; right: 0; display: flex; gap: 24px; color: var(--mb-muted); font-size: 10px; line-height: 14px; }
 .mb-account-families > span { flex: 1; min-width: 0; }
@@ -112,8 +111,8 @@
 .mb-switch-detail-error { color: #c34738; }
 .mb-switch-details button { margin: 5px 5px 0 0; padding: 5px 6px; color: #007aff; }
 @media (max-width: 360px) { .menubar-app { padding: 14px; } .mb-account-identity small { max-width: 60px; } }
-@media (max-height: 520px) { .mb-usage-chart { width: 66px; } .mb-usage-ring { width: 66px; height: 66px; } .mb-usage-ring strong { font-size: 14px; } .mb-usage-cost strong { font-size: 12px; } .mb-usage-overview { padding-bottom: 6px; } .mb-usage-summary { gap: 14px; } .mb-usage-overview .mb-overview-heading { margin-bottom: 3px; } }
-@media (max-height: 430px) { .menubar-app { gap: 4px; padding-top: 10px; } .mb-header h1 { font-size: 18px; } .mb-usage-type { font-size: 9px; } .mb-usage-cost { margin-bottom: 3px; } .mb-usage-meta { font-size: 8px; margin-top: 1px; } .mb-footer { padding-top: 6px; } .mb-footer-actions button { font-size: 10px; } .mb-header-actions button { padding: 4px; } .mb-overview-heading { margin-bottom: 4px; font-size: 10px; } .mb-aggregate strong { font-size: 13px; } .mb-aggregate > div:first-child { margin-bottom: 3px; } .mb-overview { padding-bottom: 4px; } .mb-aggregate + .mb-aggregate { margin-top: 4px; } }
+@media (max-height: 520px) { .mb-usage-chart { width: 66px; } .mb-usage-ring { width: 66px; height: 66px; } .mb-usage-ring strong { font-size: 14px; } .mb-usage-cost, .mb-usage-type { font-size: 12px; line-height: 1.2; } .mb-usage-cost strong, .mb-usage-type strong { font-size: 12px; } .mb-usage-metrics { gap: 3px; } .mb-usage-overview { padding-bottom: 6px; } .mb-usage-summary { gap: 14px; } .mb-usage-overview .mb-overview-heading { margin-bottom: 3px; } }
+@media (max-height: 430px) { .menubar-app { gap: 4px; padding-top: 10px; } .mb-header h1 { font-size: 18px; } .mb-usage-cost, .mb-usage-type { font-size: 11px; } .mb-usage-cost strong, .mb-usage-type strong { font-size: 11px; } .mb-usage-meta { font-size: 8px; margin-top: 1px; } .mb-footer { padding-top: 6px; } .mb-footer-actions button { font-size: 10px; } .mb-header-actions button { padding: 4px; } .mb-overview-heading { margin-bottom: 4px; font-size: 10px; } .mb-aggregate strong { font-size: 13px; } .mb-aggregate > div:first-child { margin-bottom: 3px; } .mb-overview { padding-bottom: 4px; } .mb-aggregate + .mb-aggregate { margin-top: 4px; } }
 @media (prefers-reduced-motion: reduce) { .menubar-app .animate-spin { animation: none; } }
 
 .mb-meter.disabled-quota { background: #ff3b30; }

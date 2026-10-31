@@ -6,6 +6,8 @@ weekly-only pool. It must not be averaged into shared Gemini, borrowed for other
 Gemini models, or assigned an invented five-hour window.
 
 Account weekly cards/tables and CLI quota details retain its name and reset time.
+Accounts reporting the pool also get a green dot beside their name in the menu and
+tray panel, independent of display settings.
 The menu adds a dedicated weekly row when reported and weekly Gemini display is
 enabled. The dashboard shows a separate Argon weekly mean for accounts reporting
 that pool, respecting the Gemini/all aggregate scope. Shared summaries and account
