@@ -352,13 +352,15 @@ fn usage_section(menu: &NSMenu, usage: Option<&modules::menu_bar_usage::MenuBarU
     unit.setAlignment(objc2_app_kit::NSTextAlignment::Center);
     let requests = label(&view, "—", 20.0, 100.0, 88.0, 10.0, false, true, marker);
     requests.setAlignment(objc2_app_kit::NSTextAlignment::Center);
-    // Cost, latency and speed share one style: regular primary-colour names, bold 15 pt values, even 28 pt pitch.
+    // Cost, latency and speed share one style: regular primary-colour names, medium 14 pt values, even 28 pt pitch.
     let mut rows = Vec::new();
     for (index, name) in [if zh { "API 费用估算" } else { "API estimate" }, if zh { "首字延迟" } else { "Latency" }, if zh { "输出速度" } else { "Output speed" }].iter().enumerate() {
         let y = 8.0 + index as f64 * 28.0;
         let title = label(&view, name, 130.0, y + 1.0, 140.0, 13.0, false, false, marker);
         title.setFrame(rect(128.0, y + 1.0, 144.0, 18.0));
-        let value = label(&view, "—", WIDTH - 145.0, y, 125.0, 15.0, true, false, marker);
+        let value = label(&view, "—", WIDTH - 145.0, y, 125.0, 14.0, false, false, marker);
+        let medium: Retained<NSFont> = unsafe { msg_send![<NSFont as objc2::ClassType>::class(), systemFontOfSize: 14.0f64, weight: 0.23f64] }; // NSFontWeightMedium
+        value.setFont(Some(&medium));
         value.setFrame(rect(WIDTH - 147.0, y, 129.0, 20.0));
         value.setAlignment(objc2_app_kit::NSTextAlignment::Right);
         rows.push(value);
