@@ -10,6 +10,8 @@ brew install --cask anglee0323/agy-switch/agy-switch
 agy-switch --version
 ```
 
+Homebrew 7 and later refuses to load third-party casks until the tap is trusted. If it reports an untrusted tap, review the repository, run `brew trust --tap anglee0323/agy-switch` (or the command Homebrew prints) and retry. This is Homebrew's own check and does not change macOS signature or Gatekeeper behavior.
+
 The explicit repository URL is required because this project also serves as the tap. Homebrew installs `AntiGravity Switch.app` and links its management entry as `agy-switch`, including when a custom `--appdir` is used. The application is not launched during installation.
 
 If a manually installed copy already occupies the destination, keep a backup and review Homebrew's conflict message before proceeding. The cask does not force adoption or overwrite another installation.

@@ -69,6 +69,8 @@ brew tap anglee0323/agy-switch https://github.com/anglee0323/agy-switch.git
 brew install --cask anglee0323/agy-switch/agy-switch
 ```
 
+Homebrew 7 及以上版本在信任 tap 之前会拒绝加载第三方 cask。若提示 untrusted tap，请先确认仓库来源，再执行 `brew trust --tap anglee0323/agy-switch`（或按 Homebrew 提示的命令）后重试。这是 Homebrew 自身的检查，不会改变 macOS 的签名或 Gatekeeper 行为。
+
 也可以下载 **macOS ARM64 ZIP**，解压后将应用移入 Applications（应用程序）目录。[Homebrew 安装与升级](docs/homebrew.md)
 
 ### Windows
