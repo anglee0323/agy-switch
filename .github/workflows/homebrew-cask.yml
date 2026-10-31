@@ -42,6 +42,9 @@ jobs:
           TAP_PATH="$(brew --repository)/Library/Taps/anglee0323/homebrew-agy-switch"
           mkdir -p "$(dirname "$TAP_PATH")"
           ln -s "$GITHUB_WORKSPACE" "$TAP_PATH"
+          # Newer Homebrew refuses to load third-party taps until trusted. This
+          # job only loads the checked-out tap, so trust it when the command exists.
+          if brew trust --help >/dev/null 2>&1; then brew trust --tap "$TAP"; fi
           brew readall "$TAP"
           brew fetch --cask "$TAP/agy-switch"
           # The app version can advance before its release is published. Validate
