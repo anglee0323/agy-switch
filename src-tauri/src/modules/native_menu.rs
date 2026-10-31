@@ -309,7 +309,7 @@ fn compact_tokens(value: u64) -> String {
 }
 struct UsageWidgets {
     ring: Retained<UsageRing>, scope: Retained<NSTextField>, total: Retained<NSTextField>,
-    requests: Retained<NSTextField>, cost: Retained<NSTextField>, counts: Vec<Retained<NSTextField>>, status: Retained<NSTextField>,
+    requests: Retained<NSTextField>, cost: Retained<NSTextField>, latency: Retained<NSTextField>, speed: Retained<NSTextField>, status: Retained<NSTextField>,
 }
 impl UsageWidgets {
     fn apply(&self, usage: Option<&modules::menu_bar_usage::MenuBarUsage>, failed: bool, zh: bool) {
@@ -320,7 +320,16 @@ impl UsageWidgets {
         self.requests.setStringValue(&NSString::from_str(&usage.map(|usage| format!("{} {}", usage.today.request_count, if zh { "次请求" } else { "requests" })).unwrap_or("—".into())));
         let amount = usage.and_then(|usage| usage.estimated_usd).map(|usd| if usd > 0.0 && usd < 0.01 { format!("$ {usd:.4}") } else { format!("$ {usd:.2}") }).unwrap_or(if usage.is_some() { if zh { "未计价".into() } else { "Unpriced".into() } } else { "—".into() });
         self.cost.setStringValue(&NSString::from_str(&amount));
-        for (index, field) in self.counts.iter().enumerate() { field.setStringValue(&NSString::from_str(&usage.map(|_| compact_tokens(values[index] as u64)).unwrap_or("—".into()))); }
+        // The ring keeps the input/output/cache split as a tooltip; the rows show recent response speed.
+        let breakdown = usage.map(|_| format!("{} {}  ·  {} {}  ·  {} {}", if zh { "输入" } else { "Input" }, compact_tokens(values[0] as u64), if zh { "输出" } else { "Output" }, compact_tokens(values[1] as u64), if zh { "缓存" } else { "Cached" }, compact_tokens(values[2] as u64)));
+        let tip = breakdown.map(|text| NSString::from_str(&text));
+        self.ring.setToolTip(tip.as_deref()); self.total.setToolTip(tip.as_deref());
+        let performance = usage.and_then(|usage| usage.performance.as_ref());
+        let scope_tip = performance.map(|value| NSString::from_str(&if zh { format!("近 7 天最近 {} 次有效回复的中位数，与今日用量统计范围无关", value.sample_count) } else { format!("Median of the latest {} eligible responses in 7 days; independent of today's totals", value.sample_count) }));
+        for field in [&self.latency, &self.speed] { field.setToolTip(scope_tip.as_deref()); }
+        let latency = performance.map(|value| if value.first_text_seconds < 10.0 { format!("{:.2} s", value.first_text_seconds) } else { format!("{:.1} s", value.first_text_seconds) }).unwrap_or("—".into());
+        let speed = performance.map(|value| format!("{:.1} token/s", value.body_tokens_per_second)).unwrap_or("—".into());
+        self.latency.setStringValue(&NSString::from_str(&latency)); self.speed.setStringValue(&NSString::from_str(&speed));
         let status = if failed { if zh { "统计刷新失败" } else { "Usage refresh failed" } }
             else if let Some(usage) = usage { if usage.unpriced_models > 0 { if zh { "部分未计价" } else { "Partly unpriced" } } else if usage.pricing_stale && usage.today.total_tokens > 0 { if zh { "缓存价格" } else { "Cached prices" } } else { "" } }
             else { if zh { "正在读取" } else { "Loading usage" } };
@@ -343,25 +352,25 @@ fn usage_section(menu: &NSMenu, usage: Option<&modules::menu_bar_usage::MenuBarU
     unit.setAlignment(objc2_app_kit::NSTextAlignment::Center);
     let requests = label(&view, "—", 20.0, 100.0, 88.0, 10.0, false, true, marker);
     requests.setAlignment(objc2_app_kit::NSTextAlignment::Center);
-    label(&view, if zh { "API 费用估算" } else { "API estimate" }, 130.0, 5.0, 140.0, 11.0, false, true, marker);
-    let cost = label(&view, "—", WIDTH - 105.0, 4.0, 85.0, 13.0, true, false, marker);
+    // Slightly larger, heavier type keeps the amount and metrics legible at menu scale.
+    label(&view, if zh { "API 费用估算" } else { "API estimate" }, 130.0, 3.0, 140.0, 13.0, false, true, marker);
+    let cost = label(&view, "—", WIDTH - 125.0, 1.0, 105.0, 17.0, true, false, marker);
+    cost.setFrame(rect(WIDTH - 127.0, 1.0, 109.0, 22.0));
     cost.setAlignment(objc2_app_kit::NSTextAlignment::Right);
-    let mut counts = Vec::new();
-    for (index, name) in [if zh { "输入" } else { "Input" }, if zh { "输出" } else { "Output" }, if zh { "缓存" } else { "Cached" }].iter().enumerate() {
-        let y = 32.0 + index as f64 * 21.0;
-        let key = NSImageView::new(marker);
-        key.setFrame(rect(130.0, y + 5.0, 8.0, 8.0)); key.setImage(symbol("minus").as_deref());
-        key.setContentTintColor(Some(&usage_color(index))); view.addSubview(&key);
-        label(&view, name, 142.0, y, 90.0, 11.0, false, true, marker);
-        let value = label(&view, "—", WIDTH - 105.0, y, 85.0, 11.0, false, false, marker);
+    let mut rows = Vec::new();
+    for (index, name) in [if zh { "首字延迟" } else { "First-text latency" }, if zh { "输出速度" } else { "Output speed" }].iter().enumerate() {
+        let y = 40.0 + index as f64 * 28.0;
+        label(&view, name, 130.0, y, 120.0, 13.0, false, true, marker);
+        let value = label(&view, "—", WIDTH - 125.0, y, 105.0, 14.0, true, false, marker);
         value.setAlignment(objc2_app_kit::NSTextAlignment::Right);
-        counts.push(value);
+        rows.push(value);
     }
+    let (speed, latency) = (rows.pop().unwrap(), rows.pop().unwrap());
     let status = label(&view, "", 130.0, 100.0, WIDTH - 150.0, 10.0, false, true, marker);
     status.setAlignment(objc2_app_kit::NSTextAlignment::Right);
     custom_item(menu, &view, "Local usage breakdown", marker);
     menu.addItem(&NSMenuItem::separatorItem(marker));
-    let widgets = UsageWidgets { ring, scope, total, requests, cost, counts, status };
+    let widgets = UsageWidgets { ring, scope, total, requests, cost, latency, speed, status };
     widgets.apply(usage, false, zh); widgets
 }
 fn custom_item(menu: &NSMenu, view: &NSView, title: &str, marker: MainThreadMarker) -> Retained<NSMenuItem> {
@@ -451,7 +460,16 @@ fn account_item(menu: &NSMenu, app: &tauri::AppHandle, account: &DashboardEntry,
     let view: Retained<AccountRow> = unsafe { msg_send![super(view), initWithFrame: rect(0.0, 0.0, WIDTH, 48.0 + periods.len() as f64 * 18.0 + if show_argon { 34.0 } else { 0.0 })] };
     let action_width = if zh { 64.0 } else { 72.0 };
     let action_frame = rect(WIDTH - 20.0 - action_width, 8.0, action_width, 26.0);
-    label(&view, &primary, 20.0, 7.0, WIDTH - action_width - 48.0, 12.0, true, false, marker);
+    // A green dot marks accounts whose quota reports the Gemini 4 Argon pool, regardless of which quota rows are shown.
+    let argon_dot = projection::argon_reported(account) && !account.disabled;
+    let name_width = WIDTH - action_width - 48.0 - if argon_dot { 14.0 } else { 0.0 };
+    let name = label(&view, &primary, 20.0, 7.0, name_width, 12.0, true, false, marker);
+    if argon_dot {
+        let dot_x = 20.0 + name.sizeThatFits(NSSize::new(name_width, 18.0)).width.min(name_width) + 4.0;
+        let dot = NSImageView::new(marker); dot.setFrame(rect(dot_x, 12.0, 8.0, 8.0));
+        dot.setImage(symbol("circle.fill").as_deref()); dot.setContentTintColor(Some(&NSColor::systemGreenColor()));
+        dot.setToolTip(Some(&NSString::from_str(if zh { "可使用 Gemini 4 Argon" } else { "Gemini 4 Argon available" }))); view.addSubview(&dot);
+    }
     if preferences.display_scope == MenuBarQuotaScope::All {
         for (family, name) in ["Gemini", "Claude / GPT"].iter().enumerate() {
             let (x, width) = quota_column(preferences.display_scope, family);
