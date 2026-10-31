@@ -55,6 +55,8 @@ agy-switch --version
 agy-switch --help
 ```
 
+Homebrew 7 and later also requires trusting the tap (`brew trust --tap anglee0323/agy-switch`); the recipe workflow does this for its checked-out tap. Keep the README/Homebrew guide note in sync.
+
 Publish these commands together with the real root-level cask and its current acceptance limits. Do not describe pending native installation as tested. Update the signing wording only if the actual final release is signed/notarized.
 
 ## macOS signature integrity is separate from platform trust
