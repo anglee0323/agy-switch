@@ -352,20 +352,19 @@ fn usage_section(menu: &NSMenu, usage: Option<&modules::menu_bar_usage::MenuBarU
     unit.setAlignment(objc2_app_kit::NSTextAlignment::Center);
     let requests = label(&view, "—", 20.0, 100.0, 88.0, 10.0, false, true, marker);
     requests.setAlignment(objc2_app_kit::NSTextAlignment::Center);
-    // Slightly larger, heavier type keeps the amount and metrics legible at menu scale.
-    label(&view, if zh { "API 费用估算" } else { "API estimate" }, 130.0, 3.0, 140.0, 13.0, false, true, marker);
-    let cost = label(&view, "—", WIDTH - 125.0, 1.0, 105.0, 17.0, true, false, marker);
-    cost.setFrame(rect(WIDTH - 127.0, 1.0, 109.0, 22.0));
-    cost.setAlignment(objc2_app_kit::NSTextAlignment::Right);
+    // Cost, latency and speed share one size and weight, with primary-colour labels, on an even 31 pt pitch.
+    const ROW_SIZE: f64 = 17.0;
     let mut rows = Vec::new();
-    for (index, name) in [if zh { "首字延迟" } else { "First-text latency" }, if zh { "输出速度" } else { "Output speed" }].iter().enumerate() {
-        let y = 40.0 + index as f64 * 28.0;
-        label(&view, name, 130.0, y, 120.0, 13.0, false, true, marker);
-        let value = label(&view, "—", WIDTH - 125.0, y, 105.0, 14.0, true, false, marker);
+    for (index, name) in [if zh { "API 费用估算" } else { "API estimate" }, if zh { "首字延迟" } else { "Latency" }, if zh { "输出速度" } else { "Output speed" }].iter().enumerate() {
+        let y = 5.0 + index as f64 * 31.0;
+        let title = label(&view, name, 130.0, y, 140.0, ROW_SIZE, true, false, marker);
+        title.setFrame(rect(128.0, y, 144.0, 22.0));
+        let value = label(&view, "—", WIDTH - 145.0, y, 125.0, ROW_SIZE, true, false, marker);
+        value.setFrame(rect(WIDTH - 147.0, y, 129.0, 22.0));
         value.setAlignment(objc2_app_kit::NSTextAlignment::Right);
         rows.push(value);
     }
-    let (speed, latency) = (rows.pop().unwrap(), rows.pop().unwrap());
+    let (speed, latency, cost) = (rows.pop().unwrap(), rows.pop().unwrap(), rows.pop().unwrap());
     let status = label(&view, "", 130.0, 100.0, WIDTH - 150.0, 10.0, false, true, marker);
     status.setAlignment(objc2_app_kit::NSTextAlignment::Right);
     custom_item(menu, &view, "Local usage breakdown", marker);

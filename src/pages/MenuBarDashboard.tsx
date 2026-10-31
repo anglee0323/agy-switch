@@ -32,7 +32,7 @@ function UsageOverview({ usage, zh }: { usage: Usage | null; zh: boolean }) {
         <div><strong>{usage ? tokens(usage.today.total_tokens) : '—'}</strong><small>tokens</small></div>
       </div></div>
       <div className="mb-usage-metrics"><div className="mb-usage-cost"><span>{zh ? 'API 费用估算' : 'API estimate'}</span><strong>{cost}</strong></div>
-        <div className="mb-usage-type" title={performanceTip}><span>{zh ? '首字延迟' : 'First-text latency'}</span><strong>{performance ? performance.first_text_seconds.toFixed(performance.first_text_seconds < 10 ? 2 : 1) + ' s' : '—'}</strong></div>
+        <div className="mb-usage-type" title={performanceTip}><span>{zh ? '首字延迟' : 'Latency'}</span><strong>{performance ? performance.first_text_seconds.toFixed(performance.first_text_seconds < 10 ? 2 : 1) + ' s' : '—'}</strong></div>
         <div className="mb-usage-type" title={performanceTip}><span>{zh ? '输出速度' : 'Output speed'}</span><strong>{performance ? performance.body_tokens_per_second.toFixed(1) + ' token/s' : '—'}</strong></div>
         <div className="mb-usage-meta"><small>{usage ? usage.today.request_count + (zh ? ' 次请求' : ' requests') : '—'}</small><small>{!usage ? zh ? '统计暂不可用' : 'Usage unavailable' : usage.unpriced_models > 0 ? zh ? '部分未计价' : 'Partly unpriced' : usage.pricing_stale && usage.today.total_tokens > 0 ? zh ? '缓存价格' : 'Cached prices' : ''}</small></div>
       </div>
