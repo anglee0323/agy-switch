@@ -53,7 +53,7 @@ jobs:
           shared-key: release-cli-${{ matrix.platform }}
           cache-bin: false
           cache-on-failure: true
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: true # TEMP-MEASURE
       - name: Build actual release executable
         run: cargo build --release --locked --manifest-path src-tauri/Cargo.toml
       - name: Test release CLI with captured stdout and stderr

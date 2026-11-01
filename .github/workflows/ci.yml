@@ -152,7 +152,7 @@ jobs:
           shared-key: ci-linux-unit
           cache-bin: false
           cache-on-failure: true
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: true # TEMP-MEASURE
       - name: Prepare placeholder frontend
         run: mkdir -p dist && echo '<!doctype html><title>test</title>' > dist/index.html
       - name: Test CLI child-process stdio isolation
@@ -189,7 +189,7 @@ jobs:
           shared-key: ci-linux-native
           cache-bin: false
           cache-on-failure: true
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: true # TEMP-MEASURE
 
       - name: Build executable for headless CLI smoke test
         run: cargo build --locked --manifest-path src-tauri/Cargo.toml --features native-gui-test
@@ -268,7 +268,7 @@ jobs:
           shared-key: ci-windows-unit
           cache-bin: false
           cache-on-failure: true
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: true # TEMP-MEASURE
       - name: Prepare placeholder frontend
         shell: bash
         run: mkdir -p dist && echo '<!doctype html><title>test</title>' > dist/index.html
@@ -306,7 +306,7 @@ jobs:
           shared-key: ci-windows-native
           cache-bin: false
           cache-on-failure: true
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: true # TEMP-MEASURE
 
       - name: Build executable for headless CLI smoke test
         run: cargo build --locked --manifest-path src-tauri/Cargo.toml --features native-gui-test
@@ -402,7 +402,7 @@ jobs:
           shared-key: ci-macos
           cache-bin: false
           cache-on-failure: true
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: true # TEMP-MEASURE
 
       - name: Test CLI child-process stdio isolation
         run: node scripts/test-cli-launch.mjs
