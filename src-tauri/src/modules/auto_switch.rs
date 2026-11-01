@@ -804,6 +804,8 @@ impl Environment for NativeEnvironment {
         let is_app_cli_mode = target_ide == Some("app");
         let is_vscode_mode = target_ide == Some("vscode");
         if !is_ide_mode && !is_vscode_mode {
+            #[cfg(target_os = "windows")]
+            crate::modules::app_state_recovery::recover_default()?;
             integration::write_to_system_keyring(target, false)?;
         }
 

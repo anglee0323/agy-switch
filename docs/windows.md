@@ -41,6 +41,8 @@ Manual switching may close/reopen Antigravity, changes its credential store and 
 
 On Windows, switching requests a normal close and waits for Antigravity to exit. If a window, confirmation, or background process keeps it open, switching stops before changing credentials: save your work, fully quit Antigravity (including its tray, if present), and retry. Switch does not force-terminate the client in this case.
 
+During an App account switch, Switch also checks the default App state file at `%USERPROFILE%\.gemini\antigravity\antigravity_state.pbtxt`. A nonempty file of at most 16 MiB containing only zero bytes is preserved beside the original as `antigravity_state.pbtxt.corrupt-<id>` and the original name is removed, so Antigravity can recreate it on its next launch. Recovery runs only after the client is closed and blocks the switch if an Antigravity client, `agy.exe`, or `language_server.exe` is still running or the backup cannot be made. Other corruption patterns and custom state locations are not repaired. A direct Antigravity launch without an App account switch does not run this check.
+
 ## Build
 
 Install Node.js 22+, Rust stable, Microsoft C++ Build Tools and the Tauri platform prerequisites. From PowerShell:

@@ -190,6 +190,21 @@ pub fn is_antigravity_running(target_ide: Option<&str>) -> bool {
     false
 }
 
+/// Be conservative: any App/IDE, native agy or language server may still write
+/// the shared App state, including one outside the detected App process tree.
+#[cfg(target_os = "windows")]
+pub(crate) fn state_writer_running() -> bool {
+    if is_antigravity_running(None) || is_antigravity_running(Some("ide")) {
+        return true;
+    }
+    let mut system = System::new();
+    system.refresh_processes(sysinfo::ProcessesToUpdate::All);
+    system.processes().values().any(|process| {
+        let name = process.name().to_string_lossy();
+        name.eq_ignore_ascii_case("agy.exe") || name.eq_ignore_ascii_case("language_server.exe")
+    })
+}
+
 #[cfg(target_os = "linux")]
 /// Get PID set of current process and all ancestors.
 /// Only ancestors (parents/grandparents) are excluded to prevent accidentally killing
