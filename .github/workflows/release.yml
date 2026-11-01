@@ -87,7 +87,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - uses: dtolnay/rust-toolchain@stable
+      # Uses the runner image's current stable Rust (same as CI and Release CLI): the rustc
+      # version is part of the cache key, so this job can restore Release CLI's cache.
       # Read-only consumer of the release-profile cache that `Release CLI` refreshes on main.
       # Tag and PR refs cannot be restored by other refs, so saving here only wastes the
       # repository's cache quota.
@@ -160,7 +161,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
@@ -255,9 +255,6 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-apple-darwin
       # No main-branch job builds this target, so only a PR's own earlier runs can warm it;
       # tag caches are never reused by another tag.
       - uses: Swatinem/rust-cache@v2

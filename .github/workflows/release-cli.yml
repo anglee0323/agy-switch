@@ -40,16 +40,12 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: npm
       # Type-checking is done once by the Build workflow; only the bundle is needed here.
       - uses: ./.github/actions/frontend-bg
         with:
           phase: start
       - uses: ./.github/actions/linux-deps
         if: runner.os == 'Linux'
-      # Same toolchain action as the Release workflow: the rustc version is part of the cache
-      # key, and Release restores this job's cache.
-      - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target

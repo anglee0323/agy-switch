@@ -173,10 +173,11 @@ jobs:
         with:
           ref: ${{ env.SOURCE_HEAD }}
           persist-credentials: false
+      # No npm cache here: `npm ci` runs in the background behind the slower Rust cache
+      # restore, so downloading from the registry costs nothing on the critical path.
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: npm
       - uses: ./.github/actions/frontend-bg
         with:
           phase: start
@@ -195,7 +196,7 @@ jobs:
           phase: wait
 
       - name: Build executable for headless CLI smoke test
-        run: cargo build --locked --manifest-path src-tauri/Cargo.toml --features native-gui-test --bins
+        run: cargo build --locked --manifest-path src-tauri/Cargo.toml --features native-gui-test
 
       - name: Smoke test CLI without a display or real credentials
         run: node scripts/test-cli.mjs src-tauri/target/debug/agy-switch-desktop
@@ -302,10 +303,11 @@ jobs:
         with:
           ref: ${{ env.SOURCE_HEAD }}
           persist-credentials: false
+      # No npm cache here: `npm ci` runs in the background behind the slower Rust cache
+      # restore, so downloading from the registry costs nothing on the critical path.
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: npm
       - uses: ./.github/actions/frontend-bg
         with:
           phase: start
@@ -321,7 +323,7 @@ jobs:
           phase: wait
 
       - name: Build executable for headless CLI smoke test
-        run: cargo build --locked --manifest-path src-tauri/Cargo.toml --features native-gui-test --bins
+        run: cargo build --locked --manifest-path src-tauri/Cargo.toml --features native-gui-test
 
       - name: Smoke test CLI without a display or real credentials
         shell: bash
@@ -401,10 +403,11 @@ jobs:
         with:
           ref: ${{ env.SOURCE_HEAD }}
           persist-credentials: false
+      # No npm cache here: `npm ci` runs in the background behind the slower Rust cache
+      # restore, so downloading from the registry costs nothing on the critical path.
       - uses: actions/setup-node@v5
         with:
           node-version: 22
-          cache: npm
       - uses: ./.github/actions/frontend-bg
         with:
           phase: start
@@ -424,7 +427,7 @@ jobs:
       - uses: ./.github/actions/rust-platform-tests
 
       - name: Build executable for headless CLI smoke test
-        run: cargo build --locked --manifest-path src-tauri/Cargo.toml --features native-gui-test --bins
+        run: cargo build --locked --manifest-path src-tauri/Cargo.toml --features native-gui-test
 
       - name: Smoke test CLI without a display or real credentials
         run: node scripts/test-cli.mjs src-tauri/target/debug/agy-switch-desktop
