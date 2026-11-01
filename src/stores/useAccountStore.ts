@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Account } from '../types/account';
 import * as accountService from '../services/accountService';
+import { mergeVisibleOrder } from '../utils/accountOrder';
 
 interface AccountState {
     accounts: Account[];
@@ -144,6 +145,8 @@ export const useAccountStore = create<AccountState>((set, get) => ({
 
     /**
      * 重新排序账号列表
+     * 拖拽只知道当前页、搜索或筛选后可见的账号，因此先合并进完整顺序再保存：
+     * 可见账号沿用各自原有的位置，其余账号保持不动。
      * 采用乐观更新策略：先更新本地状态再调用后端持久化，以提供流畅的拖拽体验
      */
     reorderAccounts: async (accountIds: string[]) => {
@@ -152,20 +155,14 @@ export const useAccountStore = create<AccountState>((set, get) => ({
         // 创建 ID 到账号的映射
         const accountMap = new Map(accounts.map(acc => [acc.id, acc]));
 
-        // 按新顺序重建账号数组
-        const reorderedAccounts = accountIds
-            .map(id => accountMap.get(id))
-            .filter((acc): acc is Account => acc !== undefined);
-
-        // 添加未在新顺序中的账号（保持原有顺序）
-        const remainingAccounts = accounts.filter(acc => !accountIds.includes(acc.id));
-        const finalAccounts = [...reorderedAccounts, ...remainingAccounts];
+        const fullOrder = mergeVisibleOrder(accounts.map(acc => acc.id), accountIds);
+        const finalAccounts = fullOrder.map(id => accountMap.get(id)!);
 
         // 乐观更新本地状态
         set({ accounts: finalAccounts });
 
         try {
-            await accountService.reorderAccounts(accountIds);
+            await accountService.reorderAccounts(fullOrder);
         } catch (error) {
             // 后端失败时回滚到原始顺序
             console.error('[AccountStore] Reorder accounts failed:', error);
