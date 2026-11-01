@@ -1,0 +1,73 @@
+name: Rust backend tests for macOS and Windows
+description: >
+  The platform-specific Rust test groups that run on macOS and Windows. Linux runs the
+  complete `cargo test --lib` instead, which already contains every group below.
+
+runs:
+  using: composite
+  steps:
+    - name: Test read-only account dashboard contract
+      shell: bash
+      run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib account_dashboard::tests
+
+    - name: Test OAuth callbacks, protobuf bounds and bounded client exit
+      shell: bash
+      run: |
+        cargo test --locked --manifest-path src-tauri/Cargo.toml --lib modules::oauth_server::tests
+        cargo test --locked --manifest-path src-tauri/Cargo.toml --lib utils::protobuf::tests
+        cargo test --locked --manifest-path src-tauri/Cargo.toml --lib modules::process::close_wait_tests
+
+    - name: Test native background schedules and coalescing
+      shell: bash
+      run: |
+        cargo test --locked --manifest-path src-tauri/Cargo.toml --lib quota_refresh::tests
+        cargo test --locked --manifest-path src-tauri/Cargo.toml --lib account_sync::tests
+
+    - name: Test menu-bar quota snapshots
+      shell: bash
+      run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib menu_bar_projection::tests
+
+    - name: Test official price parsing and native cost matching
+      shell: bash
+      run: |
+        cargo test --locked --manifest-path src-tauri/Cargo.toml --lib api_pricing::tests
+        cargo test --locked --manifest-path src-tauri/Cargo.toml --lib menu_bar_usage::tests
+
+    - name: Test local usage and response performance
+      shell: bash
+      run: "cargo test --locked --manifest-path src-tauri/Cargo.toml --lib native_token_stats::"
+
+    - name: Test App identity and metadata guards
+      shell: bash
+      run: |
+        cargo test --locked --manifest-path src-tauri/Cargo.toml --lib app_
+        cargo test --locked --manifest-path src-tauri/Cargo.toml --lib agent_activity::tests
+
+    - name: Test public release metadata guards
+      shell: bash
+      run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib modules::updater::tests
+
+    - name: Test serialized desktop preferences
+      shell: bash
+      run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib modules::config::tests
+
+    - name: Test account scopes, transfers and system proxies
+      shell: bash
+      run: |
+        cargo test --locked --manifest-path src-tauri/Cargo.toml --lib scope_tests
+        cargo test --locked --manifest-path src-tauri/Cargo.toml --lib selection_tests
+        cargo test --locked --manifest-path src-tauri/Cargo.toml --lib import_report_tests
+        cargo test --locked --manifest-path src-tauri/Cargo.toml --lib transfer_tests
+        cargo test --locked --manifest-path src-tauri/Cargo.toml --lib utils::proxy::tests
+
+    - name: Test agy-switch CLI on every platform
+      shell: bash
+      run: "cargo test --locked --manifest-path src-tauri/Cargo.toml --lib cli::"
+
+    - name: Test safe low-quota switching on every platform
+      shell: bash
+      run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib auto_switch::tests
+
+    - name: Test native CLI credentials on every platform
+      shell: bash
+      run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib cli_credentials::tests

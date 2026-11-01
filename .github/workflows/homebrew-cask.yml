@@ -20,6 +20,11 @@ on:
 permissions:
   contents: read
 
+# Newer pushes replace older PR runs; each main commit keeps its own run.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   recipe:
     runs-on: macos-15

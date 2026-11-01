@@ -5,13 +5,24 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    # Pull requests that cannot change the release executable skip this workflow.
+    # It is not a required check, so skipping never blocks a merge. Pushes to main
+    # are unfiltered: every main commit gets the full release-profile verification.
+    paths:
+      - src-tauri/**
+      - scripts/**
+      - package.json
+      - package-lock.json
+      - .github/workflows/release-cli.yml
+      - .github/actions/**
 
 permissions:
   contents: read
 
+# Newer pushes replace older PR runs; every main commit keeps its own uncancelled run.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   release-cli:
@@ -24,22 +35,25 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/linux-deps
+        if: runner.os == 'Linux'
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - name: Install Linux build dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev git cmake clang libclang-dev pkg-config
-      - run: npm run build
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: swatinem/rust-cache@v2
+      - run: npm ci --no-audit --no-fund
+      # Type-checking is done once by the Build workflow; only the bundle is needed here.
+      - name: Build frontend
+        run: npx vite build
+      - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
           shared-key: release-cli-${{ matrix.platform }}
+          cache-bin: false
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: Build actual release executable
         run: cargo build --release --locked --manifest-path src-tauri/Cargo.toml
       - name: Test release CLI with captured stdout and stderr
