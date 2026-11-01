@@ -178,9 +178,7 @@ pub fn is_antigravity_running(target_ide: Option<&str>) -> bool {
             if ide_exe_paths.contains(&exe_path) {
                 false // Explicitly immune (it is an IDE)
             } else {
-                (exe_path.contains("antigravity") || name.contains("antigravity"))
-                    && !is_ide_name(&exe_path)
-                    && !is_ide_name(&name)
+                is_app_candidate(&exe_path, &name)
             }
         };
 
@@ -406,9 +404,7 @@ fn get_antigravity_pids(target_ide: Option<&str>) -> Vec<u32> {
             if ide_exe_paths.contains(&exe_path) {
                 false // Explicitly immune (it is an IDE)
             } else {
-                (exe_path.contains("antigravity") || name.contains("antigravity"))
-                    && !is_ide_name(&exe_path)
-                    && !is_ide_name(&name)
+                is_app_candidate(&exe_path, &name)
             }
         };
 
@@ -1069,9 +1065,7 @@ fn get_process_info(target_ide: Option<&str>) -> (Option<std::path::PathBuf>, Op
                 is_ide_name(&exe_path)
                     || is_ide_name(&name)
             } else {
-                (exe_path.contains("antigravity") || name.contains("antigravity"))
-                    && !is_ide_name(&exe_path)
-                    && !is_ide_name(&name)
+                is_app_candidate(&exe_path, &name)
             };
 
             if is_ide_match && !is_helper {
@@ -1319,6 +1313,53 @@ fn check_standard_locations(target_ide: Option<&str>) -> Option<std::path::PathB
 fn is_ide_name(value: &str) -> bool {
     let value = value.to_lowercase().replace(['-', '_'], " ");
     value.contains("antigravity ide")
+}
+
+/// AntiGravity Switch (the `agy-switch-desktop` window and the `agy-switch` console) lives in
+/// a path containing "antigravity", but it is not the Antigravity App and must never be closed
+/// or relaunched as one. Both arguments are lowercase.
+fn is_switch_process(exe_path: &str, name: &str) -> bool {
+    let file = exe_path.rsplit(['/', '\\']).next().unwrap_or(exe_path);
+    file.starts_with("agy-switch") || name.starts_with("agy-switch") || exe_path.contains("antigravity switch.app")
+}
+
+/// Fuzzy match for the Antigravity App (not the IDE, not AntiGravity Switch itself).
+fn is_app_candidate(exe_path: &str, name: &str) -> bool {
+    (exe_path.contains("antigravity") || name.contains("antigravity"))
+        && !is_ide_name(exe_path)
+        && !is_ide_name(name)
+        && !is_switch_process(exe_path, name)
+}
+
+#[cfg(test)]
+mod app_candidate_tests {
+    use super::is_app_candidate;
+
+    #[test]
+    fn antigravity_switch_is_never_taken_for_the_app() {
+        for (path, name) in [
+            ("/applications/antigravity switch.app/contents/macos/agy-switch-desktop", "agy-switch-desktop"),
+            ("/applications/antigravity switch.app/contents/macos/agy-switch", "agy-switch"),
+            ("/applications/antigravity switch.app/contents/resources/anything", "something"),
+            ("c:\\program files\\antigravity switch\\agy-switch-desktop.exe", "agy-switch-desktop.exe"),
+            ("/usr/bin/agy-switch", "agy-switch"),
+        ] {
+            assert!(!is_app_candidate(path, name), "{path} is AntiGravity Switch, not the App");
+        }
+    }
+
+    #[test]
+    fn the_antigravity_app_is_still_recognized_and_the_ide_is_not() {
+        for (path, name) in [
+            ("/applications/antigravity.app/contents/macos/antigravity", "antigravity"),
+            ("/usr/share/antigravity/antigravity", "antigravity"),
+            ("c:\\users\\me\\appdata\\local\\programs\\antigravity\\antigravity.exe", "antigravity.exe"),
+        ] {
+            assert!(is_app_candidate(path, name), "{path} is the App");
+        }
+        assert!(!is_app_candidate("/applications/antigravity ide.app/contents/macos/electron", "electron"));
+        assert!(!is_app_candidate("/usr/bin/zsh", "zsh"));
+    }
 }
 
 #[cfg(test)]
