@@ -9,42 +9,70 @@ on:
 permissions:
   contents: read
 
+# A newer push to the same PR replaces the older run. Every main commit gets its own
+# group instead: no run is cancelled, and a pending run is never dropped by a later push,
+# so each commit on main is fully verified before it can be released.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+  # Keep file/line backtraces but drop full debug info: faster compile and link, smaller caches.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+  CARGO_PROFILE_TEST_DEBUG: line-tables-only
+  CARGO_NET_RETRY: 5
 
 jobs:
-  build:
-    name: ${{ matrix.platform }} build
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [macos-15, windows-latest, ubuntu-22.04]
-    runs-on: ${{ matrix.platform }}
-    timeout-minutes: 30
+  # Documentation-only pull requests skip the heavy jobs. A workflow-level `paths-ignore`
+  # would leave the required checks "Expected" forever, so the filter lives here and the
+  # `gate` job below always reports. Pushes to main always run everything.
+  changes:
+    name: Detect code changes
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          persist-credentials: false
+      - id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -uo pipefail
+          code=true
+          if [[ "$EVENT" == pull_request ]]; then
+            if files="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --paginate --jq '.[] | .filename, (.previous_filename // empty)')" && [[ -n "$files" ]]; then
+              # Only documentation, licence and the Homebrew cask (own workflow) are skippable.
+              if ! grep -qvE '^(docs/|Casks/|LICENSE$)|\.md$' <<<"$files"; then code=false; fi
+            fi
+          fi
+          echo "Changed code: $code"
+          echo "code=$code" >> "$GITHUB_OUTPUT"
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
+  # Everything that does not depend on the operating system runs once, on Linux.
+  web:
+    name: Frontend build and script tests
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SOURCE_HEAD }}
+          persist-credentials: false
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
+      - run: npm ci --no-audit --no-fund
 
-      - name: Install frontend dependencies
-        run: npm ci
-
-      - name: Install Linux build dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev git cmake clang libclang-dev pkg-config
-
-      - name: Build frontend
+      - name: Type-check and build frontend
         run: npm run build
 
       - name: Test menu-bar quota presentation
@@ -58,214 +86,380 @@ jobs:
 
       - name: Test desktop preference UI races
         run: node scripts/test-desktop-settings.mjs && node scripts/test-account-transfer.mjs
+
+      - name: Test Homebrew cask generation and release assets
+        run: node --test scripts/test-homebrew-generator.mjs scripts/test-release.mjs scripts/test-update-assets.mjs
+
+  # The mocked-IPC browser suite is the longest single test, so it is spread over three machines.
+  ui-mock:
+    name: Mocked UI acceptance (${{ matrix.shard }}/3)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SOURCE_HEAD }}
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
       - name: Install Chromium for mocked UI acceptance
-        if: runner.os == 'Linux'
-        run: npx playwright install --with-deps chromium
-
+        run: npx playwright install --with-deps --only-shell chromium
       - name: Test low-quota switching UI with synthetic IPC
-        if: runner.os == 'Linux'
-        run: npx playwright test
-
+        run: npx playwright test --shard=${{ matrix.shard }}/3
       - name: Upload UI acceptance screenshots
-        if: runner.os == 'Linux' && always()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: auto-switch-ui-acceptance
+          name: auto-switch-ui-acceptance-${{ matrix.shard }}
           path: test-results/auto-switch
           if-no-files-found: ignore
 
-      - name: Upload menu-bar mock browser screenshots
-        if: runner.os == 'Linux' && always()
-        uses: actions/upload-artifact@v4
+  # Rust unit tests need no real frontend: a placeholder `dist` satisfies the Tauri asset
+  # embedding, so these jobs neither wait for nor install Node packages. The native jobs
+  # below compile the real frontend into the app.
+  linux-unit:
+    name: Linux Rust tests
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
         with:
-          name: menubar-ui-mock-acceptance
-          path: test-results/auto-switch/**/menubar-*.png
-          if-no-files-found: ignore
-
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - uses: swatinem/rust-cache@v2
+          ref: ${{ env.SOURCE_HEAD }}
+          persist-credentials: false
+      - uses: ./.github/actions/linux-deps
+        with:
+          extra: dbus-x11 gnome-keyring
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
-          shared-key: native-platform-build-${{ matrix.platform }}
-          cache-on-failure: true
-
+          # Same dependencies as the native job (test profile only adds the crate itself), so
+          # restore its cache read-only instead of storing a second copy.
+          shared-key: ci-linux
+          cache-bin: false
+          save-if: false
+      - name: Prepare placeholder frontend
+        run: mkdir -p dist && echo '<!doctype html><title>test</title>' > dist/index.html
       - name: Test CLI child-process stdio isolation
         run: node scripts/test-cli-launch.mjs
-
-      - name: Check Tauri backend
-        run: cargo check --locked --manifest-path src-tauri/Cargo.toml
-
-      - name: Test read-only account dashboard contract
-        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib account_dashboard::tests
-
-      - name: Diagnose Windows test-loader failures
-        if: failure() && runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          $binary = Get-ChildItem src-tauri/target/debug/deps/antigravity_tools_lib-*.exe | Sort-Object LastWriteTime -Descending | Select-Object -First 1
-          if ($binary) { ./scripts/diagnose-windows-loader.ps1 -Binary $binary.FullName }
-
+      - name: Test Linux backend (the complete library suite)
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib
       - name: Test quota HTTP fixtures without native data access
         run: node scripts/test-quota.mjs
+      - name: Test isolated Linux credentials
+        run: ./scripts/test-linux-credentials.sh
 
-      - name: Test OAuth callbacks, protobuf bounds and bounded client exit
-        run: |
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib modules::oauth_server::tests
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib utils::protobuf::tests
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib modules::process::close_wait_tests
-
-      - name: Test native background schedules and coalescing
-        run: |
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib quota_refresh::tests
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib account_sync::tests
-
-      - name: Test menu-bar quota snapshots
-        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib menu_bar_projection::tests
-
-      - name: Test official price parsing and native cost matching
-        run: |
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib api_pricing::tests
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib menu_bar_usage::tests
-
-      - name: Test local usage and response performance
-        run: "cargo test --locked --manifest-path src-tauri/Cargo.toml --lib native_token_stats::"
-
-      - name: Test App identity and metadata guards
-        run: |
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib app_
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib agent_activity::tests
-
-      - name: Test public release metadata guards
-        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib modules::updater::tests
-
-      - name: Test serialized desktop preferences
-        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib modules::config::tests
-
-      - name: Test account scopes, transfers and system proxies
-        run: |
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib scope_tests
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib selection_tests
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib import_report_tests
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib transfer_tests
-          cargo test --locked --manifest-path src-tauri/Cargo.toml --lib utils::proxy::tests
-
-      - name: Test agy-switch CLI on every platform
-        run: "cargo test --locked --manifest-path src-tauri/Cargo.toml --lib cli::"
+  linux-native:
+    name: Linux native app tests
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SOURCE_HEAD }}
+          persist-credentials: false
+      # No npm cache here: `npm ci` runs in the background behind the slower Rust cache
+      # restore, so downloading from the registry costs nothing on the critical path.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: ./.github/actions/frontend-bg
+        with:
+          phase: start
+      - uses: ./.github/actions/linux-deps
+        with:
+          extra: webkit2gtk-driver xvfb dbus-x11 fonts-noto-cjk openbox gdb
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: ci-linux
+          cache-bin: false
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: ./.github/actions/frontend-bg
+        with:
+          phase: wait
 
       - name: Build executable for headless CLI smoke test
         run: cargo build --locked --manifest-path src-tauri/Cargo.toml --features native-gui-test
 
       - name: Smoke test CLI without a display or real credentials
-        shell: bash
-        run: |
-          BINARY=src-tauri/target/debug/agy-switch-desktop
-          if [[ "$RUNNER_OS" == Windows ]]; then BINARY="${BINARY}.exe"; fi
-          node scripts/test-cli.mjs "$BINARY"
+        run: node scripts/test-cli.mjs src-tauri/target/debug/agy-switch-desktop
 
       - name: Smoke test dedicated console CLI
-        shell: bash
-        run: |
-          BINARY=src-tauri/target/debug/agy-switch
-          if [[ "$RUNNER_OS" == Windows ]]; then BINARY="${BINARY}.exe"; fi
-          node scripts/test-cli.mjs "$BINARY"
+        run: node scripts/test-cli.mjs src-tauri/target/debug/agy-switch
 
       - name: Test interactive CLI in a real terminal
         timeout-minutes: 2
-        shell: bash
         run: |
-          BINARY=src-tauri/target/debug/agy-switch
-          if [[ "$RUNNER_OS" == Windows ]]; then BINARY="$BINARY.exe"; fi
-          node scripts/test-cli-terminal.mjs "$BINARY"
-          node scripts/test-cli-account-window.mjs "$BINARY"
+          node scripts/test-cli-terminal.mjs src-tauri/target/debug/agy-switch
+          node scripts/test-cli-account-window.mjs src-tauri/target/debug/agy-switch
 
       - name: Validate native GUI fixture and screenshot checks
         run: |
           node scripts/test-native-gui.mjs --self-test
           node scripts/test-desktop-lifecycle.mjs --self-test
 
-      - name: Install official native GUI test tools (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get install -y webkit2gtk-driver xvfb dbus-x11 fonts-noto-cjk openbox gdb
-
-      - name: Test actual macOS Dock and window lifecycle
-        if: runner.os == 'macOS'
-        timeout-minutes: 5
-        run: node scripts/test-macos-desktop.mjs
-
       - name: Test actual Linux tray and secondary-window lifecycle
-        if: runner.os == 'Linux'
         timeout-minutes: 5
-        env:
-          SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         run: xvfb-run -a -s "-screen 0 1280x1024x24 -nolisten tcp" dbus-run-session -- sh -c 'openbox >/tmp/agy-lifecycle-window-manager.log 2>&1 & node scripts/test-desktop-lifecycle.mjs'
 
-      - name: Test actual Windows tray and secondary-window lifecycle
-        if: runner.os == 'Windows'
+      - name: Upload native desktop lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-lifecycle-${{ runner.os }}-${{ env.SOURCE_HEAD }}
+          path: artifacts/desktop-lifecycle/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Restore the pinned official Tauri WebDriver
+        id: tauri-driver
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/tauri-driver
+          key: tauri-driver-2.0.6-${{ runner.os }}
+      - name: Build the pinned official Tauri WebDriver (cache miss only)
+        if: steps.tauri-driver.outputs.cache-hit != 'true'
+        run: cargo install tauri-driver --version 2.0.6 --locked --root "$RUNNER_TEMP/tauri-driver"
+      - run: echo "TAURI_DRIVER=$RUNNER_TEMP/tauri-driver/bin/tauri-driver" >> "$GITHUB_ENV"
+
+      - name: Test actual Linux Tauri window with isolated synthetic data
         timeout-minutes: 5
-        env:
-          SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: xvfb-run -a -s "-screen 0 1280x1024x24 -nolisten tcp" dbus-run-session -- node scripts/test-native-gui.mjs src-tauri/target/debug/agy-switch-desktop
+
+      - name: Upload native GUI evidence (never substitute mock screenshots)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-gui-${{ runner.os }}-${{ env.SOURCE_HEAD }}
+          path: artifacts/native-gui/
+          if-no-files-found: warn
+          retention-days: 14
+
+  windows-unit:
+    name: Windows Rust tests
+    env:
+      # MSVC spends much of its link time writing PDBs nothing here reads.
+      CARGO_PROFILE_DEV_DEBUG: 0
+      CARGO_PROFILE_TEST_DEBUG: 0
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SOURCE_HEAD }}
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: ci-windows
+          cache-bin: false
+          save-if: false
+      - name: Prepare placeholder frontend
+        shell: bash
+        run: mkdir -p dist && echo '<!doctype html><title>test</title>' > dist/index.html
+      - name: Test CLI child-process stdio isolation
+        run: node scripts/test-cli-launch.mjs
+      - uses: ./.github/actions/rust-platform-tests
+      - name: Diagnose Windows test-loader failures
+        if: failure()
+        shell: pwsh
+        run: |
+          $binary = Get-ChildItem src-tauri/target/debug/deps/antigravity_tools_lib-*.exe | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if ($binary) { ./scripts/diagnose-windows-loader.ps1 -Binary $binary.FullName }
+
+  windows-native:
+    name: Windows native app tests
+    env:
+      CARGO_PROFILE_DEV_DEBUG: 0
+      CARGO_PROFILE_TEST_DEBUG: 0
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SOURCE_HEAD }}
+          persist-credentials: false
+      # No npm cache here: `npm ci` runs in the background behind the slower Rust cache
+      # restore, so downloading from the registry costs nothing on the critical path.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: ./.github/actions/frontend-bg
+        with:
+          phase: start
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: ci-windows
+          cache-bin: false
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: ./.github/actions/frontend-bg
+        with:
+          phase: wait
+
+      - name: Build executable for headless CLI smoke test
+        run: cargo build --locked --manifest-path src-tauri/Cargo.toml --features native-gui-test
+
+      - name: Smoke test CLI without a display or real credentials
+        shell: bash
+        run: node scripts/test-cli.mjs src-tauri/target/debug/agy-switch-desktop.exe
+
+      - name: Smoke test dedicated console CLI
+        shell: bash
+        run: node scripts/test-cli.mjs src-tauri/target/debug/agy-switch.exe
+
+      - name: Test interactive CLI in a real terminal
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          node scripts/test-cli-terminal.mjs src-tauri/target/debug/agy-switch.exe
+          node scripts/test-cli-account-window.mjs src-tauri/target/debug/agy-switch.exe
+
+      - name: Validate native GUI fixture and screenshot checks
+        run: |
+          node scripts/test-native-gui.mjs --self-test
+          node scripts/test-desktop-lifecycle.mjs --self-test
+
+      - name: Test actual Windows tray and secondary-window lifecycle
+        timeout-minutes: 5
         run: node scripts/test-desktop-lifecycle.mjs
 
       - name: Upload native desktop lifecycle evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: desktop-lifecycle-${{ runner.os }}-${{ github.event.pull_request.head.sha || github.sha }}
-          path: |
-            artifacts/desktop-lifecycle/
-            artifacts/macos-desktop/
+          name: desktop-lifecycle-${{ runner.os }}-${{ env.SOURCE_HEAD }}
+          path: artifacts/desktop-lifecycle/
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Install pinned official Tauri WebDriver
-        if: runner.os != 'macOS'
-        run: cargo install tauri-driver --version 2.0.6 --locked
+      - name: Restore the pinned official Tauri WebDriver
+        id: tauri-driver
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/tauri-driver
+          key: tauri-driver-2.0.6-${{ runner.os }}
+      - name: Build the pinned official Tauri WebDriver (cache miss only)
+        if: steps.tauri-driver.outputs.cache-hit != 'true'
+        shell: bash
+        run: cargo install tauri-driver --version 2.0.6 --locked --root "$RUNNER_TEMP/tauri-driver"
+      - shell: bash
+        run: echo "TAURI_DRIVER=$RUNNER_TEMP/tauri-driver/bin/tauri-driver.exe" >> "$GITHUB_ENV"
 
       - name: Prepare matching Microsoft WebView2 driver
-        if: runner.os == 'Windows'
         shell: pwsh
         run: ./scripts/prepare-windows-webdriver.ps1
 
-      - name: Test actual Linux Tauri window with isolated synthetic data
-        if: runner.os == 'Linux'
-        timeout-minutes: 5
-        env:
-          SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: xvfb-run -a -s "-screen 0 1280x1024x24 -nolisten tcp" dbus-run-session -- node scripts/test-native-gui.mjs src-tauri/target/debug/agy-switch-desktop
-
       - name: Test actual Windows Tauri window with isolated synthetic data
-        if: runner.os == 'Windows'
         timeout-minutes: 5
         env:
-          SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
           NATIVE_GUI_TEST_FEATURE: '1'
         run: node scripts/test-native-gui.mjs src-tauri/target/debug/agy-switch-desktop.exe
 
       - name: Upload native GUI evidence (never substitute mock screenshots)
-        if: runner.os != 'macOS' && always()
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: native-gui-${{ runner.os }}-${{ github.event.pull_request.head.sha || github.sha }}
+          name: native-gui-${{ runner.os }}-${{ env.SOURCE_HEAD }}
           path: artifacts/native-gui/
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Test Homebrew cask generation
-        if: runner.os != 'Windows'
-        run: node --test scripts/test-homebrew-generator.mjs scripts/test-release.mjs scripts/test-update-assets.mjs
+  # macOS runners are the scarcest (five at a time across every workflow), so this is one
+  # job holding only what needs a real Mac.
+  macos:
+    name: macOS Rust and native app tests
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ env.SOURCE_HEAD }}
+          persist-credentials: false
+      # No npm cache here: `npm ci` runs in the background behind the slower Rust cache
+      # restore, so downloading from the registry costs nothing on the critical path.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: ./.github/actions/frontend-bg
+        with:
+          phase: start
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: ci-macos
+          cache-bin: false
+          cache-on-failure: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - uses: ./.github/actions/frontend-bg
+        with:
+          phase: wait
 
-      - name: Test safe low-quota switching on every platform
-        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib auto_switch::tests
+      - name: Test CLI child-process stdio isolation
+        run: node scripts/test-cli-launch.mjs
+      - uses: ./.github/actions/rust-platform-tests
 
-      - name: Test native CLI credentials on every platform
-        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib cli_credentials::tests
+      - name: Build executable for headless CLI smoke test
+        run: cargo build --locked --manifest-path src-tauri/Cargo.toml --features native-gui-test
+
+      - name: Smoke test CLI without a display or real credentials
+        run: node scripts/test-cli.mjs src-tauri/target/debug/agy-switch-desktop
+
+      - name: Smoke test dedicated console CLI
+        run: node scripts/test-cli.mjs src-tauri/target/debug/agy-switch
+
+      - name: Test interactive CLI in a real terminal
+        timeout-minutes: 2
+        run: |
+          node scripts/test-cli-terminal.mjs src-tauri/target/debug/agy-switch
+          node scripts/test-cli-account-window.mjs src-tauri/target/debug/agy-switch
+
+      - name: Validate native GUI fixture and screenshot checks
+        run: |
+          node scripts/test-native-gui.mjs --self-test
+          node scripts/test-desktop-lifecycle.mjs --self-test
+
+      - name: Test actual macOS Dock and window lifecycle
+        timeout-minutes: 5
+        run: node scripts/test-macos-desktop.mjs
+
+      - name: Upload native desktop lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-lifecycle-${{ runner.os }}-${{ env.SOURCE_HEAD }}
+          path: artifacts/macos-desktop/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Package macOS arm64 test app
-        if: runner.os == 'macOS'
-        env:
-          SOURCE_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           set -euo pipefail
           npm run tauri bundle -- --debug --bundles app
@@ -279,20 +473,31 @@ jobs:
           node --input-type=module -e 'import { writeFileSync } from "node:fs"; import { execFileSync } from "node:child_process"; writeFileSync("artifacts/macos-test/build-info.json", JSON.stringify({ source_head: process.env.SOURCE_HEAD, checkout_commit: execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim(), run_id: process.env.GITHUB_RUN_ID, architecture: "arm64", profile: "debug", distribution: "CI test build; not a signed or notarized release" }, null, 2) + "\n");'
 
       - name: Upload macOS test app
-        if: runner.os == 'macOS'
         uses: actions/upload-artifact@v4
         with:
-          name: macos-arm64-test-${{ github.event.pull_request.head.sha || github.sha }}
+          name: macos-arm64-test-${{ env.SOURCE_HEAD }}
           path: artifacts/macos-test/
           if-no-files-found: error
           retention-days: 7
 
-      - name: Test Linux backend
-        if: runner.os == 'Linux'
-        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib
-
-      - name: Test isolated Linux credentials
-        if: runner.os == 'Linux'
+  # Stable required-check names. Branch protection requires "<platform> build"; these always
+  # report (success when everything passed or a documentation-only PR skipped the real jobs)
+  # so a skipped workflow can never leave a required check pending.
+  gate:
+    name: ${{ matrix.platform }} build
+    if: always()
+    needs: [changes, web, ui-mock, linux-unit, linux-native, windows-unit, windows-native, macos]
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-15, windows-latest, ubuntu-22.04]
+    steps:
+      - name: Require every real job to pass (or be skipped for a documentation-only PR)
+        env:
+          NEEDS: ${{ toJSON(needs) }}
         run: |
-          sudo apt-get install -y dbus-x11 gnome-keyring
-          ./scripts/test-linux-credentials.sh
+          code="$(jq -r '.changes.outputs.code' <<<"$NEEDS")"
+          jq -r 'to_entries[] | "\(.key): \(.value.result)"' <<<"$NEEDS"
+          jq -e --arg code "$code" 'to_entries | all(.value.result == "success" or (.value.result == "skipped" and $code != "true"))' <<<"$NEEDS" >/dev/null

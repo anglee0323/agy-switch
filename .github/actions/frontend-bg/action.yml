@@ -1,0 +1,32 @@
+name: Frontend build in the background
+description: >
+  Run `npm ci` and `vite build` while the job does other slow, independent work (restoring
+  the Rust cache, installing apt packages). Call with phase `start` right after setup-node,
+  then with phase `wait` immediately before the first step that needs `node_modules`/`dist`.
+
+inputs:
+  phase:
+    description: "`start` or `wait`"
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Start npm ci and vite build in the background
+      if: inputs.phase == 'start'
+      shell: bash
+      run: |
+        rm -f "$RUNNER_TEMP/frontend-bg.done"
+        ( (npm ci --no-audit --no-fund && npx vite build) > "$RUNNER_TEMP/frontend-bg.log" 2>&1; echo $? > "$RUNNER_TEMP/frontend-bg.done" ) > /dev/null 2>&1 &
+        disown || true
+        echo "Frontend build started in the background"
+    - name: Wait for the background frontend build
+      if: inputs.phase == 'wait'
+      shell: bash
+      run: |
+        for _ in $(seq 1 600); do
+          [[ -f "$RUNNER_TEMP/frontend-bg.done" ]] && break
+          sleep 1
+        done
+        cat "$RUNNER_TEMP/frontend-bg.log" || true
+        [[ -f "$RUNNER_TEMP/frontend-bg.done" && "$(cat "$RUNNER_TEMP/frontend-bg.done")" == 0 ]] || { echo "::error::Background frontend build did not succeed"; exit 1; }

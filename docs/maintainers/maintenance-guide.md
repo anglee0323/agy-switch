@@ -60,6 +60,29 @@ Use the relevant rows, not the whole table for every small patch.
 | Instructions or documentation | `AGENTS.md`, maintainer guides or affected user guides | Verify referenced paths/commands and rendered screenshot layout; no version bump or release solely for these changes |
 | Removing legacy code | Active Rust/TS consumers, registered commands, migration entry points and platform-only modules | Confirm the replacement path still supports saved data; run frontend build, Rust checks/tests and relevant CLI/platform checks |
 
+## Continuous integration
+
+The `Build` workflow is split into parallel jobs so wall time follows the slowest job rather than the sum:
+`web` (type-check, frontend build and OS-independent script tests), three `ui-mock` Playwright shards,
+`linux-unit`/`linux-native`, `windows-unit`/`windows-native` and one `macos` job. Keep these rules when editing workflows:
+
+- **Required checks.** Branch protection requires `macos-15 build`, `windows-latest build` and
+  `ubuntu-22.04 build`. They are produced by the `gate` job, which always runs and passes only when every real job passed
+  (or was skipped for a documentation-only PR). Never replace it with a workflow-level `paths` filter: a workflow that
+  does not start leaves required checks pending and blocks the merge. Adding a new job means adding it to the gate's `needs`.
+- **Documentation-only PRs** (only `*.md`, `docs/**`, `Casks/**`, `LICENSE`) skip the heavy jobs through the `changes` job.
+  Pushes to `main` never skip anything.
+- **Concurrency.** A newer push cancels the older run of the same PR. `main` runs use a per-run group and are never
+  cancelled or replaced while pending, so every main commit is fully verified before a release.
+- **Caches.** Only `main` saves Rust caches (`save-if`); PR, tag and release refs cannot be restored by other refs and would
+  only consume the 10 GB repository quota. `linux-unit` and `windows-unit` restore the cache saved by the matching native job.
+  The rustc version is part of the cache key, so the first main run after a runner-image Rust update is cold.
+  Release jobs reuse the `release-cli-*` caches and never save. Do not pin a shared key to two jobs that both save.
+- **No duplicated work.** Frontend tests run once on Linux; `tsc` runs only in `web`; native jobs run `vite build` only.
+  Linux runs the complete `cargo test --lib`, so it does not repeat the filtered groups that macOS and Windows run.
+  Rust unit jobs use a placeholder `dist`; the native jobs embed the real frontend.
+- **Tools.** `tauri-driver` has no prebuilt binary; the pinned build is cached separately and compiled only on a miss.
+
 ## Release preparation and follow-up
 
 1. Consolidate the selected changes in a new version's notes. Choose an unused
