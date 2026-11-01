@@ -434,48 +434,23 @@ fn wait_until_stopped(deadline: std::time::Instant, mut running: impl FnMut() ->
     }
 }
 
+#[cfg(target_os = "windows")]
+mod windows_close;
+
 /// Close Antigravity processes
 pub fn close_antigravity(timeout_secs: u64, target_ide: Option<&str>) -> Result<(), String> {
     crate::modules::logger::log_info(&format!("Closing Antigravity ({:?})...", target_ide));
 
     #[cfg(target_os = "windows")]
     {
-        // Windows: Precise kill by PID to support multiple versions or custom filenames
+        // Ask identified windows to close normally so the client can flush its state.
+        // If it remains running (including a hidden/tray-only client), fail closed:
+        // never force-terminate it before changing credentials.
         let pids = get_antigravity_pids(target_ide);
         if !pids.is_empty() {
-            let started = std::time::Instant::now();
-            let deadline = started + Duration::from_millis(timeout_secs.saturating_mul(700));
-            let hard_deadline = started + Duration::from_millis(timeout_secs.saturating_mul(1000));
-            crate::modules::logger::log_info(&format!(
-                "Precisely closing {} identified processes on Windows...",
-                pids.len()
-            ));
-            for pid in pids {
-                let _ = Command::new("taskkill")
-                    .args(["/F", "/PID", &pid.to_string()])
-                    .creation_flags(0x08000000) // CREATE_NO_WINDOW
-                    .output();
-            }
-            // Wait for the killed PIDs to disappear, mirroring the macOS/Linux
-            // poll loops. A fixed 200ms nap intermittently lost the race with
-            // Electron teardown and failed the final running check.
-            // Phase 2: re-kill stragglers and wait out the remaining budget.
-            if !wait_until_stopped(deadline, || is_antigravity_running(target_ide)) {
-                let remaining = get_antigravity_pids(target_ide);
-                if !remaining.is_empty() {
-                    crate::modules::logger::log_warn(&format!(
-                        "Force-closing {} remaining processes on Windows...",
-                        remaining.len()
-                    ));
-                    for pid in remaining {
-                        let _ = Command::new("taskkill")
-                            .args(["/F", "/PID", &pid.to_string()])
-                            .creation_flags(0x08000000) // CREATE_NO_WINDOW
-                            .output();
-                    }
-                }
-                wait_until_stopped(hard_deadline, || is_antigravity_running(target_ide));
-            }
+            windows_close::request_windows_close(&pids)?;
+            let deadline = std::time::Instant::now() + Duration::from_secs(timeout_secs);
+            wait_until_stopped(deadline, || is_antigravity_running(target_ide));
         }
     }
 
@@ -1379,4 +1354,6 @@ mod close_wait_tests {
         assert_eq!(polls, 2);
         assert!(!wait_until_stopped(std::time::Instant::now() + Duration::from_millis(2), || true));
     }
+
+
 }

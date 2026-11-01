@@ -39,6 +39,8 @@ WebView2 is required for the desktop app. Tauri’s NSIS installer handles the c
 
 Manual switching may close/reopen Antigravity, changes its credential store and synchronizes an initialized native agy session. An external task may retain the previous credential. Verify the active account in the client after switching, especially if a partial update is reported. The CLI’s default APP target requires a discoverable Antigravity installation. No file-only target is offered.
 
+On Windows, switching requests a normal close and waits for Antigravity to exit. If a window, confirmation, or background process keeps it open, switching stops before changing credentials: save your work, fully quit Antigravity (including its tray, if present), and retry. Switch does not force-terminate the client in this case.
+
 ## Build
 
 Install Node.js 22+, Rust stable, Microsoft C++ Build Tools and the Tauri platform prerequisites. From PowerShell:
