@@ -173,16 +173,16 @@ jobs:
         with:
           ref: ${{ env.SOURCE_HEAD }}
           persist-credentials: false
-      - uses: ./.github/actions/linux-deps
-        with:
-          extra: webkit2gtk-driver xvfb dbus-x11 fonts-noto-cjk openbox gdb
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-      - run: npm ci --no-audit --no-fund
-      - name: Build frontend
-        run: npx vite build
+      - uses: ./.github/actions/frontend-bg
+        with:
+          phase: start
+      - uses: ./.github/actions/linux-deps
+        with:
+          extra: webkit2gtk-driver xvfb dbus-x11 fonts-noto-cjk openbox gdb
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
@@ -190,6 +190,9 @@ jobs:
           cache-bin: false
           cache-on-failure: true
           save-if: true # TEMP-MEASURE
+      - uses: ./.github/actions/frontend-bg
+        with:
+          phase: wait
 
       - name: Build executable for headless CLI smoke test
         run: cargo build --locked --manifest-path src-tauri/Cargo.toml --features native-gui-test --bins
@@ -250,15 +253,15 @@ jobs:
 
   windows-unit:
     name: Windows Rust tests
+    env:
+      # MSVC spends much of its link time writing PDBs nothing here reads.
+      CARGO_PROFILE_DEV_DEBUG: 0
+      CARGO_PROFILE_TEST_DEBUG: 0
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - name: Exclude the workspace from Windows Defender real-time scanning
-        shell: pwsh
-        run: |
-          try { Add-MpPreference -ExclusionPath $env:GITHUB_WORKSPACE, $env:RUNNER_TEMP, "$env:USERPROFILE\.cargo", "$env:USERPROFILE\.rustup" } catch { Write-Warning "Defender exclusion skipped: $_" }
       - uses: actions/checkout@v5
         with:
           ref: ${{ env.SOURCE_HEAD }}
@@ -287,15 +290,14 @@ jobs:
 
   windows-native:
     name: Windows native app tests
+    env:
+      CARGO_PROFILE_DEV_DEBUG: 0
+      CARGO_PROFILE_TEST_DEBUG: 0
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
-      - name: Exclude the workspace from Windows Defender real-time scanning
-        shell: pwsh
-        run: |
-          try { Add-MpPreference -ExclusionPath $env:GITHUB_WORKSPACE, $env:RUNNER_TEMP, "$env:USERPROFILE\.cargo", "$env:USERPROFILE\.rustup" } catch { Write-Warning "Defender exclusion skipped: $_" }
       - uses: actions/checkout@v5
         with:
           ref: ${{ env.SOURCE_HEAD }}
@@ -304,9 +306,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci --no-audit --no-fund
-      - name: Build frontend
-        run: npx vite build
+      - uses: ./.github/actions/frontend-bg
+        with:
+          phase: start
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
@@ -314,6 +316,9 @@ jobs:
           cache-bin: false
           cache-on-failure: true
           save-if: true # TEMP-MEASURE
+      - uses: ./.github/actions/frontend-bg
+        with:
+          phase: wait
 
       - name: Build executable for headless CLI smoke test
         run: cargo build --locked --manifest-path src-tauri/Cargo.toml --features native-gui-test --bins
@@ -400,9 +405,9 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci --no-audit --no-fund
-      - name: Build frontend
-        run: npx vite build
+      - uses: ./.github/actions/frontend-bg
+        with:
+          phase: start
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
@@ -410,6 +415,9 @@ jobs:
           cache-bin: false
           cache-on-failure: true
           save-if: true # TEMP-MEASURE
+      - uses: ./.github/actions/frontend-bg
+        with:
+          phase: wait
 
       - name: Test CLI child-process stdio isolation
         run: node scripts/test-cli-launch.mjs

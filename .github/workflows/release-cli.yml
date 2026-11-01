@@ -37,16 +37,16 @@ jobs:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - uses: ./.github/actions/linux-deps
-        if: runner.os == 'Linux'
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-      - run: npm ci --no-audit --no-fund
       # Type-checking is done once by the Build workflow; only the bundle is needed here.
-      - name: Build frontend
-        run: npx vite build
+      - uses: ./.github/actions/frontend-bg
+        with:
+          phase: start
+      - uses: ./.github/actions/linux-deps
+        if: runner.os == 'Linux'
       # Same toolchain action as the Release workflow: the rustc version is part of the cache
       # key, and Release restores this job's cache.
       - uses: dtolnay/rust-toolchain@stable
@@ -57,6 +57,9 @@ jobs:
           cache-bin: false
           cache-on-failure: true
           save-if: true # TEMP-MEASURE
+      - uses: ./.github/actions/frontend-bg
+        with:
+          phase: wait
       - name: Build actual release executable
         run: cargo build --release --locked --manifest-path src-tauri/Cargo.toml
       - name: Test release CLI with captured stdout and stderr
