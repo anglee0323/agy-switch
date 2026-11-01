@@ -209,6 +209,7 @@ jobs:
         run: |
           node scripts/test-cli-terminal.mjs src-tauri/target/debug/agy-switch
           node scripts/test-cli-account-window.mjs src-tauri/target/debug/agy-switch
+          node scripts/test-cli-agy-target.mjs src-tauri/target/debug/agy-switch
 
       - name: Validate native GUI fixture and screenshot checks
         run: |
@@ -339,6 +340,7 @@ jobs:
         run: |
           node scripts/test-cli-terminal.mjs src-tauri/target/debug/agy-switch.exe
           node scripts/test-cli-account-window.mjs src-tauri/target/debug/agy-switch.exe
+          node scripts/test-cli-agy-target.mjs src-tauri/target/debug/agy-switch.exe
 
       - name: Validate native GUI fixture and screenshot checks
         run: |
@@ -440,6 +442,7 @@ jobs:
         run: |
           node scripts/test-cli-terminal.mjs src-tauri/target/debug/agy-switch
           node scripts/test-cli-account-window.mjs src-tauri/target/debug/agy-switch
+          node scripts/test-cli-agy-target.mjs src-tauri/target/debug/agy-switch
 
       - name: Validate native GUI fixture and screenshot checks
         run: |

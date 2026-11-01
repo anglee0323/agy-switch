@@ -9,7 +9,7 @@ mod workflows;
 use output::{AccountView, Snapshot};
 use std::path::{Path, PathBuf};
 
-const HELP: &str = "agy-switch - Antigravity account management CLI\n\nUsage:\n  agy-switch                         Interactive dashboard / menu (TUI)\n  agy-switch accounts list [--json]\n  agy-switch current [--target app|ide] [--json]\n  agy-switch quota [ACCOUNT_ID|EMAIL] [--json]\n  agy-switch switch [ACCOUNT_ID|EMAIL] [--target app|ide] [--json]\n  agy-switch stats [--json]\n  agy-switch refresh [ACCOUNT_ID|EMAIL] [--json]\n  agy-switch policy show [--json]\n  agy-switch policy set [OPTIONS] [--json]\n    --enabled true|false --mode wait|stop --strategy priority|round-robin\n    --reserve 1..98 --minimum 2..100 --model all|gemini|claude|MODEL_ID\n    --target app|app-cli|ide|vscode --candidates ID|EMAIL...\n    --clear-candidates\n  agy-switch policy order [ID|EMAIL...] [--json]\n  agy-switch accounts order [ID|EMAIL...] [--json]\n  agy-switch update check [--json]\n  agy-switch experiments show [--json]\n  agy-switch experiments translation on|off [--json]\n  agy-switch experiments run          Maintain App translation in foreground\n  agy-switch --help\n  agy-switch --version\n\nRead commands use local cached data only and never open the GUI or refresh tokens.\n'current' is agy-switch's recorded account, not a live credential-store check.\n'switch' may refresh tokens, close/restart Antigravity, and update credentials.\nDefault target 'app' synchronizes APP credentials and an initialized agy session.\nIDE switches leave App and agy credentials unchanged.\nThere is no CLI-only target: APP and agy may share the same credential store.\nPolicy edits configure the desktop scheduler; they do not start a CLI daemon.\nUpdate checks contact GitHub but never download or install.\nExperimental translation affects only Antigravity App on Windows/macOS.\nKeep Switch desktop or experiments run active; injection never changes App files.\nOrdering requires every account (or selected candidate) exactly once.\nAccounts can be managed interactively via TUI or through the GUI. ABV_DATA_DIR overrides the data directory.\n";
+const HELP: &str = "agy-switch - Antigravity account management CLI\n\nUsage:\n  agy-switch                         Interactive dashboard / menu (TUI)\n  agy-switch accounts list [--json]\n  agy-switch current [--target app|ide] [--json]\n  agy-switch quota [ACCOUNT_ID|EMAIL] [--json]\n  agy-switch switch [ACCOUNT_ID|EMAIL] [--target app|ide|agy] [--json]\n  agy-switch stats [--json]\n  agy-switch refresh [ACCOUNT_ID|EMAIL] [--json]\n  agy-switch policy show [--json]\n  agy-switch policy set [OPTIONS] [--json]\n    --enabled true|false --mode wait|stop --strategy priority|round-robin\n    --reserve 1..98 --minimum 2..100 --model all|gemini|claude|MODEL_ID\n    --target app|app-cli|ide|vscode --candidates ID|EMAIL...\n    --clear-candidates\n  agy-switch policy order [ID|EMAIL...] [--json]\n  agy-switch accounts order [ID|EMAIL...] [--json]\n  agy-switch update check [--json]\n  agy-switch experiments show [--json]\n  agy-switch experiments translation on|off [--json]\n  agy-switch experiments run          Maintain App translation in foreground\n  agy-switch --help\n  agy-switch --version\n\nRead commands use local cached data only and never open the GUI or refresh tokens.\n'current' is agy-switch's recorded account, not a live credential-store check.\n'switch' may refresh tokens, close/restart Antigravity, and update credentials.\nDefault target 'app' synchronizes APP credentials and an initialized agy session.\nIDE switches leave App and agy credentials unchanged.\nTarget 'agy' switches the shared App+agy login without closing or restarting any client; a running App keeps its session until it restarts.\nPolicy edits configure the desktop scheduler; they do not start a CLI daemon.\nUpdate checks contact GitHub but never download or install.\nExperimental translation affects only Antigravity App on Windows/macOS.\nKeep Switch desktop or experiments run active; injection never changes App files.\nOrdering requires every account (or selected candidate) exactly once.\nAccounts can be managed interactively via TUI or through the GUI. ABV_DATA_DIR overrides the data directory.\n";
 
 #[derive(Debug, PartialEq)]
 enum Command {
@@ -122,7 +122,7 @@ fn parse(args: &[String], interactive: bool) -> Result<(Command, bool)> {
             target: "app".into(),
         },
         ["switch", selector, "--target", target]
-            if !selector.starts_with('-') && matches!(*target, "app" | "ide") =>
+            if !selector.starts_with('-') && matches!(*target, "app" | "ide" | "agy") =>
         {
             Command::Switch {
                 selector: (*selector).into(),
@@ -282,6 +282,7 @@ fn execute(command: Command, json: bool) -> Result<String> {
                 .map_err(|_| CliError::data("Could not start the account-switch runtime."))?;
             let target_ide = match target.as_str() {
                 "ide" => Some("ide"),
+                "agy" => Some("shared_credentials"),
                 _ => Some("app"),
             };
             check_cli_switch_target(target_ide).map_err(|error| switch_error(&error))?;
@@ -484,6 +485,20 @@ mod tests {
     }
     fn parse_test(args_slice: &[&str]) -> Result<(Command, bool)> {
         parse(&args(args_slice), false)
+    }
+    #[test]
+    fn agy_target_parses_for_switch_only() {
+        assert!(parse_test(&["current", "--target", "agy"]).is_err());
+        match parse_test(&["switch", "abc", "--target", "agy", "--json"]).unwrap() {
+            (Command::Switch { selector, target }, true) => assert_eq!((selector.as_str(), target.as_str()), ("abc", "agy")),
+            other => panic!("unexpected parse: {other:?}"),
+        }
+        // The interactive picker keeps its own App/IDE choice; there is no bare agy picker.
+        assert!(parse(&args(&["switch", "--target", "agy"]), true).is_err());
+    }
+    #[test]
+    fn agy_target_needs_no_app() {
+        assert!(ensure_cli_switch_target(Some("shared_credentials"), false).is_ok());
     }
     #[test]
     fn parses_commands_and_json() {

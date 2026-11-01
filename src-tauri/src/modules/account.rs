@@ -1024,7 +1024,7 @@ pub async fn switch_account(
     use crate::modules::oauth;
     // Omitted manual targets mean App + native agy. Global synchronization is explicit.
     let target_ide = Some(match target_ide.unwrap_or("app") { "agy" | "app_cli" => "app", target => target });
-    if !matches!(target_ide, Some("app" | "ide" | "vscode" | "all")) {
+    if !matches!(target_ide, Some("app" | "ide" | "vscode" | "all" | "shared_credentials")) {
         return Err("Unknown account switch target.".into());
     }
 
@@ -1076,7 +1076,8 @@ pub async fn switch_account(
 
     // Merge last-used/index changes into fresh data under the account write lock.
     // A concurrent quota refresh must not be replaced by our old Account clone.
-    finish_switch_account(account_id, target_ide)?;
+    // The shared login moved for the App and agy alike, so record it as the App selection.
+    finish_switch_account(account_id, if target_ide == Some("shared_credentials") { Some("app") } else { target_ide })?;
 
     crate::modules::logger::log_info(&format!(
         "Account switch core logic completed: {}",

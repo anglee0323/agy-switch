@@ -43,6 +43,7 @@ agy-switch quota user@example.com --json
 agy-switch switch ACCOUNT_ID
 agy-switch switch user@example.com --target app --json
 agy-switch switch ACCOUNT_ID --target ide
+agy-switch switch ACCOUNT_ID --target agy   # switch the shared login without restarting any client
 agy-switch policy show --json
 agy-switch policy set --mode wait --strategy priority --reserve 10 --minimum 30 --model gemini
 agy-switch policy set --enabled true --candidates ACCOUNT_B ACCOUNT_C
@@ -66,7 +67,7 @@ agy-switch experiments run             # keep App translation active in foregrou
 
 ## Switching and safety
 
-There is no `--target cli` mode. The APP and Google’s `agy` may share a system credential store; writing only a session file cannot guarantee that a new `agy` process uses that account. Use the normal APP+agy synchronization path and verify the active identity in the client. This CLI does not install `agy` or create a missing native CLI data directory. If that directory already exists, normal synchronization can create its first native token file. A valid system token profile may also let `agy` sign in locally without a browser, as described in the [official authentication guide](https://antigravity.google/docs/cli/install/#local-silent-keyring-sign-in).
+**Target `agy`.** The App and Google's `agy` share one login (the system credential store; agy's session file is kept in sync). `switch ACCOUNT --target agy` writes that shared login and the agy session file, then stops: it never closes, starts or restarts the App, the IDE, the App Hub or any other process, and does not edit client databases. A new `agy` command uses the new account immediately. A running App keeps the session it already loaded until it restarts, so App and agy can use different accounts in the meantime; whether a running App later writes its own session back is not verified. The recorded current account becomes the new one. It does not require the App to be installed. Use it from scripts and agents that drive `agy`, such as account relays; use `--target app` when the App should follow at once. A running `agy` keeps the login it started with, so switch while no `agy` command is running. Successful switches are verified manually on macOS; automated checks cover only paths that fail before any write.
 
 Switching is an explicit mutating command. It reuses the GUI's token validation/refresh, credential synchronization, process handling and account-index update. The default `--target app` switches App and the initialized native `agy` session together, closing and restarting only a running App. On Linux an initialized agy session can be used without an installed App; the shared credential store is still updated. `--target ide` changes only IDE credentials and restarts only a running IDE. App/CLI and IDE have separate recorded selections; `current --target app|ide` reads the corresponding record. See [account scopes and import](account-scopes.md).
 
@@ -115,6 +116,7 @@ cargo build --locked --manifest-path src-tauri/Cargo.toml
 node scripts/test-cli.mjs ./src-tauri/target/debug/agy-switch
 node scripts/test-cli-terminal.mjs ./src-tauri/target/debug/agy-switch
 node scripts/test-cli-account-window.mjs ./src-tauri/target/debug/agy-switch
+node scripts/test-cli-agy-target.mjs ./src-tauri/target/debug/agy-switch
 node scripts/test-cli-launch.mjs
 node --test scripts/test-homebrew-generator.mjs
 ```

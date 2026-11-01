@@ -60,6 +60,12 @@ impl DesktopIntegration {
             account.email, target_ide
         ));
 
+        // The shared App+agy credentials only: no client, Hub or other process is closed or
+        // started. A running App keeps the session it already loaded until it restarts.
+        if target_ide == Some("shared_credentials") {
+            return write_to_system_keyring(account, false);
+        }
+
         #[cfg(target_os = "linux")]
         if process::get_antigravity_executable_path(target_ide).is_none()
             && !(matches!(target_ide, Some("app" | "agy")) && cli_session_path()?.is_some()) {
