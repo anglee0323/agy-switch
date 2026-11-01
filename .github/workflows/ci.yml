@@ -87,9 +87,6 @@ jobs:
       - name: Test desktop preference UI races
         run: node scripts/test-desktop-settings.mjs && node scripts/test-account-transfer.mjs
 
-      - name: Test quota HTTP fixtures without native data access
-        run: node scripts/test-quota.mjs
-
       - name: Test Homebrew cask generation and release assets
         run: node --test scripts/test-homebrew-generator.mjs scripts/test-release.mjs scripts/test-update-assets.mjs
 
@@ -159,6 +156,8 @@ jobs:
         run: node scripts/test-cli-launch.mjs
       - name: Test Linux backend (the complete library suite)
         run: cargo test --locked --manifest-path src-tauri/Cargo.toml --lib
+      - name: Test quota HTTP fixtures without native data access
+        run: node scripts/test-quota.mjs
       - name: Test isolated Linux credentials
         run: ./scripts/test-linux-credentials.sh
 
@@ -472,6 +471,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     strategy:
+      fail-fast: false
       matrix:
         platform: [macos-15, windows-latest, ubuntu-22.04]
     steps:
