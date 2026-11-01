@@ -19,8 +19,15 @@ runs:
         # Throwaway CI VMs gain nothing from fsync or man-page indexing.
         echo 'force-unsafe-io' | sudo tee /etc/dpkg/dpkg.cfg.d/90-ci-unsafe-io >/dev/null
         sudo rm -f /var/lib/man-db/auto-update
-        sudo apt-get update -qq
+        PACKAGES="libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev cmake clang libclang-dev pkg-config patchelf $EXTRA_PACKAGES"
+        SECONDS=0
+        # The runner image's package index is rebuilt weekly and nearly always current, so try
+        # the install first and only pay for `apt-get update` when a package has moved.
         # shellcheck disable=SC2086
-        sudo apt-get install -y -qq --no-install-recommends \
-          libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev \
-          libssl-dev cmake clang libclang-dev pkg-config patchelf $EXTRA_PACKAGES
+        if ! sudo apt-get install -y -qq --no-install-recommends $PACKAGES; then
+          echo "Package index is stale; updating (${SECONDS}s elapsed)"
+          sudo apt-get update -qq
+          # shellcheck disable=SC2086
+          sudo apt-get install -y -qq --no-install-recommends $PACKAGES
+        fi
+        echo "apt install: ${SECONDS}s"

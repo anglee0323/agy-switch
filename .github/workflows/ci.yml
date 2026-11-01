@@ -90,9 +90,9 @@ jobs:
       - name: Test Homebrew cask generation and release assets
         run: node --test scripts/test-homebrew-generator.mjs scripts/test-release.mjs scripts/test-update-assets.mjs
 
-  # The mocked-IPC browser suite is the longest single test, so it is spread over four machines.
+  # The mocked-IPC browser suite is the longest single test, so it is spread over three machines.
   ui-mock:
-    name: Mocked UI acceptance (${{ matrix.shard }}/4)
+    name: Mocked UI acceptance (${{ matrix.shard }}/3)
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-22.04
@@ -100,7 +100,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4]
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v5
         with:
@@ -114,7 +114,7 @@ jobs:
       - name: Install Chromium for mocked UI acceptance
         run: npx playwright install --with-deps --only-shell chromium
       - name: Test low-quota switching UI with synthetic IPC
-        run: npx playwright test --shard=${{ matrix.shard }}/4
+        run: npx playwright test --shard=${{ matrix.shard }}/3
       - name: Upload UI acceptance screenshots
         if: always()
         uses: actions/upload-artifact@v4
@@ -146,10 +146,11 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
-          shared-key: ci-linux-unit
+          # Same dependencies as the native job (test profile only adds the crate itself), so
+          # restore its cache read-only instead of storing a second copy.
+          shared-key: ci-linux
           cache-bin: false
-          cache-on-failure: true
-          save-if: true # TEMP-MEASURE
+          save-if: false
       - name: Prepare placeholder frontend
         run: mkdir -p dist && echo '<!doctype html><title>test</title>' > dist/index.html
       - name: Test CLI child-process stdio isolation
@@ -185,13 +186,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
-          shared-key: ci-linux-native
+          shared-key: ci-linux
           cache-bin: false
           cache-on-failure: true
           save-if: true # TEMP-MEASURE
 
       - name: Build executable for headless CLI smoke test
-        run: cargo build --locked --manifest-path src-tauri/Cargo.toml --features native-gui-test
+        run: cargo build --locked --manifest-path src-tauri/Cargo.toml --features native-gui-test --bins
 
       - name: Smoke test CLI without a display or real credentials
         run: node scripts/test-cli.mjs src-tauri/target/debug/agy-switch-desktop
@@ -254,6 +255,10 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
+      - name: Exclude the workspace from Windows Defender real-time scanning
+        shell: pwsh
+        run: |
+          try { Add-MpPreference -ExclusionPath $env:GITHUB_WORKSPACE, $env:RUNNER_TEMP, "$env:USERPROFILE\.cargo", "$env:USERPROFILE\.rustup" } catch { Write-Warning "Defender exclusion skipped: $_" }
       - uses: actions/checkout@v5
         with:
           ref: ${{ env.SOURCE_HEAD }}
@@ -264,10 +269,9 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
-          shared-key: ci-windows-unit
+          shared-key: ci-windows
           cache-bin: false
-          cache-on-failure: true
-          save-if: true # TEMP-MEASURE
+          save-if: false
       - name: Prepare placeholder frontend
         shell: bash
         run: mkdir -p dist && echo '<!doctype html><title>test</title>' > dist/index.html
@@ -288,6 +292,10 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
+      - name: Exclude the workspace from Windows Defender real-time scanning
+        shell: pwsh
+        run: |
+          try { Add-MpPreference -ExclusionPath $env:GITHUB_WORKSPACE, $env:RUNNER_TEMP, "$env:USERPROFILE\.cargo", "$env:USERPROFILE\.rustup" } catch { Write-Warning "Defender exclusion skipped: $_" }
       - uses: actions/checkout@v5
         with:
           ref: ${{ env.SOURCE_HEAD }}
@@ -302,13 +310,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
-          shared-key: ci-windows-native
+          shared-key: ci-windows
           cache-bin: false
           cache-on-failure: true
           save-if: true # TEMP-MEASURE
 
       - name: Build executable for headless CLI smoke test
-        run: cargo build --locked --manifest-path src-tauri/Cargo.toml --features native-gui-test
+        run: cargo build --locked --manifest-path src-tauri/Cargo.toml --features native-gui-test --bins
 
       - name: Smoke test CLI without a display or real credentials
         shell: bash
@@ -408,7 +416,7 @@ jobs:
       - uses: ./.github/actions/rust-platform-tests
 
       - name: Build executable for headless CLI smoke test
-        run: cargo build --locked --manifest-path src-tauri/Cargo.toml --features native-gui-test
+        run: cargo build --locked --manifest-path src-tauri/Cargo.toml --features native-gui-test --bins
 
       - name: Smoke test CLI without a display or real credentials
         run: node scripts/test-cli.mjs src-tauri/target/debug/agy-switch-desktop
