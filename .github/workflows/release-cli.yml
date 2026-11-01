@@ -52,7 +52,7 @@ jobs:
           shared-key: release-cli-${{ matrix.platform }}
           cache-bin: false
           cache-on-failure: true
-          save-if: true # TEMP-MEASURE
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: ./.github/actions/frontend-bg
         with:
           phase: wait

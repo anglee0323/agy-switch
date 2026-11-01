@@ -190,7 +190,7 @@ jobs:
           shared-key: ci-linux
           cache-bin: false
           cache-on-failure: true
-          save-if: true # TEMP-MEASURE
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: ./.github/actions/frontend-bg
         with:
           phase: wait
@@ -317,7 +317,7 @@ jobs:
           shared-key: ci-windows
           cache-bin: false
           cache-on-failure: true
-          save-if: true # TEMP-MEASURE
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: ./.github/actions/frontend-bg
         with:
           phase: wait
@@ -417,7 +417,7 @@ jobs:
           shared-key: ci-macos
           cache-bin: false
           cache-on-failure: true
-          save-if: true # TEMP-MEASURE
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: ./.github/actions/frontend-bg
         with:
           phase: wait
