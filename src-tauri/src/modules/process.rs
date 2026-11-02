@@ -458,14 +458,31 @@ pub fn close_antigravity(timeout_secs: u64, target_ide: Option<&str>) -> Result<
 
     #[cfg(target_os = "windows")]
     {
-        // Ask identified windows to close normally so the client can flush its state.
-        // If it remains running (including a hidden/tray-only client), fail closed:
-        // never force-terminate it before changing credentials.
+        // Ask identified windows to close normally first so the client can flush its
+        // state, mirroring SIGTERM on macOS/Linux. A client kept alive in the background
+        // or tray, or one with no visible window, is force-closed after the grace period.
         let pids = get_antigravity_pids(target_ide);
         if !pids.is_empty() {
-            windows_close::request_windows_close(&pids)?;
-            let deadline = std::time::Instant::now() + Duration::from_secs(timeout_secs);
-            wait_until_stopped(deadline, || is_antigravity_running(target_ide));
+            let started = std::time::Instant::now();
+            let deadline = started + Duration::from_millis(timeout_secs.saturating_mul(700));
+            let hard_deadline = started + Duration::from_millis(timeout_secs.saturating_mul(1000));
+            if let Err(error) = windows_close::request_windows_close(&pids) {
+                crate::modules::logger::log_warn(&error);
+            }
+            if !wait_until_stopped(deadline, || is_antigravity_running(target_ide)) {
+                let remaining = get_antigravity_pids(target_ide);
+                crate::modules::logger::log_warn(&format!(
+                    "Antigravity did not close normally; force-closing {} remaining processes on Windows...",
+                    remaining.len()
+                ));
+                for pid in remaining {
+                    let _ = Command::new("taskkill")
+                        .args(["/F", "/PID", &pid.to_string()])
+                        .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                        .output();
+                }
+                wait_until_stopped(hard_deadline, || is_antigravity_running(target_ide));
+            }
         }
     }
 
@@ -1369,6 +1386,4 @@ mod close_wait_tests {
         assert_eq!(polls, 2);
         assert!(!wait_until_stopped(std::time::Instant::now() + Duration::from_millis(2), || true));
     }
-
-
 }
