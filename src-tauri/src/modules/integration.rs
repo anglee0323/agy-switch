@@ -126,7 +126,13 @@ impl DesktopIntegration {
 
         update_client_credentials(
             || crate::modules::app_hub::close(&hubs, false).map_err(|_| "Cannot stop the Antigravity App Hub; credentials were not changed.".into()),
-            || write_client_storage(account, target_ide, &candidate_dbs, dirs::home_dir().as_deref(), || write_to_system_keyring(account, false)),
+            || {
+                #[cfg(target_os = "windows")]
+                if !is_ide_mode && !is_vscode_mode {
+                    crate::modules::app_state_recovery::recover_default()?;
+                }
+                write_client_storage(account, target_ide, &candidate_dbs, dirs::home_dir().as_deref(), || write_to_system_keyring(account, false))
+            },
             || crate::modules::app_hub::restart(&hubs),
         )?;
 

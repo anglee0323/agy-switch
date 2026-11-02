@@ -190,6 +190,21 @@ pub fn is_antigravity_running(target_ide: Option<&str>) -> bool {
     false
 }
 
+/// Be conservative: any App/IDE, native agy or language server may still write
+/// the shared App state, including one outside the detected App process tree.
+#[cfg(target_os = "windows")]
+pub(crate) fn state_writer_running() -> bool {
+    if is_antigravity_running(None) || is_antigravity_running(Some("ide")) {
+        return true;
+    }
+    let mut system = System::new();
+    system.refresh_processes(sysinfo::ProcessesToUpdate::All);
+    system.processes().values().any(|process| {
+        let name = process.name().to_string_lossy();
+        name.eq_ignore_ascii_case("agy.exe") || name.eq_ignore_ascii_case("language_server.exe")
+    })
+}
+
 #[cfg(target_os = "linux")]
 /// Get PID set of current process and all ancestors.
 /// Only ancestors (parents/grandparents) are excluded to prevent accidentally killing
@@ -434,45 +449,37 @@ fn wait_until_stopped(deadline: std::time::Instant, mut running: impl FnMut() ->
     }
 }
 
+#[cfg(target_os = "windows")]
+mod windows_close;
+
 /// Close Antigravity processes
 pub fn close_antigravity(timeout_secs: u64, target_ide: Option<&str>) -> Result<(), String> {
     crate::modules::logger::log_info(&format!("Closing Antigravity ({:?})...", target_ide));
 
     #[cfg(target_os = "windows")]
     {
-        // Windows: Precise kill by PID to support multiple versions or custom filenames
+        // Ask identified windows to close normally first so the client can flush its
+        // state, mirroring SIGTERM on macOS/Linux. A client kept alive in the background
+        // or tray, or one with no visible window, is force-closed after the grace period.
         let pids = get_antigravity_pids(target_ide);
         if !pids.is_empty() {
             let started = std::time::Instant::now();
             let deadline = started + Duration::from_millis(timeout_secs.saturating_mul(700));
             let hard_deadline = started + Duration::from_millis(timeout_secs.saturating_mul(1000));
-            crate::modules::logger::log_info(&format!(
-                "Precisely closing {} identified processes on Windows...",
-                pids.len()
-            ));
-            for pid in pids {
-                let _ = Command::new("taskkill")
-                    .args(["/F", "/PID", &pid.to_string()])
-                    .creation_flags(0x08000000) // CREATE_NO_WINDOW
-                    .output();
+            if let Err(error) = windows_close::request_windows_close(&pids) {
+                crate::modules::logger::log_warn(&error);
             }
-            // Wait for the killed PIDs to disappear, mirroring the macOS/Linux
-            // poll loops. A fixed 200ms nap intermittently lost the race with
-            // Electron teardown and failed the final running check.
-            // Phase 2: re-kill stragglers and wait out the remaining budget.
             if !wait_until_stopped(deadline, || is_antigravity_running(target_ide)) {
                 let remaining = get_antigravity_pids(target_ide);
-                if !remaining.is_empty() {
-                    crate::modules::logger::log_warn(&format!(
-                        "Force-closing {} remaining processes on Windows...",
-                        remaining.len()
-                    ));
-                    for pid in remaining {
-                        let _ = Command::new("taskkill")
-                            .args(["/F", "/PID", &pid.to_string()])
-                            .creation_flags(0x08000000) // CREATE_NO_WINDOW
-                            .output();
-                    }
+                crate::modules::logger::log_warn(&format!(
+                    "Antigravity did not close normally; force-closing {} remaining processes on Windows...",
+                    remaining.len()
+                ));
+                for pid in remaining {
+                    let _ = Command::new("taskkill")
+                        .args(["/F", "/PID", &pid.to_string()])
+                        .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                        .output();
                 }
                 wait_until_stopped(hard_deadline, || is_antigravity_running(target_ide));
             }

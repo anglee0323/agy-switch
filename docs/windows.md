@@ -39,6 +39,10 @@ WebView2 is required for the desktop app. Tauri’s NSIS installer handles the c
 
 Manual switching may close/reopen Antigravity, changes its credential store and synchronizes an initialized native agy session. An external task may retain the previous credential. Verify the active account in the client after switching, especially if a partial update is reported. The CLI’s default APP target requires a discoverable Antigravity installation. No file-only target is offered.
 
+On Windows, switching first requests a normal close of Antigravity's visible windows so the client can save its state. If it is still running after most of the close timeout (for example, it runs in the background or tray, has no visible window, or is waiting on a confirmation), the remaining processes are force-closed, as on macOS and Linux. If they still do not exit, switching stops before changing credentials. Save your work before switching.
+
+During an App account switch, Switch also checks the default App state file at `%USERPROFILE%\.gemini\antigravity\antigravity_state.pbtxt`. A nonempty file of at most 16 MiB containing only zero bytes is preserved beside the original as `antigravity_state.pbtxt.corrupt-<id>` and the original name is removed, so Antigravity can recreate it on its next launch. Recovery runs only after the client is closed and blocks the switch if an Antigravity client, `agy.exe`, or `language_server.exe` is still running or the backup cannot be made. Other corruption patterns and custom state locations are not repaired. A direct Antigravity launch without an App account switch does not run this check.
+
 ## Build
 
 Install Node.js 22+, Rust stable, Microsoft C++ Build Tools and the Tauri platform prerequisites. From PowerShell:
