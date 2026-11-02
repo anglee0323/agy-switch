@@ -3,8 +3,19 @@
 Manual switching defaults to Antigravity App and the initialized native agy CLI
 session together. Both clients can use the same OS credential store. Existing
 long-running agy commands can retain an old session; start a new command after
-switching. IDE switching updates only the IDE databases and device data, closes
-and reopens only a running IDE, and keeps App/CLI and plugin credentials untouched.
+switching. For Antigravity IDE before 2.6, IDE switching updates only the IDE
+databases and device data, closes and reopens only a running IDE, and keeps App/CLI
+and plugin credentials untouched.
+
+Antigravity IDE 2.6 and later sign in through the same credential as the App and
+agy: its built-in extension runs the shared App-data Hub, and the IDE databases no
+longer select the account. When the discovered IDE reports `ideVersion` 2.6.0 or
+later in `resources/app/product.json`, App/CLI and IDE switching become the same
+operation. Either target writes the shared credential, closes and reopens a running
+App and IDE, and records the account for both App/CLI and IDE. The IDE's own Hub is
+not relaunched by Switch; the reopened IDE starts a new one. Independent App and IDE
+accounts are no longer possible on one system user with these versions. An
+undetected IDE or unreadable version keeps the independent behavior above.
 
 On macOS, manual switching also stops an independently running, verified App-data
 Hub before writing credentials and restarts it before reopening the App. Otherwise
@@ -22,7 +33,8 @@ record without accessing live credentials.
 
 New automatic-switch policies default to App/CLI. Existing explicit global
 policies retain their scope; choose App/CLI or IDE in smart-switch settings to
-isolate them. The scheduler validates the selected client's credentials before
+isolate them. With IDE 2.6 or later, App/CLI and IDE policies both verify and
+write the shared credential and close and reopen a running IDE. The scheduler validates the selected client's credentials before
 closing or switching it.
 
 Local import scans App, CLI, IDE and supported plugin sources independently.

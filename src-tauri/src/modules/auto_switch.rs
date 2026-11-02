@@ -515,9 +515,16 @@ fn configured_client_path(path: &std::path::Path, configured: &std::path::Path) 
         || path.starts_with(root.join("Frameworks"))
 }
 
+/// Antigravity IDE 2.6+ signs in with the App/CLI credential, so an IDE policy
+/// verifies and writes that credential instead of the IDE databases.
+fn credential_target(target: Target) -> Target {
+    if target == Target::Ide && version::ide_shares_app_sign_in() { Target::AppCli } else { target }
+}
+
 /// Compare credentials privately. No token or raw authentication error is exposed
 /// through the status DTO. Any external sign-in mismatch invalidates the request.
 fn verify_source(source: &Account, target: Target) -> Result<(), &'static str> {
+    let target = credential_target(target);
     if target == Target::App || target == Target::AppCli {
         let config =
             crate::modules::config::load_app_config().map_err(|_| "credentials_changed")?;
@@ -777,9 +784,12 @@ impl Environment for NativeEnvironment {
         crate::modules::process::start_antigravity(target_ide)
     }
     fn restart_plan(&self, target: Target) -> Result<RestartPlan, &'static str> {
+        // A shared-sign-in IDE must reload with the App/CLI credential.
+        let shared_ide = matches!(target, Target::AppCli | Target::Ide) && version::ide_shares_app_sign_in();
+        let target = if shared_ide { Target::AppCli } else { target };
         Ok(RestartPlan {
             app: matches!(target, Target::App | Target::AppCli) && self.is_client_running(None),
-            ide: matches!(target, Target::App | Target::Ide) && self.is_client_running(Some("ide")),
+            ide: (shared_ide || matches!(target, Target::App | Target::Ide)) && self.is_client_running(Some("ide")),
             hubs: if matches!(target, Target::App | Target::AppCli) {
                 crate::modules::app_hub::snapshot()?
             } else { vec![] },
@@ -800,6 +810,7 @@ impl Environment for NativeEnvironment {
         verify_source(source, target)
     }
     fn write_credentials(&self, target: &Account, target_ide: Option<&str>) -> Result<(), String> {
+        let target_ide = if integration::shared_ide_scope(target_ide) { Some("app") } else { target_ide };
         let is_ide_mode = target_ide == Some("ide");
         let is_app_cli_mode = target_ide == Some("app");
         let is_vscode_mode = target_ide == Some("vscode");
@@ -1269,10 +1280,11 @@ async fn evaluate_core<E: Environment>(
                             crate::modules::agent_activity::Activity::Unknown => return Err("task_state_unknown"),
                         }
                     }
+                    let close_target = credential_target(close_config.target);
                     close_environment
-                        .close_client(20, close_config.target.argument())
+                        .close_client(20, close_target.argument())
                         .map_err(|_| "client_close_failed")?;
-                    if close_config.target == Target::App && plan.ide {
+                    if close_target != Target::Ide && plan.ide {
                         close_environment.close_client(20, Some("ide"))
                             .map_err(|_| "client_close_failed")?;
                     }
