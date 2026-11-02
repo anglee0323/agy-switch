@@ -122,6 +122,7 @@ jobs:
           name: auto-switch-ui-acceptance-${{ matrix.shard }}
           path: test-results/auto-switch
           if-no-files-found: ignore
+          retention-days: 1
 
   # Rust unit tests need no real frontend: a placeholder `dist` satisfies the Tauri asset
   # embedding, so these jobs neither wait for nor install Node packages. The native jobs
@@ -227,7 +228,7 @@ jobs:
           name: desktop-lifecycle-${{ runner.os }}-${{ env.SOURCE_HEAD }}
           path: artifacts/desktop-lifecycle/
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 1
 
       - name: Restore the pinned official Tauri WebDriver
         id: tauri-driver
@@ -251,7 +252,7 @@ jobs:
           name: native-gui-${{ runner.os }}-${{ env.SOURCE_HEAD }}
           path: artifacts/native-gui/
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 1
 
   windows-unit:
     name: Windows Rust tests
@@ -358,7 +359,7 @@ jobs:
           name: desktop-lifecycle-${{ runner.os }}-${{ env.SOURCE_HEAD }}
           path: artifacts/desktop-lifecycle/
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 1
 
       - name: Restore the pinned official Tauri WebDriver
         id: tauri-driver
@@ -390,7 +391,7 @@ jobs:
           name: native-gui-${{ runner.os }}-${{ env.SOURCE_HEAD }}
           path: artifacts/native-gui/
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 1
 
   # macOS runners are the scarcest (five at a time across every workflow), so this is one
   # job holding only what needs a real Mac.
@@ -460,7 +461,7 @@ jobs:
           name: desktop-lifecycle-${{ runner.os }}-${{ env.SOURCE_HEAD }}
           path: artifacts/macos-desktop/
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 1
 
       - name: Package macOS arm64 test app
         run: |
@@ -481,7 +482,7 @@ jobs:
           name: macos-arm64-test-${{ env.SOURCE_HEAD }}
           path: artifacts/macos-test/
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
 
   # Stable required-check names. Branch protection requires "<platform> build"; these always
   # report (success when everything passed or a documentation-only PR skipped the real jobs)
