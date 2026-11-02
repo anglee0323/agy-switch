@@ -144,7 +144,7 @@ jobs:
           name: release-linux-${{ needs.prepare.outputs.commit }}
           path: artifacts/release/
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7
           # Packages are already compressed; zipping them again only costs time.
           compression-level: 0
 
@@ -238,7 +238,7 @@ jobs:
           name: release-windows-${{ needs.prepare.outputs.commit }}
           path: artifacts/release/
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7
           # Packages are already compressed; zipping them again only costs time.
           compression-level: 0
 
@@ -325,7 +325,7 @@ jobs:
           name: release-macos-${{ needs.prepare.outputs.commit }}
           path: artifacts/release/
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7
           # Packages are already compressed; zipping them again only costs time.
           compression-level: 0
 
