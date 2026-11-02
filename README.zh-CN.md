@@ -20,10 +20,10 @@ AntiGravity Switch 把你的 Antigravity 账号集中到一个地方：查看哪
 | --- | --- |
 | Antigravity 桌面客户端 | 当前选择账号的桌面凭据 |
 | Antigravity 命令行（`agy`） | 随桌面凭据一起同步原生命令行会话，需要先初始化客户端 |
-| Antigravity IDE | 独立 IDE 的账号凭据 |
+| Antigravity IDE | 2.6 以下：独立 IDE 自己的凭据；2.6 及以上与桌面客户端共用登录，切换时一并重新打开 |
 | VS Code 中的 Antigravity 插件 | 插件凭据，无需重启 VS Code 主编辑器 |
 
-账号管理和快捷看板会一起切换 App 与已初始化的 `agy` 会话。独立切换 IDE 可使用管理命令行或智能切换设置。智能切换设置可选择全域同步、桌面客户端与命令行、Antigravity IDE 或 VS Code 插件。请先安装并初始化需要使用的客户端。兼容性取决于客户端版本和凭据存储方式；切换不会迁移正在运行的任务。本工具的管理命令 `agy-switch` 与 Google 的 `agy` 是两个不同的命令。[账号同步范围](docs/account-scopes.md)
+账号管理和快捷看板会一起切换 App 与已初始化的 `agy` 会话。2.6 以下的 IDE 可通过管理命令行或智能切换设置独立切换；IDE 2.6 及以上与 App 共用登录，切换 App 时会一并重新打开正在运行的 IDE。智能切换设置可选择全域同步、桌面客户端与命令行、Antigravity IDE 或 VS Code 插件。请先安装并初始化需要使用的客户端。兼容性取决于客户端版本和凭据存储方式；切换不会迁移正在运行的任务。本工具的管理命令 `agy-switch` 与 Google 的 `agy` 是两个不同的命令。[账号同步范围](docs/account-scopes.md)
 
 <table>
   <tr>

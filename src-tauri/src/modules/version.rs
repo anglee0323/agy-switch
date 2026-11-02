@@ -193,6 +193,42 @@ fn get_version_linux(exe_path: &PathBuf) -> Result<AntigravityVersion, String> {
     Err("Unable to determine Antigravity version on Linux".to_string())
 }
 
+/// Antigravity IDE 2.6.0 runs its agent through the built-in Antigravity extension,
+/// which starts the shared App-data Hub (`agy --hub --app_data_dir=antigravity`) and
+/// signs in with the App/agy credential. Its databases no longer select the account.
+const IDE_SHARED_SIGN_IN_VERSION: &str = "2.6.0";
+
+/// Whether the discovered Antigravity IDE uses the shared App/agy sign-in.
+/// An undetected IDE or unreadable version keeps the legacy independent behavior.
+pub fn ide_shares_app_sign_in() -> bool {
+    process::get_antigravity_executable_path(Some("ide"))
+        .and_then(|executable| ide_product_version(&executable))
+        .is_some_and(|version| ide_version_shares_app_sign_in(&version))
+}
+
+fn ide_version_shares_app_sign_in(version: &str) -> bool {
+    compare_version(version, IDE_SHARED_SIGN_IN_VERSION) != std::cmp::Ordering::Less
+}
+
+/// The IDE's Electron version differs from its product version, so read
+/// `ideVersion` from product.json instead of the executable or bundle metadata.
+fn ide_product_version(executable: &std::path::Path) -> Option<String> {
+    let executable = std::fs::canonicalize(executable).unwrap_or_else(|_| executable.to_path_buf());
+    let text = executable.to_string_lossy();
+    let mut candidates = Vec::new();
+    if let Some(end) = text.find(".app/").or_else(|| text.ends_with(".app").then(|| text.len() - 4)) {
+        candidates.push(PathBuf::from(&text[..end + 4]).join("Contents/Resources/app/product.json"));
+    }
+    // Windows/Linux executables sit beside resources/; Linux launchers may be in bin/.
+    for root in executable.ancestors().skip(1).take(2) {
+        candidates.push(root.join("resources/app/product.json"));
+    }
+    candidates.into_iter().find_map(|path| {
+        let json: serde_json::Value = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
+        json.get("ideVersion")?.as_str().map(str::to_owned)
+    })
+}
+
 /// 比较版本号
 pub fn compare_version(v1: &str, v2: &str) -> std::cmp::Ordering {
     let parts1: Vec<u32> = v1.split('.').filter_map(|s| s.parse().ok()).collect();
@@ -235,6 +271,37 @@ mod tests {
             compare_version("2.0.0", "1.16.5"),
             std::cmp::Ordering::Greater
         );
+    }
+
+    #[test]
+    fn ide_shared_sign_in_starts_at_2_6_from_product_metadata() {
+        assert!(!ide_version_shares_app_sign_in("2.5.5"));
+        assert!(ide_version_shares_app_sign_in("2.6.0"));
+        assert!(ide_version_shares_app_sign_in("2.10.1"));
+
+        let root = tempfile::tempdir().unwrap();
+        let product = |path: &std::path::Path, body: &str| {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, body).unwrap();
+        };
+        // macOS bundle: Electron reports 1.107.0, the IDE product is 2.6.0.
+        let bundle = root.path().join("Antigravity IDE.app");
+        product(&bundle.join("Contents/Resources/app/product.json"), r#"{"version":"1.107.0","ideVersion":"2.6.0"}"#);
+        std::fs::create_dir_all(bundle.join("Contents/MacOS")).unwrap();
+        assert_eq!(ide_product_version(&bundle).as_deref(), Some("2.6.0"));
+        assert_eq!(ide_product_version(&bundle.join("Contents/MacOS")).as_deref(), Some("2.6.0"));
+
+        // Windows/Linux installation and a Linux bin/ launcher.
+        let install = root.path().join("Antigravity IDE");
+        product(&install.join("resources/app/product.json"), r#"{"ideVersion":"2.5.5"}"#);
+        assert_eq!(ide_product_version(&install.join("antigravity-ide")).as_deref(), Some("2.5.5"));
+        assert_eq!(ide_product_version(&install.join("bin/antigravity-ide")).as_deref(), Some("2.5.5"));
+
+        // Missing or legacy metadata keeps independent IDE switching.
+        let legacy = root.path().join("legacy");
+        product(&legacy.join("resources/app/product.json"), r#"{"version":"1.104.0"}"#);
+        assert_eq!(ide_product_version(&legacy.join("antigravity-ide")), None);
+        assert_eq!(ide_product_version(&root.path().join("missing/antigravity-ide")), None);
     }
 
     #[test]
