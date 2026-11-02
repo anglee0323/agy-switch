@@ -1071,13 +1071,21 @@ pub async fn switch_account(
     ensure_enterprise_project_ready(&mut account).await?;
     account = merge_switch_fields(&account, &original_refresh_token)?;
 
+    // IDE 2.6+ shares the App/CLI sign-in, so a switch of either changes both records.
+    let shared_ide = modules::integration::shared_ide_scope(target_ide);
+
     // 3. Execute platform-specific system integration (Close proc, Inject DB, Start proc, etc.)
     integration.on_account_switch(&account, target_ide).await?;
 
     // Merge last-used/index changes into fresh data under the account write lock.
     // A concurrent quota refresh must not be replaced by our old Account clone.
     // The shared login moved for the App and agy alike, so record it as the App selection.
-    finish_switch_account(account_id, if target_ide == Some("shared_credentials") { Some("app") } else { target_ide })?;
+    let recorded = match target_ide {
+        _ if shared_ide => vec!["app", "ide"],
+        Some("shared_credentials") => vec!["app"],
+        target => target.into_iter().collect(),
+    };
+    finish_switch_account(account_id, &recorded)?;
 
     crate::modules::logger::log_info(&format!(
         "Account switch core logic completed: {}",
@@ -1131,7 +1139,7 @@ pub(crate) fn switch_merge_fixture_check() {
     assert_eq!(merged.quota.unwrap().models[0].percentage, 1);
 }
 
-fn finish_switch_account(account_id: &str, target_ide: Option<&str>) -> Result<(), String> {
+fn finish_switch_account(account_id: &str, targets: &[&str]) -> Result<(), String> {
     let _write = lock_account_file_updates()?;
     let mut index = load_account_index()?;
     if !index.accounts.iter().any(|a| a.id == account_id) {
@@ -1140,7 +1148,9 @@ fn finish_switch_account(account_id: &str, target_ide: Option<&str>) -> Result<(
     let mut latest = load_account(account_id)?;
     latest.update_last_used();
     save_account(&latest)?;
-    index.record_selected(account_id, target_ide);
+    for target in targets {
+        index.record_selected(account_id, Some(target));
+    }
     save_account_index(&index)
 }
 

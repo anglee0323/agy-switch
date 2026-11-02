@@ -66,8 +66,13 @@ impl DesktopIntegration {
             return write_to_system_keyring(account, false);
         }
 
+        // Antigravity IDE 2.6+ signs in with the shared App/agy credential, so App/CLI and
+        // IDE switching are one operation. A running IDE is closed and reopened with the App.
+        let shared_ide = shared_ide_scope(target_ide);
+        let target_ide = if shared_ide { Some("app") } else { target_ide };
+
         #[cfg(target_os = "linux")]
-        if process::get_antigravity_executable_path(target_ide).is_none()
+        if !shared_ide && process::get_antigravity_executable_path(target_ide).is_none()
             && !(matches!(target_ide, Some("app" | "agy")) && cli_session_path()?.is_some()) {
             return Err("Cannot find Antigravity. Set its executable path in Settings, or install and initialize agy before switching accounts.".into());
         }
@@ -82,7 +87,7 @@ impl DesktopIntegration {
             db::get_all_candidate_db_paths(target_ide)
         };
         let candidate_dbs: Vec<_> = candidate_dbs.into_iter().filter(|path| path.is_file()).collect();
-        if is_ide_mode || is_app_cli_mode {
+        if !shared_ide && (is_ide_mode || is_app_cli_mode) {
             let other = db::get_all_candidate_db_paths(Some(if is_ide_mode { "app" } else { "ide" }));
             reject_shared_databases(&candidate_dbs, &other)?;
         }
@@ -95,7 +100,7 @@ impl DesktopIntegration {
             crate::modules::app_hub::snapshot().map_err(|_| "Cannot verify the Antigravity App Hub. Finish running agy commands before retrying.")?
         };
         let app_running = if is_ide_mode || is_vscode_mode { false } else { process::is_antigravity_running(None) };
-        let ide_running = if is_app_cli_mode || is_vscode_mode { false } else { process::is_antigravity_running(Some("ide")) };
+        let ide_running = if (is_app_cli_mode && !shared_ide) || is_vscode_mode { false } else { process::is_antigravity_running(Some("ide")) };
 
         if is_vscode_mode {
             // VS Code 插件模式：不退出 VS Code 宿主，直接进行凭据热更新
@@ -106,6 +111,9 @@ impl DesktopIntegration {
         } else if is_app_cli_mode {
             if app_running {
                 process::close_antigravity(20, None)?;
+            }
+            if ide_running {
+                process::close_antigravity(20, Some("ide"))?;
             }
         } else {
             if app_running {
@@ -139,6 +147,9 @@ impl DesktopIntegration {
             if app_running {
                 integration.start_application(None)?;
             }
+            if ide_running {
+                integration.start_application(Some("ide"))?;
+            }
         } else {
             if app_running {
                 integration.start_application(None)?;
@@ -153,6 +164,11 @@ impl DesktopIntegration {
 
         Ok(())
     }
+}
+
+/// App/CLI and IDE targets share one sign-in when the installed IDE is 2.6 or later.
+pub(crate) fn shared_ide_scope(target_ide: Option<&str>) -> bool {
+    matches!(target_ide, Some("app" | "ide")) && crate::modules::version::ide_shares_app_sign_in()
 }
 
 /// Restart the observed Hub even after a failed write. Start it before the App

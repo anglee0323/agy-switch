@@ -11,11 +11,19 @@ pub(crate) struct Hub {
     pid: u32,
     executable: PathBuf,
     arguments: Vec<OsString>,
+    /// Antigravity IDE 2.6+ starts its own Hub. It exits with the IDE, and the reopened
+    /// IDE starts a new one, so Switch must not relaunch it with stale arguments.
+    ide_owned: bool,
 }
 
 #[cfg(test)]
 pub(crate) fn fixture() -> Hub {
-    Hub { pid: 42, executable: "/fixture/agy".into(), arguments: vec![] }
+    Hub { pid: 42, executable: "/fixture/agy".into(), arguments: vec![], ide_owned: false }
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn is_ide_label(value: &str) -> bool {
+    value.to_lowercase().replace(['-', '_'], " ").contains("antigravity ide")
 }
 
 impl std::fmt::Debug for Hub {
@@ -65,13 +73,24 @@ pub(crate) fn snapshot() -> Result<Vec<Hub>, &'static str> {
             return Err("task_state_unknown");
         }
         let pid = process.pid().as_u32();
+        let mut ide_owned = false;
+        let mut parent = process.parent();
+        for _ in 0..16 {
+            let Some(ancestor) = parent.and_then(|pid| system.process(pid)) else { break };
+            if is_ide_label(&ancestor.name().to_string_lossy())
+                || ancestor.exe().is_some_and(|path| is_ide_label(&path.to_string_lossy())) {
+                ide_owned = true;
+                break;
+            }
+            parent = ancestor.parent();
+        }
         metadata::verify_executable(pid, &expected).map_err(|_| "task_state_unknown")?;
         let owner = metadata::command("/bin/ps", &["-p".into(), pid.to_string(), "-o".into(), "uid=".into()])
             .map_err(|_| "task_state_unknown")?;
         if owner.parse::<u32>().ok() != Some(unsafe { libc::geteuid() }) {
             return Err("task_state_unknown");
         }
-        hubs.push(Hub { pid, executable, arguments: process.cmd().iter().skip(1).cloned().collect() });
+        hubs.push(Hub { pid, executable, arguments: process.cmd().iter().skip(1).cloned().collect(), ide_owned });
     }
     Ok(hubs)
 }
@@ -116,11 +135,11 @@ pub(crate) fn close(hubs: &[Hub], wait: bool) -> Result<(), &'static str> {
 
 pub(crate) fn restart(hubs: &[Hub]) -> Result<(), String> {
     #[cfg(target_os = "macos")]
-    if !hubs.is_empty() && !snapshot().map_err(|_| "restart_failed")?.is_empty() {
+    if hubs.iter().any(|hub| !hub.ide_owned) && !snapshot().map_err(|_| "restart_failed")?.is_empty() {
         return Err("restart_failed".into());
     }
     #[cfg(target_os = "macos")]
-    for hub in hubs {
+    for hub in hubs.iter().filter(|hub| !hub.ide_owned) {
         let expected = dirs::home_dir().ok_or("restart_failed")?.join(".gemini/bin/agy")
             .canonicalize().map_err(|_| "restart_failed")?;
         if hub.executable != expected {
@@ -165,7 +184,21 @@ mod tests {
             assert!(!app_hub_command(path, path, &args(s)));
         }
         assert!(!app_hub_command(Path::new("/unrelated/agy"), path, &args("agy --hub --app_data_dir antigravity")));
-        let hub = Hub { pid: 42, executable: path.into(), arguments: args("--csrf_token fixture-secret") };
+        let hub = Hub { pid: 42, executable: path.into(), arguments: args("--csrf_token fixture-secret"), ide_owned: false };
         assert!(!format!("{hub:?}").contains("fixture-secret"));
+    }
+
+    #[test]
+    fn ide_hub_owners_are_recognized_by_name_or_path() {
+        for owner in [
+            "Antigravity IDE Helper (Plugin)",
+            "/Applications/Antigravity IDE.app/Contents/MacOS/Electron",
+            "/opt/antigravity-ide/antigravity-ide",
+        ] {
+            assert!(is_ide_label(owner), "{owner}");
+        }
+        for owner in ["Antigravity", "/Applications/Antigravity.app/Contents/MacOS/Antigravity", "zsh"] {
+            assert!(!is_ide_label(owner), "{owner}");
+        }
     }
 }

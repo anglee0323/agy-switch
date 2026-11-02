@@ -20,10 +20,10 @@ AntiGravity Switch brings your Antigravity accounts into one place. See which ac
 | --- | --- |
 | Antigravity desktop app | The selected account's desktop credentials |
 | Antigravity CLI (`agy`) | The native CLI session alongside desktop credentials; initialize the client first |
-| Antigravity IDE | The standalone IDE's account credentials |
+| Antigravity IDE | Before 2.6: the standalone IDE's own credentials. 2.6 and later share the desktop sign-in and reopen with it |
 | Antigravity extension for VS Code | Extension credentials without restarting the VS Code host |
 
-The account page and quick dashboard switch App and initialized `agy` sessions together. Independent IDE switching is available through the management CLI and smart-switch settings. In smart-switch settings, choose Global Sync, Desktop App & CLI, Antigravity IDE, or VS Code Extension. Install and initialize the clients you use first. Compatibility depends on the installed client version and credential store; switching does not migrate running tasks. The management command `agy-switch` is separate from Google's `agy`. [Account scopes](docs/account-scopes.md)
+The account page and quick dashboard switch App and initialized `agy` sessions together. Independent IDE switching is available through the management CLI and smart-switch settings for IDE versions before 2.6; IDE 2.6 and later share the App sign-in, so switching the App also reopens a running IDE. In smart-switch settings, choose Global Sync, Desktop App & CLI, Antigravity IDE, or VS Code Extension. Install and initialize the clients you use first. Compatibility depends on the installed client version and credential store; switching does not migrate running tasks. The management command `agy-switch` is separate from Google's `agy`. [Account scopes](docs/account-scopes.md)
 
 <table>
   <tr>
