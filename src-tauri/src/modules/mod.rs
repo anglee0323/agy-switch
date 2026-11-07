@@ -2,6 +2,7 @@ pub mod account;
 pub mod account_dashboard;
 pub mod account_service;
 pub mod account_sync;
+pub mod account_usage;
 pub mod api_pricing;
 pub(crate) mod app_identity;
 pub(crate) mod app_hub;

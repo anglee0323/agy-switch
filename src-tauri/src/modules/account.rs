@@ -1151,7 +1151,9 @@ fn finish_switch_account(account_id: &str, targets: &[&str]) -> Result<(), Strin
     for target in targets {
         index.record_selected(account_id, Some(target));
     }
-    save_account_index(&index)
+    save_account_index(&index)?;
+    crate::modules::account_usage::record_active_account(account_id, chrono::Utc::now().timestamp());
+    Ok(())
 }
 
 fn is_enterprise_client(client_key: Option<&str>) -> bool {
@@ -1456,6 +1458,11 @@ pub fn update_account_quota(account_id: &str, quota: QuotaData) -> Result<(), St
 
     // Save account first
     save_account(&account)?;
+
+    // 记录配额周期变化（防刷屏、记录单次消耗与检查点）
+    if let Some(quota_val) = &account.quota {
+        crate::modules::account_usage::record_quota_cycle_refresh(account_id, quota_val);
+    }
 
     // [FIX] 同时更新索引文件中的摘要信息，确保列表页图标即时刷新
     {

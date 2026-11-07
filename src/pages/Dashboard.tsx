@@ -10,6 +10,7 @@ import { dashboardOverview } from '../utils/dashboardOverview';
 import { averageRequestInput } from '../utils/dashboardUsage';
 import { quotaDisplay, quotaTone } from '../utils/menuBarOverview';
 import { useDashboardOverview } from '../hooks/useDashboardOverview';
+import { formatUsdWithRate, CurrencyMode } from '../utils/currency';
 
 interface LocalTokenTotals {
     input_tokens: number;
@@ -82,9 +83,12 @@ type RangeKey = 'today' | 'yesterday' | '3d' | '7d' | '30d';
 
 const formatTokens = (value: number, locale: string) => value.toLocaleString(locale);
 
-const formatUsd = (value: number) => {
-    if (value === 0) return '$0.00';
-    return value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`;
+const formatUsd = (value: number, mode: CurrencyMode = 'usd', rate = 7.25, compact = false) => {
+    if (mode === 'usd') {
+        if (value === 0) return '$0.00';
+        return value < 0.01 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`;
+    }
+    return formatUsdWithRate(value, mode, rate, compact);
 };
 
 const compactTokens = (value: number, locale: string) => {
@@ -317,6 +321,8 @@ function Dashboard() {
     [accountData.snapshot, accountData.now, accountData.reserve, quotaPreferences, config?.refresh_interval, config?.quota_protection.threshold_percentage]);
     const quotaScope = t(`local_dashboard.quota_scope_${quotaPreferences.quota_scope}`);
     const overviewUnavailable = t(accountData.failed ? 'local_dashboard.overview_failed' : accountData.loading ? 'local_dashboard.overview_loading' : 'local_dashboard.overview_unknown');
+    const currencyMode = config?.quota_valuation?.currency ?? 'usd';
+    const usdToCnyRate = config?.quota_valuation?.usd_to_cny_rate ?? 7.25;
     const rangeLabels: Record<RangeKey, string> = {
         today: t('local_dashboard.today'),
         yesterday: t('local_dashboard.yesterday'),
@@ -555,7 +561,7 @@ function Dashboard() {
         api_cost: (<TokenCard cardId="api_cost"
             label={t('local_dashboard.api_cost')}
             value={apiCost.usd}
-            displayValue={apiCost.unpricedModels && !apiCost.pricedModels ? t('local_dashboard.unpriced') : formatUsd(apiCost.usd)}
+            displayValue={apiCost.unpricedModels && !apiCost.pricedModels ? t('local_dashboard.unpriced') : formatUsd(apiCost.usd, currencyMode, usdToCnyRate, true)}
             detail={<div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 <span>{t('local_dashboard.api_requests', { requestCount: formatTokens(totals.request_count, locale) })}</span>
                 {apiCost.unpricedModels > 0 && <span className="text-amber-700 dark:text-amber-400">{t('local_dashboard.unpriced_count', { count: apiCost.unpricedModels })}</span>}
@@ -878,7 +884,7 @@ function Dashboard() {
                                                 </span>
                                             </div>
                                             <div className="text-right shrink-0 font-mono">
-                                                <span className="font-semibold text-gray-900 dark:text-gray-100">{formatUsd(item.costUsd)}</span>
+                                                <span className="font-semibold text-gray-900 dark:text-gray-100">{formatUsd(item.costUsd, currencyMode, usdToCnyRate, true)}</span>
                                                 <span className="text-[10px] text-gray-400 ml-1">({item.costPercent.toFixed(1)}%)</span>
                                             </div>
                                         </div>

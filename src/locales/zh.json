@@ -204,6 +204,8 @@
     "quota_window_5h": "显示五小时窗口的额度和重置时间；自动切换仍同时检查周额度。Argon 单独标为周配额。",
     "quota_window_weekly": "7 天配额",
     "quota_window_weekly_short": "周配额",
+    "cycle_history_btn": "周期变化",
+    "cycle_history_title": "周期额度变化与消耗统计",
     "shared_pool": "共享池",
     "dedicated_pool": "独立池",
     "weekly_scope_gemini": "涵盖 Gemini 3.8、3.7、3.1、2.5",
@@ -553,5 +555,24 @@
     "invalid_address": "请输入有效的 HTTP 或 SOCKS 代理地址，不含用户名和密码。之前生效的代理保持不变。",
     "applying": "正在应用…",
     "save_failed": "保存失败，请检查代理地址或设置文件是否可写。"
+  },
+  "quota_valuation": {
+    "section_title": "配额价值与等效 Token 换算",
+    "section_desc": "结合活跃时间片与真实消耗，双层诚实反推额度等效价值，防虚标爆炸",
+    "enable_title": "启用配额价值换算",
+    "enable_desc": "在账号卡片与表格中实时反推并展示额度折算金额（USD/CNY）与等效 Token",
+    "currency_label": "计价币种",
+    "both": "双币对照",
+    "mode_label": "展示模式",
+    "mode_remaining": "等效剩余",
+    "mode_used_and_total": "消耗 / 总额",
+    "rate_title": "USD → CNY 汇率",
+    "rate_desc": "支持 24 小时自动更新或手动自定义",
+    "auto_rate": "自动同步",
+    "rate_updated": "汇率已更新为 1 USD = {{rate}} CNY",
+    "reference_caps_title": "100% 满额基准折算与自定义参考上限",
+    "reference_caps_desc": "当账号未产生消耗（100%）时，依次取自定义上限或历史样本中位数折算等效价值",
+    "enable_ref_cap": "启用满额折算",
+    "auto_calc": "自动校准中位数"
   }
 }

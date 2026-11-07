@@ -21,6 +21,8 @@ pub struct AppConfig {
     pub quota_protection: QuotaProtectionConfig,
     pub pinned_quota_models: PinnedQuotaModelsConfig,
     pub network: NetworkPreferences,
+    #[serde(default)]
+    pub quota_valuation: QuotaValuationConfig,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -227,6 +229,33 @@ impl Default for PinnedQuotaModelsConfig {
     }
 }
 
+/// Quota currency and token valuation configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct QuotaValuationConfig {
+    pub enabled: bool,
+    pub currency: String,
+    pub display_mode: String,
+    pub auto_exchange_rate: bool,
+    pub usd_to_cny_rate: f64,
+    pub use_reference_cap: bool,
+    pub reference_caps_usd: std::collections::BTreeMap<String, f64>,
+}
+
+impl Default for QuotaValuationConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            currency: "usd".to_string(),
+            display_mode: "remaining".to_string(),
+            auto_exchange_rate: true,
+            usd_to_cny_rate: 7.25,
+            use_reference_cap: true,
+            reference_caps_usd: std::collections::BTreeMap::new(),
+        }
+    }
+}
+
 impl AppConfig {
     pub fn new() -> Self {
         Self {
@@ -247,6 +276,7 @@ impl AppConfig {
             quota_protection: QuotaProtectionConfig::default(),
             pinned_quota_models: PinnedQuotaModelsConfig::default(),
             network: NetworkPreferences::default(),
+            quota_valuation: QuotaValuationConfig::default(),
         }
     }
 }
@@ -323,5 +353,17 @@ mod tests {
             let restored: AppConfig = serde_json::from_str(&saved).unwrap();
             assert_eq!(restored.language, language);
         }
+    }
+
+    #[test]
+    fn legacy_config_deserializes_with_default_quota_valuation() {
+        let legacy: AppConfig = serde_json::from_str(r#"{"language":"zh"}"#).unwrap();
+        assert!(legacy.quota_valuation.enabled);
+        assert_eq!(legacy.quota_valuation.currency, "usd");
+        assert_eq!(legacy.quota_valuation.display_mode, "remaining");
+        assert!(legacy.quota_valuation.auto_exchange_rate);
+        assert_eq!(legacy.quota_valuation.usd_to_cny_rate, 7.25);
+        assert!(legacy.quota_valuation.use_reference_cap);
+        assert!(legacy.quota_valuation.reference_caps_usd.is_empty());
     }
 }

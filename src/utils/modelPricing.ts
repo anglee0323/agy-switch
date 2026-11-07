@@ -11,14 +11,14 @@ const pricingKeys = (model: string) => {
     const name = model.toLowerCase().replace(/-n$/, '');
     const tokens = name.match(/[a-z]+|[0-9]+/g) || [];
     const exact = tokens.join('-');
-    const gemini = /^gemini-([0-9]+(?:-[0-9]+)*)-(flash(?:-lite)?|pro)(?:-(.*))?$/.exec(exact);
+    const gemini = /^gemini-([0-9]+(?:-[0-9]+)*)-(flash(?:-lite)?|pro|argon)(?:-(.*))?$/.exec(exact);
     if (gemini) {
         const suffix = gemini[3]?.split('-') || [];
         const distinctVariant = suffix.some(token => ['lite', 'image', 'vision', 'audio', 'tts', 'live', 'embedding', 'embeddings', 'robotics', 'native'].includes(token));
         let experimental = false;
         const alias = !distinctVariant && suffix.every(token => {
             if (['exp', 'experimental', 'preview', 'test'].includes(token)) experimental = true;
-            return experimental || /^[a-z]$/.test(token) || ['high', 'medium', 'low', 'minimal', 'thinking'].includes(token);
+            return experimental || /^[a-z]$/.test(token) || ['high', 'medium', 'low', 'minimal', 'thinking', 'tiered'].includes(token);
         });
         return { exact, base: alias ? `gemini-${gemini[1]}-${gemini[2]}` : undefined };
     }

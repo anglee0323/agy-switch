@@ -1,6 +1,7 @@
 
 
 import {
+  Activity,
   Download,
   Calendar,
   Clock,
@@ -10,10 +11,15 @@ import {
   Search,
   Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { listen } from "@tauri-apps/api/event";
+import { request } from "../utils/request";
+import { useConfigStore } from "../stores/useConfigStore";
+import type { BucketValuation, QuotaValuationResponse } from "../utils/quotaValuation";
 import AccountGrid from "../components/accounts/AccountGrid";
 import AccountTable from "../components/accounts/AccountTable";
 import AddAccountDialog from "../components/accounts/AddAccountDialog";
+import QuotaCycleModal from "../components/accounts/QuotaCycleModal";
 import ModalDialog from "../components/common/ModalDialog";
 import Pagination from "../components/common/Pagination";
 import { showToast } from "../components/common/ToastContainer";
@@ -33,6 +39,7 @@ export type QuotaWindow = "5h" | "weekly";
 
 function Accounts() {
   const { t } = useTranslation();
+  const { config } = useConfigStore();
   const {
     accounts,
     currentAccount,
@@ -46,6 +53,7 @@ function Accounts() {
     reorderAccounts,
     updateAccountLabel,
   } = useAccountStore();
+  const [valuationsMap, setValuationsMap] = useState<Record<string, BucketValuation[]>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<FilterType>('all');
   const [isSearchExpanded, setIsSearchExpanded] = useState(false);
@@ -78,6 +86,8 @@ function Accounts() {
   const [refreshingIds, setRefreshingIds] = useState<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const [isCycleModalOpen, setIsCycleModalOpen] = useState(false);
+  const [cycleModalAccountId, setCycleModalAccountId] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -117,16 +127,18 @@ function Accounts() {
     // 回退到原有的动态计算逻辑
     if (!containerSize.height) return viewMode === "grid" ? 6 : 8;
 
+    const valuationEnabled = config?.quota_valuation?.enabled !== false;
+
     if (viewMode === "list") {
       const headerHeight = 36; // 缩深后的表头高度
-      const rowHeight = 72; // 包含多行模型信息后的实际行高
+      const rowHeight = valuationEnabled ? 96 : 72; // 包含多行模型与折算信息后的实际行高
       // 计算能容纳多少行, 默认最低 10 行
       const autoFitCount = Math.floor(
         (containerSize.height - headerHeight) / rowHeight,
       );
       return Math.max(10, autoFitCount);
     } else {
-      const cardHeight = 180; // AccountCard 实际高度 (含间距)
+      const cardHeight = valuationEnabled ? 220 : 180; // AccountCard 实际高度 (含折算与间距)
       const gap = 16; // gap-4
 
       // 匹配 Tailwind 断点逻辑
@@ -143,7 +155,38 @@ function Accounts() {
       );
       return cols * rows;
     }
-  }, [localPageSize, containerSize, viewMode]);
+  }, [localPageSize, containerSize, viewMode, config?.quota_valuation?.enabled]);
+
+  const fetchValuations = useCallback(async () => {
+    try {
+      const res = await request<QuotaValuationResponse>('get_account_quota_valuations');
+      if (res?.accounts) {
+        const map: Record<string, BucketValuation[]> = {};
+        for (const item of res.accounts) {
+          map[item.account_id] = item.buckets;
+        }
+        setValuationsMap(map);
+      }
+    } catch {
+      // 容错降级
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchValuations();
+  }, [fetchValuations, accounts, config?.quota_valuation]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen('accounts://refreshed', () => {
+      void fetchValuations();
+    }).then((fn) => {
+      unlisten = fn;
+    }).catch(() => {});
+    return () => {
+      unlisten?.();
+    };
+  }, [fetchValuations]);
 
   useEffect(() => {
     fetchAccounts();
@@ -636,6 +679,20 @@ function Accounts() {
         <div className="flex items-center gap-1.5 shrink-0">
           <AddAccountDialog onAdd={handleAddAccount} showText={false} />
 
+          <button
+            className="px-2.5 py-2 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-800/50 text-xs font-medium rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors flex items-center gap-1.5 shadow-xs whitespace-nowrap shrink-0"
+            onClick={() => {
+              setCycleModalAccountId(undefined);
+              setIsCycleModalOpen(true);
+            }}
+            title={t("accounts.cycle_history_title", "周期额度变化与消耗统计")}
+          >
+            <Activity className="w-3.5 h-3.5" />
+            <span className="hidden md:inline">
+              {t("accounts.cycle_history_btn", "周期变化")}
+            </span>
+          </button>
+
           {selectedIds.size > 0 && (
             <>
               <button
@@ -707,8 +764,13 @@ function Accounts() {
                 onEditLabel={handleEditLabel}
                 onDelete={handleDelete}
                 onExport={id => handleExport([id])}
+                onViewCycleHistory={id => {
+                  setCycleModalAccountId(id);
+                  setIsCycleModalOpen(true);
+                }}
                 onReorder={reorderAccounts}
                 quotaWindow={quotaWindow}
+                valuationsMap={valuationsMap}
               />
             </div>
           </div>
@@ -726,8 +788,13 @@ function Accounts() {
               onEditLabel={handleEditLabel}
               onDelete={handleDelete}
               onExport={id => handleExport([id])}
+              onViewCycleHistory={id => {
+                setCycleModalAccountId(id);
+                setIsCycleModalOpen(true);
+              }}
               onReorder={reorderAccounts}
               quotaWindow={quotaWindow}
+              valuationsMap={valuationsMap}
             />
           </div>
         )}
@@ -829,7 +896,11 @@ function Accounts() {
         </div>
       </ModalDialog>
 
-
+      <QuotaCycleModal
+        isOpen={isCycleModalOpen}
+        onClose={() => setIsCycleModalOpen(false)}
+        initialAccountId={cycleModalAccountId}
+      />
 
     </div>
   );

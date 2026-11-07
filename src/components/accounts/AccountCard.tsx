@@ -1,6 +1,6 @@
-import { weeklyQuotaItems, modelQuotaForWindow } from '../../utils/menuBarQuota';
+import { weeklyQuotaItems, modelQuotaForWindow, modelQuotaPoolKind } from '../../utils/menuBarQuota';
 import { useMemo } from 'react';
-import { Download, ArrowRightLeft, RefreshCw, Trash2, Lock, Ban, Diamond, Gem, Circle, Sparkles, Tag, Clock, GripVertical, BrainCircuit, CheckCircle2 } from 'lucide-react';
+import { Download, ArrowRightLeft, RefreshCw, Trash2, Lock, Ban, Diamond, Gem, Circle, Sparkles, Tag, Clock, GripVertical, BrainCircuit, CheckCircle2, Activity } from 'lucide-react';
 import { Account } from '../../types/account';
 import { cn } from '../../utils/cn';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +10,8 @@ import { getDisplayQuotaModels } from '../../config/modelConfig';
 import { getValidationBlockedStatusLabel } from './accountValidationStatus';
 import AccountSelection from './AccountSelection';
 import { getAccountTier } from '../../utils/accountTier';
+import type { BucketValuation } from '../../utils/quotaValuation';
+import { findBucketForWeekly, findBucketFor5h, formatValuationDisplay, formatValuationStructured } from '../../utils/quotaValuation';
 
 interface AccountCardProps {
     account: Account;
@@ -23,7 +25,9 @@ interface AccountCardProps {
     onEditLabel: () => void;
     onDelete: () => void;
     onExport?: () => void;
+    onViewCycleHistory?: () => void;
     quotaWindow?: '5h' | 'weekly';
+    valuations?: BucketValuation[];
     dragHandleProps?: {
         attributes?: any;
         listeners?: any;
@@ -43,11 +47,13 @@ function AccountCard({
     onEditLabel,
     onDelete,
     onExport,
+    onViewCycleHistory,
     quotaWindow,
+    valuations,
     dragHandleProps,
     isDragging = false,
 }: AccountCardProps) {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const { config } = useConfigStore();
     const isDisabled = Boolean(account.disabled);
     const validationBlockedLabel = getValidationBlockedStatusLabel(account.validation_blocked_reason, t);
@@ -205,28 +211,76 @@ function AccountCard({
                     </div>
                 ) : quotaWindow === 'weekly' && weeklyItems.length > 0 ? (
                     <div className="grid grid-cols-1 gap-2 content-start my-auto">
-                        {weeklyItems.map((item) => (
-                            <QuotaItem
-                                key={item.id}
-                                label={
-                                    <span className="flex items-center gap-1.5 truncate">
-                                        <span>{item.title}</span>
-                                        <span className="shrink-0">
-                                            {item.poolBadge}
+                        {weeklyItems.map((item) => {
+                            const bucketId = (item as any).bucketId || item.id;
+                            const valuation = findBucketForWeekly(valuations, bucketId);
+                            const valStructured = config?.quota_valuation?.enabled !== false
+                                ? formatValuationStructured(
+                                    valuation,
+                                    config?.quota_valuation?.currency ?? 'usd',
+                                    config?.quota_valuation?.display_mode ?? 'remaining',
+                                    i18n.language.startsWith('zh')
+                                )
+                                : null;
+                            const valDisplay = config?.quota_valuation?.enabled !== false
+                                ? formatValuationDisplay(
+                                    valuation,
+                                    config?.quota_valuation?.currency ?? 'usd',
+                                    config?.quota_valuation?.display_mode ?? 'remaining',
+                                    i18n.language.startsWith('zh')
+                                )
+                                : null;
+                            return (
+                                <QuotaItem
+                                    key={item.id}
+                                    label={
+                                        <span className="flex items-center gap-1.5 truncate">
+                                            <span>{item.title}</span>
+                                            <span className="shrink-0">
+                                                {item.poolBadge}
+                                            </span>
                                         </span>
-                                    </span>
-                                }
-                                title={`${item.title} (${item.poolBadge})`}
-                                percentage={item.percentage}
-                                resetTime={item.resetTime}
-                                Icon={item.Icon}
-                            />
-                        ))}
+                                    }
+                                    title={`${item.title} (${item.poolBadge})`}
+                                    percentage={item.percentage}
+                                    resetTime={item.resetTime}
+                                    Icon={item.Icon}
+                                    valuationStructured={valStructured}
+                                    valuationLine={valDisplay?.line}
+                                    valuationTitle={valDisplay?.title}
+                                />
+                            );
+                        })}
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 gap-2 content-start my-auto">
                         {displayModels.map((model) => {
                             const resolved = modelQuotaForWindow(model.data, account.quota, quotaWindow);
+                            const pool = model.data
+                                ? modelQuotaPoolKind(model.data.name, model.data.display_name)
+                                : (model.id.toLowerCase().includes('claude') || model.id.toLowerCase().includes('gpt')
+                                    ? 'other'
+                                    : model.id.toLowerCase().includes('argon')
+                                    ? 'argon'
+                                    : 'gemini');
+                            const poolKind = pool === 'argon' ? 'argon' : pool === 'other' ? 'third_party' : 'gemini';
+                            const valuation = findBucketFor5h(valuations, poolKind, resolved.window === 'weekly' ? 'weekly' : '5h');
+                            const valStructured = config?.quota_valuation?.enabled !== false
+                                ? formatValuationStructured(
+                                    valuation,
+                                    config?.quota_valuation?.currency ?? 'usd',
+                                    config?.quota_valuation?.display_mode ?? 'remaining',
+                                    i18n.language.startsWith('zh')
+                                )
+                                : null;
+                            const valDisplay = config?.quota_valuation?.enabled !== false
+                                ? formatValuationDisplay(
+                                    valuation,
+                                    config?.quota_valuation?.currency ?? 'usd',
+                                    config?.quota_valuation?.display_mode ?? 'remaining',
+                                    i18n.language.startsWith('zh')
+                                )
+                                : null;
                             return (
                                 <QuotaItem
                                     key={model.id}
@@ -236,6 +290,9 @@ function AccountCard({
                                     windowLabel={resolved.window === 'weekly' ? t('accounts.quota_window_weekly_short') : undefined}
                                     isProtected={isModelProtected(model.protectedKey)}
                                     Icon={model.Icon}
+                                    valuationStructured={valStructured}
+                                    valuationLine={valDisplay?.line}
+                                    valuationTitle={valDisplay?.title}
                                 />
                             );
                         })}
@@ -290,6 +347,16 @@ function AccountCard({
                     >
                         <Trash2 className="w-3.5 h-3.5" />
                     </button>
+                    {onViewCycleHistory && (
+                        <button
+                            className="p-1.5 rounded-lg transition-all text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:text-indigo-400 dark:hover:bg-indigo-900/30"
+                            title={t('accounts.cycle_history_title', '周期额度变化与消耗统计')}
+                            aria-label={t('accounts.cycle_history_title', '周期额度变化与消耗统计')}
+                            onClick={e => { e.stopPropagation(); onViewCycleHistory(); }}
+                        >
+                            <Activity className="w-3.5 h-3.5" />
+                        </button>
+                    )}
                     {onExport && (
                         <button
                             className="p-1.5 rounded-lg transition-all text-gray-400 dark:text-gray-500 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30"
