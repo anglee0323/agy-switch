@@ -25,6 +25,7 @@ pub async fn get_account_dashboard_snapshot(
 pub async fn get_menu_bar_snapshot(
 ) -> Result<modules::account_dashboard::DashboardSnapshot, String> {
     tokio::task::spawn_blocking(|| {
+        #[allow(unused_mut)]
         let mut snapshot = modules::account_dashboard::snapshot()?;
         #[cfg(target_os = "macos")]
         {
@@ -555,6 +556,7 @@ pub(crate) async fn sync_account_from_db_internal(app: tauri::AppHandle) -> Resu
     // 既然是从数据库导入，自动将其设为 Manager 的当前账号并保留当前 target
     let account_id = account.id.clone();
     modules::account::set_current_account_id_with_target(&account_id, Some("app"))?;
+    modules::account_usage::record_active_account(&account_id, chrono::Utc::now().timestamp());
     tracing::info!(
         previous_account_id = current.as_ref().map(|account| account.id.as_str()).unwrap_or("none"),
         current_account_id = account_id.as_str(),
@@ -723,6 +725,25 @@ pub fn get_running_version() -> String { env!("CARGO_PKG_VERSION").into() }
 #[tauri::command]
 pub async fn download_and_install_update(app: tauri::AppHandle, expected_version: String, progress: tauri::ipc::Channel<crate::modules::updater::UpdateProgress>) -> Result<(), String> {
     crate::modules::updater::download_and_install(app, expected_version, progress).await
+}
+
+/// 获取实时/缓存汇率
+#[tauri::command]
+pub async fn get_exchange_rate(config_rate: Option<f64>, auto_fetch: Option<bool>) -> Result<modules::api_pricing::ExchangeRateSnapshot, String> {
+    let auto = auto_fetch.unwrap_or(true);
+    Ok(modules::api_pricing::get_exchange_rate(config_rate, auto).await)
+}
+
+/// 获取所有账号配额价值与等效 Token 折算总览
+#[tauri::command]
+pub async fn get_account_quota_valuations() -> Result<modules::account_usage::QuotaValuationResponse, String> {
+    modules::account_usage::calculate_all_account_valuations().await
+}
+
+/// 获取周期配额变化历史流水与汇总统计
+#[tauri::command]
+pub async fn get_quota_cycle_history(account_id: Option<String>) -> Result<modules::account_usage::QuotaCycleHistoryResponse, String> {
+    modules::account_usage::get_quota_cycle_history(account_id).await
 }
 
 #[cfg(test)]

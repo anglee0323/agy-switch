@@ -57,6 +57,26 @@ export interface PinnedQuotaModelsConfig {
     models: string[];
 }
 
+export interface QuotaValuationConfig {
+    enabled: boolean;
+    currency: 'usd' | 'cny' | 'both';
+    display_mode: 'remaining' | 'used_and_total';
+    auto_exchange_rate: boolean;
+    usd_to_cny_rate: number;
+    use_reference_cap: boolean;
+    reference_caps_usd: Record<string, number>;
+}
+
+export const DEFAULT_QUOTA_VALUATION_CONFIG: QuotaValuationConfig = {
+    enabled: true,
+    currency: 'usd',
+    display_mode: 'remaining',
+    auto_exchange_rate: true,
+    usd_to_cny_rate: 7.25,
+    use_reference_cap: true,
+    reference_caps_usd: {},
+};
+
 export interface AppConfig {
     network?: { proxy_mode: 'system' | 'direct' | 'manual'; proxy_url: string };
     dashboard?: DashboardPreferences;
@@ -75,4 +95,5 @@ export interface AppConfig {
     antigravity_ide_args?: string[];
     quota_protection: QuotaProtectionConfig;
     pinned_quota_models: PinnedQuotaModelsConfig;
+    quota_valuation?: QuotaValuationConfig;
 }

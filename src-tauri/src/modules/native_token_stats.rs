@@ -84,13 +84,61 @@ pub struct LocalTokenUsageSummary {
 }
 
 #[derive(Debug, Clone)]
-struct GenerationEvent {
-    model: String,
-    input_tokens: u64,
-    output_tokens: u64,
-    cached_tokens: u64,
-    total_tokens: u64,
-    timestamp_seconds: i64,
+pub(crate) struct GenerationEvent {
+    pub(crate) model: String,
+    pub(crate) input_tokens: u64,
+    pub(crate) output_tokens: u64,
+    pub(crate) cached_tokens: u64,
+    pub(crate) total_tokens: u64,
+    pub(crate) timestamp_seconds: i64,
+}
+
+pub(crate) fn read_recent_generation_events(since_timestamp: i64) -> Result<Vec<GenerationEvent>, String> {
+    let since_date = chrono::Local.timestamp_opt(since_timestamp, 0)
+        .single()
+        .map(|dt| dt.date_naive())
+        .unwrap_or_else(|| chrono::Local::now().date_naive() - chrono::Duration::days(35));
+    let database_paths = discover_database_files().unwrap_or_default();
+    let archive_path = token_archive_path().ok();
+    read_generation_events_internal(&database_paths, archive_path.as_deref(), since_date)
+}
+
+pub(crate) fn read_generation_events_internal(
+    database_paths: &[PathBuf],
+    archive_path: Option<&Path>,
+    since: chrono::NaiveDate,
+) -> Result<Vec<GenerationEvent>, String> {
+    let live_source_keys = database_paths
+        .iter()
+        .map(|path| source_key_for_database(path))
+        .collect::<HashSet<_>>();
+
+    let mut events = Vec::new();
+    let archived = if let Some(path) = archive_path {
+        if path.is_file() {
+            scan_archive(path, since, &live_source_keys).unwrap_or_default()
+        } else {
+            ArchivedTokenData::default()
+        }
+    } else {
+        ArchivedTokenData::default()
+    };
+    events.extend(archived.events);
+
+    for path in database_paths {
+        let source_key = source_key_for_database(path);
+        let archived_ids = archived
+            .generation_ids_by_source
+            .get(&source_key)
+            .cloned()
+            .unwrap_or_default();
+        if let Ok(result) = scan_database(path, since, &archived_ids) {
+            events.extend(result.events);
+        }
+    }
+
+    events.sort_by_key(|event| event.timestamp_seconds);
+    Ok(events)
 }
 
 #[derive(Debug, Clone, Copy)]

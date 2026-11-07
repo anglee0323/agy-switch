@@ -5,11 +5,22 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
-const GEMINI_PRICING_URL: &str = "https://ai.google.dev/gemini-api/docs/pricing?hl=en";
+const GEMINI_PRICING_URL: &str = "https://ai.google.dev/gemini-api/docs/pricing.md.txt";
 const AGENT_PLATFORM_PRICING_URL: &str =
-    "https://cloud.google.com/gemini-enterprise-agent-platform/generative-ai/pricing?hl=en";
+    "https://platform.claude.com/docs/en/about-claude/pricing.md";
+const EXCHANGE_RATE_API_URL: &str = "https://open.er-api.com/v6/latest/USD";
 const CACHE_TTL_SECONDS: i64 = 24 * 60 * 60;
-const PARSER_REVISION: u32 = 2;
+const PARSER_REVISION: u32 = 4;
+const DEFAULT_USD_TO_CNY: f64 = 7.25;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExchangeRateSnapshot {
+    pub rate: f64,
+    pub fetched_at: i64,
+    pub stale: bool,
+    pub source: String,
+    pub warning: Option<String>,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ApiPricing {
@@ -67,46 +78,28 @@ pub async fn get_api_pricing() -> Result<ApiPricingSnapshot, String> {
     }
 
     let mut unique_prices = BTreeMap::new();
+    for price in builtin_fallback_prices() {
+        unique_prices.insert(price.model.to_ascii_lowercase(), price);
+    }
     for price in prices {
         unique_prices.insert(price.model.to_ascii_lowercase(), price);
     }
-    let prices: Vec<ApiPricing> = unique_prices.into_values().collect();
+    let combined_prices: Vec<ApiPricing> = unique_prices.into_values().collect();
 
-    if !prices.is_empty() {
-        let snapshot = ApiPricingSnapshot {
-            parser_revision: PARSER_REVISION,
-            prices,
-            fetched_at: now,
-            stale: false,
-            source: "Google Gemini API + Google Agent Platform 官方价格".to_string(),
-            warning: (!warnings.is_empty()).then(|| warnings.join("；")),
-        };
-        write_cache(&snapshot);
-        return Ok(snapshot);
-    }
-
-    if let Some(mut cached) = read_cache() {
-        cached.stale = true;
-        cached.warning = Some(if warnings.is_empty() {
-            "官方价格页暂时没有解析到可用价格，继续使用本地缓存".to_string()
-        } else {
-            format!("{}；继续使用本地缓存", warnings.join("；"))
-        });
-        return Ok(cached);
-    }
-
-    Ok(ApiPricingSnapshot {
+    let snapshot = ApiPricingSnapshot {
         parser_revision: PARSER_REVISION,
-        prices: Vec::new(),
+        prices: combined_prices,
         fetched_at: now,
-        stale: true,
-        source: "内置价格兜底".to_string(),
-        warning: Some(if warnings.is_empty() {
-            "官方价格页暂时没有解析到可用价格".to_string()
+        stale: !warnings.is_empty(),
+        source: if warnings.is_empty() {
+            "Google Gemini API + Google Agent Platform 官方价格".to_string()
         } else {
-            warnings.join("；")
-        }),
-    })
+            "Google 官方价格与内置标准价格融合".to_string()
+        },
+        warning: (!warnings.is_empty()).then(|| warnings.join("；")),
+    };
+    write_cache(&snapshot);
+    Ok(snapshot)
 }
 
 async fn fetch_page(client: &reqwest::Client, url: &str) -> Result<String, String> {
@@ -128,10 +121,173 @@ fn cache_path() -> Option<PathBuf> {
     Some(root.join("api_pricing.json"))
 }
 
+fn exchange_rate_cache_path() -> Option<PathBuf> {
+    let root = std::env::var_os("ABV_DATA_DIR").filter(|path| !path.to_string_lossy().trim().is_empty()).map(PathBuf::from)
+        .or_else(|| dirs::home_dir().map(|home| home.join(".antigravity_tools")))?;
+    Some(root.join("exchange_rate.json"))
+}
+
+fn read_exchange_rate_cache() -> Option<ExchangeRateSnapshot> {
+    let path = exchange_rate_cache_path()?;
+    let bytes = fs::read(path).ok()?;
+    serde_json::from_slice(&bytes).ok()
+}
+
+fn write_exchange_rate_cache(snapshot: &ExchangeRateSnapshot) {
+    let Some(path) = exchange_rate_cache_path() else { return; };
+    let Some(parent) = path.parent() else { return; };
+    if fs::create_dir_all(parent).is_err() { return; }
+    if let Ok(bytes) = serde_json::to_vec_pretty(snapshot) {
+        let _ = fs::write(path, bytes);
+    }
+}
+
+/// 获取 USD -> CNY 汇率。支持 24 小时本地缓存与优雅回退，绝不阻塞应用运行。
+pub async fn get_exchange_rate(config_rate: Option<f64>, auto_fetch: bool) -> ExchangeRateSnapshot {
+    let fallback_rate = config_rate
+        .filter(|r| r.is_finite() && (3.0..=20.0).contains(r))
+        .unwrap_or(DEFAULT_USD_TO_CNY);
+    let now = Utc::now().timestamp();
+
+    if !auto_fetch {
+        return ExchangeRateSnapshot {
+            rate: fallback_rate,
+            fetched_at: now,
+            stale: false,
+            source: "用户固定汇率配置".to_string(),
+            warning: None,
+        };
+    }
+
+    if let Some(mut cached) = read_exchange_rate_cache() {
+        if now.saturating_sub(cached.fetched_at) < CACHE_TTL_SECONDS && (3.0..=20.0).contains(&cached.rate) {
+            cached.stale = false;
+            cached.warning = None;
+            return cached;
+        }
+    }
+
+    let client = match crate::utils::proxy::configure_reqwest(reqwest::Client::builder()) {
+        Ok(builder) => builder
+            .timeout(std::time::Duration::from_secs(8))
+            .user_agent("agy-switch exchange rate fetcher")
+            .build()
+            .map_err(|e| e.to_string()),
+        Err(e) => Err(e),
+    };
+
+    let fetch_res = match client {
+        Ok(cli) => fetch_open_exchange_rate(&cli).await,
+        Err(e) => Err(e),
+    };
+
+    match fetch_res {
+        Ok(parsed_rate) if (3.0..=20.0).contains(&parsed_rate) => {
+            let snapshot = ExchangeRateSnapshot {
+                rate: parsed_rate,
+                fetched_at: now,
+                stale: false,
+                source: "open.er-api.com 实时汇率".to_string(),
+                warning: None,
+            };
+            write_exchange_rate_cache(&snapshot);
+            snapshot
+        }
+        Err(err) => {
+            if let Some(mut cached) = read_exchange_rate_cache() {
+                if (3.0..=20.0).contains(&cached.rate) {
+                    cached.stale = true;
+                    cached.warning = Some(format!("获取最新汇率失败（{}），使用本地缓存汇率", err));
+                    return cached;
+                }
+            }
+            ExchangeRateSnapshot {
+                rate: fallback_rate,
+                fetched_at: now,
+                stale: true,
+                source: "配置默认汇率兜底".to_string(),
+                warning: Some(format!("汇率接口不可用（{}），使用配置兜底", err)),
+            }
+        }
+        _ => {
+            if let Some(mut cached) = read_exchange_rate_cache() {
+                if (3.0..=20.0).contains(&cached.rate) {
+                    cached.stale = true;
+                    cached.warning = Some("最新汇率数值超出正常范围，使用本地缓存汇率".to_string());
+                    return cached;
+                }
+            }
+            ExchangeRateSnapshot {
+                rate: fallback_rate,
+                fetched_at: now,
+                stale: true,
+                source: "配置默认汇率兜底".to_string(),
+                warning: Some("最新汇率数值异常，使用配置兜底".to_string()),
+            }
+        }
+    }
+}
+
+async fn fetch_open_exchange_rate(client: &reqwest::Client) -> Result<f64, String> {
+    let response = client
+        .get(EXCHANGE_RATE_API_URL)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !response.status().is_success() {
+        return Err(format!("HTTP {}", response.status()));
+    }
+    let body = response.text().await.map_err(|e| e.to_string())?;
+    parse_exchange_rate_json(&body)
+}
+
+pub fn parse_exchange_rate_json(json_str: &str) -> Result<f64, String> {
+    let val: serde_json::Value = serde_json::from_str(json_str).map_err(|e| e.to_string())?;
+    let cny = val.get("rates").and_then(|r| r.get("CNY")).and_then(|v| v.as_f64())
+        .ok_or_else(|| "rates.CNY not found in response".to_string())?;
+    Ok(cny)
+}
+
+pub fn builtin_fallback_prices() -> Vec<ApiPricing> {
+    vec![
+        ApiPricing { model: "gemini-4-argon".into(), input: 2.0, output: 10.0, cached: 0.10 },
+        ApiPricing { model: "gemini-3.8-flash".into(), input: 0.75, output: 3.75, cached: 0.075 },
+        ApiPricing { model: "gemini-3.6-flash".into(), input: 0.50, output: 2.50, cached: 0.05 },
+        ApiPricing { model: "gemini-3.5-flash-lite".into(), input: 0.20, output: 1.00, cached: 0.02 },
+        ApiPricing { model: "gemini-3.1-pro-preview".into(), input: 2.00, output: 12.00, cached: 0.20 },
+        ApiPricing { model: "gemini-3.1-flash-lite".into(), input: 0.25, output: 1.50, cached: 0.025 },
+        ApiPricing { model: "gemini-3-flash-preview".into(), input: 0.50, output: 3.00, cached: 0.05 },
+        ApiPricing { model: "gemini-2.5-pro".into(), input: 1.25, output: 10.00, cached: 0.125 },
+        ApiPricing { model: "gemini-2.5-flash".into(), input: 0.30, output: 2.50, cached: 0.03 },
+        ApiPricing { model: "gemini-2.5-flash-lite".into(), input: 0.10, output: 0.40, cached: 0.01 },
+        ApiPricing { model: "Claude Opus 5.5".into(), input: 4.0, output: 20.0, cached: 0.20 },
+        ApiPricing { model: "Claude Opus 5".into(), input: 5.0, output: 25.0, cached: 0.50 },
+        ApiPricing { model: "Claude Opus 4.8".into(), input: 5.0, output: 25.0, cached: 0.50 },
+        ApiPricing { model: "Claude Opus 4.7".into(), input: 5.0, output: 25.0, cached: 0.50 },
+        ApiPricing { model: "Claude Opus 4.6".into(), input: 5.0, output: 25.0, cached: 0.50 },
+        ApiPricing { model: "Claude Opus 4.5".into(), input: 5.0, output: 25.0, cached: 0.50 },
+        ApiPricing { model: "Claude Sonnet 5.5".into(), input: 2.0, output: 10.0, cached: 0.10 },
+        ApiPricing { model: "Claude Sonnet 5".into(), input: 2.0, output: 10.0, cached: 0.20 },
+        ApiPricing { model: "Claude Sonnet 4.6".into(), input: 3.0, output: 15.0, cached: 0.30 },
+        ApiPricing { model: "Claude Sonnet 4.5".into(), input: 3.0, output: 15.0, cached: 0.30 },
+        ApiPricing { model: "Claude Haiku 5.5".into(), input: 0.10, output: 0.50, cached: 0.01 },
+        ApiPricing { model: "Claude Haiku 4.5".into(), input: 1.0, output: 5.0, cached: 0.10 },
+    ]
+}
+
 pub fn cached_pricing() -> Option<ApiPricingSnapshot> {
-    let mut snapshot = read_cache()?;
-    snapshot.stale = snapshot.parser_revision != PARSER_REVISION || Utc::now().timestamp().saturating_sub(snapshot.fetched_at) >= CACHE_TTL_SECONDS;
-    Some(snapshot)
+    if let Some(mut snapshot) = read_cache() {
+        snapshot.stale = snapshot.parser_revision != PARSER_REVISION || Utc::now().timestamp().saturating_sub(snapshot.fetched_at) >= CACHE_TTL_SECONDS;
+        return Some(snapshot);
+    }
+    Some(ApiPricingSnapshot {
+        parser_revision: PARSER_REVISION,
+        prices: builtin_fallback_prices(),
+        fetched_at: Utc::now().timestamp(),
+        stale: true,
+        source: "内置价格兜底".to_string(),
+        warning: None,
+    })
 }
 
 fn read_cache() -> Option<ApiPricingSnapshot> {
@@ -155,7 +311,14 @@ fn write_cache(snapshot: &ApiPricingSnapshot) {
     }
 }
 
-fn parse_gemini_prices(html: &str, today: NaiveDate) -> Vec<ApiPricing> {
+fn parse_gemini_prices(content: &str, today: NaiveDate) -> Vec<ApiPricing> {
+    if content.contains("<h2") {
+        return parse_gemini_html_prices(content, today);
+    }
+    parse_gemini_markdown_prices(content, today)
+}
+
+fn parse_gemini_html_prices(html: &str, today: NaiveDate) -> Vec<ApiPricing> {
     let heading_regex = Regex::new(r#"(?is)<h2\b[^>]*\bid="(gemini-[^"]+)"[^>]*>.*?</h2>"#)
         .expect("valid Gemini heading regex");
     let mut headings = Vec::new();
@@ -180,6 +343,104 @@ fn parse_gemini_prices(html: &str, today: NaiveDate) -> Vec<ApiPricing> {
             parse_gemini_section(&html[*end..section_end], model, today)
         })
         .collect()
+}
+
+fn parse_gemini_markdown_prices(content: &str, today: NaiveDate) -> Vec<ApiPricing> {
+    let heading_regex = Regex::new(r#"(?m)^##\s+[^\n]*?\{%\s*id="(gemini-[^"]+)"\s*%\}"#)
+        .expect("valid markdown heading regex");
+    let mut headings = Vec::new();
+    for capture in heading_regex.captures_iter(content) {
+        let Some(full) = capture.get(0) else { continue; };
+        let Some(model) = capture.get(1) else { continue; };
+        headings.push((full.start(), full.end(), model.as_str().to_string()));
+    }
+
+    let mut results = Vec::new();
+    for (index, (_, end, model)) in headings.iter().enumerate() {
+        let section_end = headings.get(index + 1).map(|h| h.0).unwrap_or(content.len());
+        let section = &content[*end..section_end];
+
+        let tab_content = if let Some(std_start) = section.find(r#"{% tab title="Standard" %}"#) {
+            let after_std = &section[std_start + r#"{% tab title="Standard" %}"#.len()..];
+            if let Some(tab_end) = after_std.find("{% /tab %}") {
+                &after_std[..tab_end]
+            } else {
+                after_std
+            }
+        } else {
+            section
+        };
+
+        let table_content = if let Some(tbl_start) = tab_content.find("{% table %}") {
+            let after_tbl = &tab_content[tbl_start + "{% table %}".len()..];
+            if let Some(tbl_end) = after_tbl.find("{% /table %}") {
+                &after_tbl[..tbl_end]
+            } else {
+                after_tbl
+            }
+        } else {
+            tab_content
+        };
+
+        let rows = parse_markdown_table_rows(table_content);
+        let mut input = None;
+        let mut output = None;
+        let mut cached = None;
+        for cells in rows {
+            if cells.len() < 3 {
+                continue;
+            }
+            let label = cells[0].to_ascii_lowercase();
+            if label.starts_with("input price") {
+                input = parse_effective_price(&cells[2], today, false);
+            } else if label.starts_with("output price") {
+                output = parse_effective_price(&cells[2], today, model.contains("image"));
+            } else if label.starts_with("context caching price") {
+                cached = parse_effective_price(&cells[2], today, false);
+            }
+        }
+
+        if let (Some(inp), Some(out)) = (input, output) {
+            results.push(ApiPricing {
+                model: model.clone(),
+                input: inp,
+                output: out,
+                cached: cached.unwrap_or(0.0),
+            });
+        }
+    }
+
+    results
+}
+
+fn parse_markdown_table_rows(table_content: &str) -> Vec<Vec<String>> {
+    let mut rows = Vec::new();
+    let row_blocks = table_content.split("\n---");
+    for block in row_blocks {
+        let mut cells = Vec::new();
+        let mut current_cell: Option<String> = None;
+        for line in block.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("* ") {
+                if let Some(c) = current_cell.take() {
+                    cells.push(c);
+                }
+                current_cell = Some(trimmed[2..].trim().to_string());
+            } else if let Some(ref mut c) = current_cell {
+                if !trimmed.is_empty() {
+                    c.push(' ');
+                    c.push_str(trimmed);
+                }
+            }
+        }
+        if let Some(c) = current_cell {
+            cells.push(c);
+        }
+        if !cells.is_empty() {
+            rows.push(cells);
+        }
+    }
+    rows
 }
 
 fn parse_gemini_section(section: &str, model: &str, today: NaiveDate) -> Option<ApiPricing> {
@@ -217,7 +478,14 @@ fn parse_gemini_section(section: &str, model: &str, today: NaiveDate) -> Option<
     })
 }
 
-fn parse_agent_platform_prices(html: &str, today: NaiveDate) -> Vec<ApiPricing> {
+fn parse_agent_platform_prices(content: &str, today: NaiveDate) -> Vec<ApiPricing> {
+    if content.contains("<table") || content.contains("<tr") {
+        return parse_agent_platform_html_prices(content, today);
+    }
+    parse_agent_platform_markdown_prices(content, today)
+}
+
+fn parse_agent_platform_html_prices(html: &str, today: NaiveDate) -> Vec<ApiPricing> {
     let mut records: BTreeMap<String, ApiPricing> = BTreeMap::new();
     let mut current_model = None;
 
@@ -260,6 +528,58 @@ fn parse_agent_platform_prices(html: &str, today: NaiveDate) -> Vec<ApiPricing> 
         .into_values()
         .filter(|price| price.input > 0.0 && price.output > 0.0)
         .collect()
+}
+
+fn parse_agent_platform_markdown_prices(content: &str, today: NaiveDate) -> Vec<ApiPricing> {
+    let mut records: BTreeMap<String, ApiPricing> = BTreeMap::new();
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if !trimmed.starts_with('|') {
+            continue;
+        }
+        let mut cells: Vec<String> = trimmed
+            .split('|')
+            .map(|s| s.trim().to_string())
+            .collect();
+        if cells.first().map(|s| s.is_empty()).unwrap_or(false) {
+            cells.remove(0);
+        }
+        if cells.last().map(|s| s.is_empty()).unwrap_or(false) {
+            cells.pop();
+        }
+        if cells.len() < 6 {
+            continue;
+        }
+
+        let raw_name = &cells[0];
+        let name_without_paren = match raw_name.find('(') {
+            Some(idx) => &raw_name[..idx],
+            None => raw_name.as_str(),
+        };
+        let clean_name = name_without_paren.replace("**", "").trim().to_string();
+        let lower_name = clean_name.to_ascii_lowercase();
+
+        if lower_name.starts_with("claude ")
+            && (lower_name.contains("opus") || lower_name.contains("sonnet") || lower_name.contains("haiku"))
+        {
+            if !records.contains_key(&lower_name) {
+                let input = parse_effective_price(&cells[1], today, false);
+                let cached = parse_effective_price(&cells[4], today, false);
+                let output = parse_effective_price(&cells[5], today, false);
+                if let (Some(inp), Some(out)) = (input, output) {
+                    if inp > 0.0 && out > 0.0 {
+                        records.insert(lower_name, ApiPricing {
+                            model: clean_name,
+                            input: inp,
+                            output: out,
+                            cached: cached.unwrap_or(0.0),
+                        });
+                    }
+                }
+            }
+        }
+    }
+    records.into_values().collect()
 }
 
 fn parse_table_rows(table: &str) -> Vec<Vec<String>> {
@@ -429,5 +749,83 @@ mod tests {
         assert_eq!(prices.len(), 1);
         assert_eq!(prices[0].model, "gemini-3.9-flash");
         assert_eq!(prices[0].output, 4.0);
+    }
+
+    #[test]
+    fn parses_valid_and_invalid_exchange_rate_json() {
+        let valid_json = r#"{"result":"success","rates":{"CNY":7.2345,"EUR":0.92}}"#;
+        assert_eq!(parse_exchange_rate_json(valid_json).unwrap(), 7.2345);
+
+        let missing_cny = r#"{"result":"success","rates":{"EUR":0.92}}"#;
+        assert!(parse_exchange_rate_json(missing_cny).is_err());
+
+        let invalid_json = "not a json";
+        assert!(parse_exchange_rate_json(invalid_json).is_err());
+    }
+
+    #[test]
+    fn parses_gemini_markdown_format() {
+        let md = r#"
+## Gemini 4 Argon  {% id="gemini-4-argon" %}
+
+{% tab title="Standard" %}
+{% table %}
+* Input price
+* Free
+* $2.00
+---
+* Output price
+* Free
+* $10.00
+---
+* Context caching price
+* Free
+* $0.10
+{% /table %}
+{% /tab %}
+
+## Gemini 3.8 Flash  {% id="gemini-3.8-flash" %}
+
+{% tab title="Standard" %}
+{% table %}
+* Input price
+* Free
+* $0.75
+---
+* Output price
+* Free
+* $3.75
+---
+* Context caching price
+* Free
+* $0.075
+{% /table %}
+{% /tab %}
+        "#;
+        let prices = parse_gemini_prices(md, NaiveDate::from_ymd_opt(2026, 10, 5).unwrap());
+        assert_eq!(prices.len(), 2);
+        assert_eq!(prices[0].model, "gemini-4-argon");
+        assert_eq!((prices[0].input, prices[0].output, prices[0].cached), (2.0, 10.0, 0.10));
+        assert_eq!(prices[1].model, "gemini-3.8-flash");
+        assert_eq!((prices[1].input, prices[1].output, prices[1].cached), (0.75, 3.75, 0.075));
+    }
+
+    #[test]
+    fn parses_anthropic_markdown_pricing_table() {
+        let md = r#"
+| Model | Base input tokens | 5m cache writes | 1h cache writes | Cache hits and refreshes | Output tokens |
+|---|---|---|---|---|---|
+| **Claude Opus 4.6** | $5.00 | $6.25 | $10.00 | $0.50 | $25.00 |
+| **Claude Sonnet 4.6** | $3.00 | $3.75 | $6.00 | $0.30 | $15.00 |
+| **Claude Haiku 5.5** (for prompts up to 100,000 tokens) | $0.10 | $0.125 | $0.20 | $0.01 | $0.50 |
+        "#;
+        let prices = parse_agent_platform_prices(md, NaiveDate::from_ymd_opt(2026, 10, 5).unwrap());
+        assert_eq!(prices.len(), 3);
+        let opus = prices.iter().find(|p| p.model == "Claude Opus 4.6").unwrap();
+        assert_eq!((opus.input, opus.output, opus.cached), (5.0, 25.0, 0.50));
+        let sonnet = prices.iter().find(|p| p.model == "Claude Sonnet 4.6").unwrap();
+        assert_eq!((sonnet.input, sonnet.output, sonnet.cached), (3.0, 15.0, 0.30));
+        let haiku = prices.iter().find(|p| p.model == "Claude Haiku 5.5").unwrap();
+        assert_eq!((haiku.input, haiku.output, haiku.cached), (0.10, 0.50, 0.01));
     }
 }
