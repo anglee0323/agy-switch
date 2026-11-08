@@ -24,13 +24,13 @@ fn get_account_lock(account_id: &str) -> Arc<Mutex<()>> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use std::collections::HashSet;
     use std::sync::Mutex as StdMutex;
 
     // Global mutex to prevent concurrent test execution
-    static TEST_MUTEX: Lazy<StdMutex<()>> = Lazy::new(|| StdMutex::new(()));
+    pub(crate) static TEST_MUTEX: Lazy<StdMutex<()>> = Lazy::new(|| StdMutex::new(()));
 
     struct TestDataDir {
         path: PathBuf,

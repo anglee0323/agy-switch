@@ -1900,13 +1900,40 @@ mod tests {
         assert!(val.estimated_total_usd.is_some());
     }
 
-    static TEST_ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    struct AbvDataDirGuard {
+        _mutex_guard: std::sync::MutexGuard<'static, ()>,
+        prev_val: Option<std::ffi::OsString>,
+        _temp_dir: tempfile::TempDir,
+    }
+
+    impl AbvDataDirGuard {
+        fn new() -> Self {
+            let mutex_guard = crate::modules::account::tests::TEST_MUTEX
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            let prev_val = std::env::var_os("ABV_DATA_DIR");
+            let temp_dir = tempfile::tempdir().unwrap();
+            std::env::set_var("ABV_DATA_DIR", temp_dir.path());
+            Self {
+                _mutex_guard: mutex_guard,
+                prev_val,
+                _temp_dir: temp_dir,
+            }
+        }
+    }
+
+    impl Drop for AbvDataDirGuard {
+        fn drop(&mut self) {
+            match &self.prev_val {
+                Some(prev) => std::env::set_var("ABV_DATA_DIR", prev),
+                None => std::env::remove_var("ABV_DATA_DIR"),
+            }
+        }
+    }
 
     #[test]
     fn intra_cycle_refresh_tracks_delta_and_ignores_noop_refresh() {
-        let _env_guard = TEST_ENV_LOCK.lock().unwrap();
-        let temp_dir = tempfile::tempdir().unwrap();
-        std::env::set_var("ABV_DATA_DIR", temp_dir.path());
+        let _env_guard = AbvDataDirGuard::new();
 
         let account_id = "test_acc_delta";
         let reset_time = "2026-11-08T12:00:00Z";
@@ -1957,9 +1984,7 @@ mod tests {
 
     #[test]
     fn idle_100_percent_rolling_window_does_not_spam_completed_cycles() {
-        let _env_guard = TEST_ENV_LOCK.lock().unwrap();
-        let temp_dir = tempfile::tempdir().unwrap();
-        std::env::set_var("ABV_DATA_DIR", temp_dir.path());
+        let _env_guard = AbvDataDirGuard::new();
 
         let account_id = "test_acc_idle";
 
@@ -1997,9 +2022,7 @@ mod tests {
 
     #[test]
     fn cycle_reset_archives_previous_cycle_and_computes_coc_delta() {
-        let _env_guard = TEST_ENV_LOCK.lock().unwrap();
-        let temp_dir = tempfile::tempdir().unwrap();
-        std::env::set_var("ABV_DATA_DIR", temp_dir.path());
+        let _env_guard = AbvDataDirGuard::new();
 
         let account_id = "test_acc_coc";
 

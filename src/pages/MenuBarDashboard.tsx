@@ -26,7 +26,9 @@ function UsageOverview({ usage, zh, currencyMode = 'usd', usdToCnyRate = 7.25 }:
   const amount = usage?.estimated_usd;
   const cost = amount == null
     ? usage ? (zh ? '未计价' : 'Unpriced') : '—'
-    : formatUsdWithRate(amount, currencyMode, usdToCnyRate, true);
+    : currencyMode === 'usd'
+      ? '$ ' + amount.toFixed(amount > 0 && amount < 0.01 ? 4 : 2)
+      : formatUsdWithRate(amount, currencyMode, usdToCnyRate, true);
   return <section className="mb-usage-overview" aria-label={zh ? '今日本机用量' : 'Today’s local usage'}>
     <div className="mb-overview-heading"><h2>{zh ? '今日用量' : 'Today’s usage'}</h2><span>{usage?.incomplete ? zh ? '统计不完整' : 'Partial records' : zh ? '本机' : 'Local'}</span></div>
     <div className="mb-usage-summary">
