@@ -93,14 +93,14 @@ export function QuotaItem({
             <div className="w-full flex items-center justify-between text-[11px] leading-tight">
                 <div className="flex items-center gap-1.5 min-w-0 truncate font-semibold text-gray-800 dark:text-gray-100">
                     {Icon && <Icon size={13} className="shrink-0 text-gray-500 dark:text-gray-400" />}
-                    <span className="truncate">{label}</span>
+                    <span className="truncate min-w-0">{label}</span>
                     {windowLabel && (
                         <span className="text-[10px] px-1 py-0.2 rounded bg-gray-200/70 dark:bg-white/10 text-gray-500 dark:text-gray-400 font-normal shrink-0">
                             {windowLabel}
                         </span>
                     )}
                 </div>
-                <div className="flex items-center gap-1 shrink-0 font-bold font-mono">
+                <div className="flex items-center gap-1 shrink-0 pl-1.5 font-bold font-mono">
                     {isProtected && (
                         <span title={t('accounts.quota_protected')}><Lock className="w-2.5 h-2.5 text-amber-500" /></span>
                     )}
@@ -136,8 +136,8 @@ export function QuotaItem({
             </div>
 
             {/* 第 3 行：左侧双图标美刀/人民币/Token + 右侧重置倒计时 (100% 复刻图 1) */}
-            <div className="w-full flex items-center justify-between text-[10px] font-mono leading-none pt-0.5">
-                <div className="flex items-center gap-2 min-w-0 truncate">
+            <div className="w-full flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-[10px] font-mono leading-none pt-0.5">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0">
                     {valuationStructured ? (
                         <>
                             {/* 已用指标 */}
@@ -181,8 +181,8 @@ export function QuotaItem({
                     ) : null}
                 </div>
 
-                {/* 右侧：重置倒计时 */}
-                <div className="shrink-0 ml-auto pl-1">
+                {/* 右侧：重置倒计时 (窄卡片里换行而不是压住金额) */}
+                <div className="shrink-0 ml-auto whitespace-nowrap">
                     {resetTime ? (
                         <span className="flex items-center gap-0.5 font-medium text-amber-600 dark:text-amber-400">
                             <Clock className="w-2.5 h-2.5 shrink-0" />
