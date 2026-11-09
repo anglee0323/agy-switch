@@ -11,10 +11,11 @@ import '../components/menubar/MenuBarDashboard.css';
 import { DEFAULT_MENU_BAR_PREFERENCES, menuBarResetTimeDisplay, type MenuBarPreferences } from '../types/config';
 import logo from '../assets/logo.png';
 import { quotaTone } from '../utils/menuBarOverview';
+import { formatUsdWithRate, CurrencyMode } from '../utils/currency';
 
 interface Appearance { platform?: string; native_material: boolean; reduced_transparency: boolean; high_contrast: boolean; material_kind?: string }
 interface Usage { today: { input_tokens: number; output_tokens: number; cached_tokens: number; total_tokens: number; request_count: number }; estimated_usd: number | null; unpriced_models: number; pricing_stale: boolean; incomplete: boolean; performance?: { sample_count: number; first_text_seconds: number; body_tokens_per_second: number } | null }
-function UsageOverview({ usage, zh }: { usage: Usage | null; zh: boolean }) {
+function UsageOverview({ usage, zh, currencyMode = 'usd', usdToCnyRate = 7.25 }: { usage: Usage | null; zh: boolean; currencyMode?: CurrencyMode; usdToCnyRate?: number }) {
   const values = usage ? [usage.today.input_tokens, usage.today.output_tokens, usage.today.cached_tokens] : [0, 0, 0];
   const sum = values.reduce((total, value) => total + value, 0);
   const colors = ['#52a3d8', '#eabf53', '#62b69d'];
@@ -23,7 +24,11 @@ function UsageOverview({ usage, zh }: { usage: Usage | null; zh: boolean }) {
   const performanceTip = performance ? zh ? '近 7 天最近 ' + performance.sample_count + ' 次有效回复的中位数，与今日用量统计范围无关' : 'Median of the latest ' + performance.sample_count + ' eligible responses in 7 days; independent of today’s totals' : undefined;
   let offset = 0;
   const amount = usage?.estimated_usd;
-  const cost = amount == null ? usage ? zh ? '未计价' : 'Unpriced' : '—' : '$ ' + amount.toFixed(amount > 0 && amount < 0.01 ? 4 : 2);
+  const cost = amount == null
+    ? usage ? (zh ? '未计价' : 'Unpriced') : '—'
+    : currencyMode === 'usd'
+      ? '$ ' + amount.toFixed(amount > 0 && amount < 0.01 ? 4 : 2)
+      : formatUsdWithRate(amount, currencyMode, usdToCnyRate, true);
   return <section className="mb-usage-overview" aria-label={zh ? '今日本机用量' : 'Today’s local usage'}>
     <div className="mb-overview-heading"><h2>{zh ? '今日用量' : 'Today’s usage'}</h2><span>{usage?.incomplete ? zh ? '统计不完整' : 'Partial records' : zh ? '本机' : 'Local'}</span></div>
     <div className="mb-usage-summary">
@@ -169,7 +174,7 @@ export default function MenuBarDashboard() {
       <div className="mb-brand">{preferences.show_icons && <img src={logo} alt="" width="24" height="24" />}<div><span className="mb-eyebrow">AntiGravity Switch</span>{detail && <h1>{zh ? '智能切换' : 'Auto-switch'}</h1>}</div></div>
       <div className="mb-header-actions">{detail && <button aria-label={zh ? '返回总览' : 'Back to overview'} onClick={() => setDetail(null)}><ArrowLeft size={16} /></button>}<button aria-label={zh ? '刷新全部额度' : 'Refresh all quotas'} disabled={busy || loading} onClick={() => void refresh()}><RefreshCw size={16} className={refreshing ? 'animate-spin' : ''} /></button><button aria-label={zh ? '偏好设置' : 'Settings'} onClick={() => openPage('settings')}><Settings size={16} /></button></div>
     </header>
-    {!detail && <UsageOverview usage={usage} zh={zh} />}
+    {!detail && <UsageOverview usage={usage} zh={zh} currencyMode={config?.quota_valuation?.currency ?? 'usd'} usdToCnyRate={config?.quota_valuation?.usd_to_cny_rate ?? 7.25} />}
     {!detail && preferences.show_aggregate && <section className="mb-overview" aria-label={zh ? '聚合额度' : 'Aggregate quotas'}>
       <div className="mb-overview-heading"><h2>{zh ? '剩余额度' : 'Remaining quota'}</h2><span>{scopeName}  {zh ? '平均剩余' : 'Mean remaining'}</span></div>
       {periods.map(window => { const data = aggregate(window); return <div className="mb-aggregate" key={window}>

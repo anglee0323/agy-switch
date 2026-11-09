@@ -1,8 +1,10 @@
-import { useMemo, useState } from 'react';
-import { Bot, BrainCircuit, Check, RefreshCw, RotateCcw, Sparkles } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Bot, BrainCircuit, Check, DollarSign, RefreshCw, RotateCcw, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useConfigStore } from '../../stores/useConfigStore';
 import { useAccountStore } from '../../stores/useAccountStore';
+import { request } from '../../utils/request';
+import { DEFAULT_QUOTA_VALUATION_CONFIG, QuotaValuationConfig } from '../../types/config';
 import {
     DEFAULT_PINNED_MODELS,
     getModelSortWeight,
@@ -55,6 +57,55 @@ export default function ModelDisplaySettings({ onClose, embedded = false }: Mode
     const accounts = useAccountStore(state => state.accounts);
     const refreshAllQuotas = useAccountStore(state => state.refreshAllQuotas);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [isRefreshingRate, setIsRefreshingRate] = useState(false);
+    const [liveRate, setLiveRate] = useState<number | null>(null);
+
+    useEffect(() => {
+        let mounted = true;
+        request<{ rate: number; fetched_at: number; stale: boolean }>('get_exchange_rate')
+            .then(snapshot => {
+                if (mounted && snapshot?.rate) {
+                    setLiveRate(snapshot.rate);
+                }
+            })
+            .catch(() => {});
+        return () => { mounted = false; };
+    }, []);
+
+    const valuationConfig = config?.quota_valuation ?? DEFAULT_QUOTA_VALUATION_CONFIG;
+
+    const updateValuationConfig = async (patch: Partial<QuotaValuationConfig>) => {
+        if (!config) return;
+        const nextValuation: QuotaValuationConfig = {
+            ...DEFAULT_QUOTA_VALUATION_CONFIG,
+            ...config.quota_valuation,
+            ...patch,
+        };
+        try {
+            await saveConfig({
+                ...config,
+                quota_valuation: nextValuation,
+            }, true);
+        } catch (err) {
+            showToast(String(err), 'error');
+        }
+    };
+
+    const handleRefreshExchangeRate = async () => {
+        setIsRefreshingRate(true);
+        try {
+            const snapshot = await request<{ rate: number; fetched_at: number; stale: boolean }>('get_exchange_rate');
+            if (snapshot?.rate) {
+                setLiveRate(snapshot.rate);
+                await updateValuationConfig({ usd_to_cny_rate: snapshot.rate });
+                showToast(t('quota_valuation.rate_updated', { rate: snapshot.rate.toFixed(4) }), 'success');
+            }
+        } catch (err) {
+            showToast(String(err), 'error');
+        } finally {
+            setIsRefreshingRate(false);
+        }
+    };
 
     // 当前用户勾选的主模型列表（标准化去重）
     const currentPinned = useMemo(() => {
@@ -303,6 +354,204 @@ export default function ModelDisplaySettings({ onClose, embedded = false }: Mode
                 <div className="mt-4 pt-3 border-t border-gray-100 dark:border-slate-800 text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
                     {t('model_display.hint', '勾选后实时生效。已为您自动合并同系列多档位（如 High/Medium/Low），前台卡片与表格将以最简洁的合并视图监控其实际共享额度。')}
                 </div>
+            </section>
+
+            {/* 配额价值与多币种换算配置区 */}
+            <section className="bg-white dark:bg-slate-900 border border-gray-200/80 dark:border-slate-800 rounded-2xl p-5 shadow-xs transition-all">
+                <div className="flex items-center justify-between pb-3 border-b border-gray-100 dark:border-slate-800">
+                    <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                            <DollarSign className="w-4 h-4" />
+                        </div>
+                        <div>
+                            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                                {t('quota_valuation.section_title', '配额价值与等效 Token 换算')}
+                            </h3>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {t('quota_valuation.section_desc', '结合活跃时间片与真实消耗，双层诚实反推额度等效价值，防虚标爆炸')}
+                            </p>
+                        </div>
+                    </div>
+
+                    <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={valuationConfig.enabled}
+                            onChange={(e) => updateValuationConfig({ enabled: e.target.checked })}
+                            className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-emerald-600"></div>
+                    </label>
+                </div>
+
+                {valuationConfig.enabled && (
+                    <div className="mt-4 space-y-4">
+                        {/* 计价币种与展示模式 */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                    {t('quota_valuation.currency_label', '计价币种')}
+                                </label>
+                                <div className="grid grid-cols-3 gap-1.5 bg-gray-50 dark:bg-slate-800/60 p-1 rounded-xl border border-gray-200/80 dark:border-slate-800">
+                                    {(['usd', 'cny', 'both'] as const).map((curr) => (
+                                        <button
+                                            key={curr}
+                                            type="button"
+                                            onClick={() => updateValuationConfig({ currency: curr })}
+                                            className={`py-1.5 text-xs font-medium rounded-lg transition-all ${
+                                                valuationConfig.currency === curr
+                                                    ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-xs'
+                                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
+                                            }`}
+                                        >
+                                            {curr === 'usd' ? '$ USD' : curr === 'cny' ? '¥ CNY' : t('quota_valuation.both', '双币对照')}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                                    {t('quota_valuation.mode_label', '展示模式')}
+                                </label>
+                                <div className="grid grid-cols-2 gap-1.5 bg-gray-50 dark:bg-slate-800/60 p-1 rounded-xl border border-gray-200/80 dark:border-slate-800">
+                                    {(['remaining', 'used_and_total'] as const).map((mode) => (
+                                        <button
+                                            key={mode}
+                                            type="button"
+                                            onClick={() => updateValuationConfig({ display_mode: mode })}
+                                            className={`py-1.5 text-xs font-medium rounded-lg transition-all ${
+                                                valuationConfig.display_mode === mode
+                                                    ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-xs'
+                                                    : 'text-gray-600 dark:text-gray-400 hover:text-gray-900'
+                                            }`}
+                                        >
+                                            {mode === 'remaining' ? t('quota_valuation.mode_remaining', '等效剩余') : t('quota_valuation.mode_used_and_total', '消耗 / 总额')}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* 汇率设置 */}
+                        <div className="p-3.5 bg-gray-50/70 dark:bg-slate-800/40 rounded-xl border border-gray-200/60 dark:border-slate-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                            <div className="min-w-0">
+                                <div className="text-xs font-medium text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                                    <span>{t('quota_valuation.rate_title', 'USD → CNY 汇率')}</span>
+                                    <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                        1 USD = {(liveRate ?? valuationConfig.usd_to_cny_rate).toFixed(4)} CNY
+                                    </span>
+                                </div>
+                                <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
+                                    {t('quota_valuation.rate_desc', '支持 24 小时自动更新或手动自定义')}
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                                <label className="text-xs text-gray-600 dark:text-gray-400 flex items-center gap-1.5 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={valuationConfig.auto_exchange_rate}
+                                        onChange={(e) => updateValuationConfig({ auto_exchange_rate: e.target.checked })}
+                                        className="checkbox checkbox-xs rounded"
+                                    />
+                                    <span>{t('quota_valuation.auto_rate', '自动同步')}</span>
+                                </label>
+
+                                <button
+                                    type="button"
+                                    onClick={handleRefreshExchangeRate}
+                                    disabled={isRefreshingRate}
+                                    className="p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-gray-300 hover:bg-white dark:hover:bg-slate-700 transition-colors disabled:opacity-50"
+                                    title={t('common.refresh', '刷新')}
+                                >
+                                    <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingRate ? 'animate-spin' : ''}`} />
+                                </button>
+
+                                {!valuationConfig.auto_exchange_rate && (
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        min="3.0"
+                                        max="20.0"
+                                        defaultValue={valuationConfig.usd_to_cny_rate}
+                                        onBlur={(e) => {
+                                            const val = parseFloat(e.target.value);
+                                            if (!isNaN(val) && val >= 3.0 && val <= 20.0) {
+                                                updateValuationConfig({ usd_to_cny_rate: val });
+                                            }
+                                        }}
+                                        className="w-20 px-2 py-1 text-xs font-mono bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-right"
+                                    />
+                                )}
+                            </div>
+                        </div>
+
+                        {/* 第二层参考上限折算 */}
+                        <div className="pt-2 border-t border-gray-100 dark:border-slate-800">
+                            <div className="flex items-center justify-between mb-2">
+                                <div>
+                                    <span className="text-xs font-semibold text-gray-800 dark:text-gray-200">
+                                        {t('quota_valuation.reference_caps_title', '100% 满额基准折算与自定义参考上限')}
+                                    </span>
+                                    <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                                        {t('quota_valuation.reference_caps_desc', '当账号未产生消耗（100%）时，依次取自定义上限或历史样本中位数折算等效价值')}
+                                    </p>
+                                </div>
+                                <label className="text-xs text-gray-600 dark:text-gray-400 flex items-center gap-1.5 cursor-pointer shrink-0 ml-2">
+                                    <input
+                                        type="checkbox"
+                                        checked={valuationConfig.use_reference_cap}
+                                        onChange={(e) => updateValuationConfig({ use_reference_cap: e.target.checked })}
+                                        className="checkbox checkbox-xs rounded"
+                                    />
+                                    <span>{t('quota_valuation.enable_ref_cap', '启用满额折算')}</span>
+                                </label>
+                            </div>
+
+                            {valuationConfig.use_reference_cap && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 mt-2">
+                                    {[
+                                        { key: 'gemini:5h', label: 'Gemini 5h ($)' },
+                                        { key: 'gemini:weekly', label: 'Gemini Weekly ($)' },
+                                        { key: '3p:5h', label: 'Claude / GPT 5h ($)' },
+                                        { key: '3p:weekly', label: 'Claude / GPT Weekly ($)' },
+                                        { key: 'argon:weekly', label: 'Argon Weekly ($)' },
+                                    ].map((cap) => (
+                                        <div key={cap.key} className="p-2.5 bg-gray-50/70 dark:bg-slate-800/40 rounded-xl border border-gray-200/60 dark:border-slate-800/80">
+                                            <div className="text-[11px] font-medium text-gray-600 dark:text-gray-400 mb-1 truncate" title={cap.label}>
+                                                {cap.label}
+                                            </div>
+                                            <input
+                                                type="number"
+                                                step="0.5"
+                                                min="0"
+                                                placeholder={t('quota_valuation.auto_calc', '自动校准中位数')}
+                                                defaultValue={valuationConfig.reference_caps_usd?.[cap.key] ?? ''}
+                                                onBlur={(e) => {
+                                                    const raw = e.target.value.trim();
+                                                    const nextMap = { ...(valuationConfig.reference_caps_usd ?? {}) };
+                                                    if (!raw) {
+                                                        delete nextMap[cap.key];
+                                                    } else {
+                                                        const val = parseFloat(raw);
+                                                        if (!isNaN(val) && val > 0) {
+                                                            nextMap[cap.key] = val;
+                                                        } else {
+                                                            delete nextMap[cap.key];
+                                                        }
+                                                    }
+                                                    updateValuationConfig({ reference_caps_usd: nextMap });
+                                                }}
+                                                className="w-full px-2 py-1 text-xs font-mono bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-right"
+                                            />
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
             </section>
 
             {/* 完成关闭按钮 (如果不是内嵌设置页面) */}

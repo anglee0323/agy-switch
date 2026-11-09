@@ -58,7 +58,7 @@ pub fn project(summary: &LocalTokenUsageSummary, pricing: Option<&ApiPricingSnap
     }
 }
 
-fn pricing_keys(model: &str) -> (String, Option<String>) {
+pub(crate) fn pricing_keys(model: &str) -> (String, Option<String>) {
     // Keep this policy aligned with src/utils/modelPricing.ts.
     let model = model.to_ascii_lowercase();
     let model = model.strip_suffix("-n").unwrap_or(&model);
@@ -66,7 +66,7 @@ fn pricing_keys(model: &str) -> (String, Option<String>) {
     static GEMINI: OnceLock<regex::Regex> = OnceLock::new();
     let exact = TOKENS.get_or_init(|| regex::Regex::new(r"[a-z]+|[0-9]+").unwrap())
         .find_iter(model).map(|token| token.as_str()).collect::<Vec<_>>().join("-");
-    let pattern = GEMINI.get_or_init(|| regex::Regex::new(r"^gemini-([0-9]+(?:-[0-9]+)*)-(flash(?:-lite)?|pro)(?:-(.*))?$").unwrap());
+    let pattern = GEMINI.get_or_init(|| regex::Regex::new(r"^gemini-([0-9]+(?:-[0-9]+)*)-(flash(?:-lite)?|pro|argon)(?:-(.*))?$").unwrap());
     if let Some(gemini) = pattern.captures(&exact) {
         let suffix: Vec<_> = gemini.get(3).map(|value| value.as_str().split('-').collect()).unwrap_or_default();
         let distinct_variant = suffix.iter().any(|token| ["lite", "image", "vision", "audio", "tts", "live", "embedding", "embeddings", "robotics", "native"].contains(token));
@@ -74,7 +74,7 @@ fn pricing_keys(model: &str) -> (String, Option<String>) {
         let alias = !distinct_variant && suffix.iter().all(|token| {
             if ["exp", "experimental", "preview", "test"].contains(token) { experimental = true; }
             experimental || (token.len() == 1 && token.as_bytes()[0].is_ascii_lowercase())
-                || ["high", "medium", "low", "minimal", "thinking"].contains(token)
+                || ["high", "medium", "low", "minimal", "thinking", "tiered"].contains(token)
         });
         let base = alias.then(|| format!("gemini-{}-{}", &gemini[1], &gemini[2]));
         return (exact, base);
@@ -91,25 +91,28 @@ fn pricing_keys(model: &str) -> (String, Option<String>) {
     (name, None)
 }
 
+pub(crate) fn match_model_price<'a>(model: &str, prices: &'a [ApiPricing]) -> Option<&'a ApiPricing> {
+    let entries: Vec<_> = prices.iter().map(|price| (price, pricing_keys(&price.model))).collect();
+    let (exact, base) = pricing_keys(model);
+    let mut matching: Vec<_> = entries.iter().filter(|(_, keys)| keys.0 == exact).map(|(price, _)| *price).collect();
+    if matching.is_empty() {
+        if let Some(base) = base {
+            let aliases: Vec<_> = entries.iter().filter(|(_, keys)| keys.1.as_deref() == Some(base.as_str())).collect();
+            matching = aliases.iter().filter(|(_, keys)| keys.0 == base).map(|(price, _)| *price).collect();
+            if matching.is_empty() { matching = aliases.iter().map(|(price, _)| *price).collect(); }
+        }
+    }
+    let price = matching.first().copied();
+    price.filter(|price| matching.len() == 1 && [price.input, price.output, price.cached].iter().all(|rate| rate.is_finite() && *rate >= 0.0))
+}
+
 pub(crate) fn estimate(models: &[LocalTokenModel], prices: &[ApiPricing]) -> (Option<f64>, usize) {
     let mut usd = 0.0;
     let mut priced = 0;
     let mut unpriced = 0;
-    let entries: Vec<_> = prices.iter().map(|price| (price, pricing_keys(&price.model))).collect();
     for model in models {
         if model.input_tokens == 0 && model.output_tokens == 0 && model.cached_tokens == 0 { continue; }
-        let (exact, base) = pricing_keys(&model.model);
-        let mut matching: Vec<_> = entries.iter().filter(|(_, keys)| keys.0 == exact).map(|(price, _)| *price).collect();
-        if matching.is_empty() {
-            if let Some(base) = base {
-                let aliases: Vec<_> = entries.iter().filter(|(_, keys)| keys.1.as_deref() == Some(base.as_str())).collect();
-                matching = aliases.iter().filter(|(_, keys)| keys.0 == base).map(|(price, _)| *price).collect();
-                if matching.is_empty() { matching = aliases.iter().map(|(price, _)| *price).collect(); }
-            }
-        }
-        let price = matching.first().copied();
-        // Do not guess prices from a substring or silently pick an ambiguous rate.
-        if let Some(price) = price.filter(|price| matching.len() == 1 && [price.input, price.output, price.cached].iter().all(|rate| rate.is_finite() && *rate >= 0.0)) {
+        if let Some(price) = match_model_price(&model.model, prices) {
             usd += (model.input_tokens as f64 * price.input + model.output_tokens as f64 * price.output + model.cached_tokens as f64 * price.cached) / 1_000_000.0;
             priced += 1;
         } else { unpriced += 1; }

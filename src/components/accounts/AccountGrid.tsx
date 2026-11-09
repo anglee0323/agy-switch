@@ -20,6 +20,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Account } from '../../types/account';
+import type { BucketValuation } from '../../utils/quotaValuation';
 import AccountCard from './AccountCard';
 
 interface AccountGridProps {
@@ -34,8 +35,10 @@ interface AccountGridProps {
     onEditLabel: (accountId: string) => void;
     onDelete: (accountId: string) => void;
     onExport?: (accountId: string) => void;
+    onViewCycleHistory?: (accountId: string) => void;
     onReorder?: (accountIds: string[]) => void;
     quotaWindow?: '5h' | 'weekly';
+    valuationsMap?: Record<string, BucketValuation[]>;
 }
 
 interface SortableAccountCardProps {
@@ -50,7 +53,9 @@ interface SortableAccountCardProps {
     onEditLabel: () => void;
     onDelete: () => void;
     onExport?: () => void;
+    onViewCycleHistory?: () => void;
     quotaWindow?: '5h' | 'weekly';
+    valuations?: BucketValuation[];
 }
 
 function SortableAccountCard({
@@ -65,7 +70,9 @@ function SortableAccountCard({
     onEditLabel,
     onDelete,
     onExport,
+    onViewCycleHistory,
     quotaWindow,
+    valuations,
 }: SortableAccountCardProps) {
     const {
         attributes,
@@ -97,7 +104,9 @@ function SortableAccountCard({
                 onEditLabel={onEditLabel}
                 onDelete={onDelete}
                 onExport={onExport}
+                onViewCycleHistory={onViewCycleHistory}
                 quotaWindow={quotaWindow}
+                valuations={valuations}
                 dragHandleProps={{ attributes, listeners }}
                 isDragging={isDragging}
             />
@@ -117,8 +126,10 @@ function AccountGrid({
     onEditLabel,
     onDelete,
     onExport,
+    onViewCycleHistory,
     onReorder,
     quotaWindow,
+    valuationsMap,
 }: AccountGridProps) {
     const { t } = useTranslation();
     const [activeId, setActiveId] = useState<string | null>(null);
@@ -185,7 +196,9 @@ function AccountGrid({
                             onEditLabel={() => onEditLabel(account.id)}
                             onDelete={() => onDelete(account.id)}
                             onExport={() => onExport?.(account.id)}
+                            onViewCycleHistory={() => onViewCycleHistory?.(account.id)}
                             quotaWindow={quotaWindow}
+                            valuations={valuationsMap?.[account.id]}
                         />
                     ))}
                 </div>
@@ -207,6 +220,7 @@ function AccountGrid({
                             onEditLabel={() => {}}
                             onDelete={() => {}}
                             quotaWindow={quotaWindow}
+                            valuations={valuationsMap?.[activeAccount.id]}
                         />
                     </div>
                 ) : null}

@@ -1,4 +1,6 @@
-import { weeklyQuotaItems, modelQuotaForWindow } from '../../utils/menuBarQuota';
+import { weeklyQuotaItems, modelQuotaForWindow, modelQuotaPoolKind } from '../../utils/menuBarQuota';
+import type { BucketValuation } from '../../utils/quotaValuation';
+import { findBucketForWeekly, findBucketFor5h, formatValuationDisplay, formatValuationStructured } from '../../utils/quotaValuation';
 /**
  * 账号表格组件
  * 支持拖拽排序功能，用户可以通过拖拽行来调整账号顺序
@@ -36,6 +38,7 @@ import {
     Sparkles,
     Tag,
     Clock,
+    Activity,
     Bot,
     BrainCircuit,
     ArrowUpDown,
@@ -72,9 +75,11 @@ interface AccountTableProps {
     onEditLabel: (accountId: string) => void;
     onDelete: (accountId: string) => void;
     onExport?: (accountId: string) => void;
+    onViewCycleHistory?: (accountId: string) => void;
     /** 拖拽排序回调，当用户完成拖拽时触发 */
     onReorder?: (accountIds: string[]) => void;
     quotaWindow?: '5h' | 'weekly';
+    valuationsMap?: Record<string, BucketValuation[]>;
 }
 
 interface SortableRowProps {
@@ -90,7 +95,9 @@ interface SortableRowProps {
     onEditLabel: () => void;
     onDelete: () => void;
     onExport?: () => void;
+    onViewCycleHistory?: () => void;
     quotaWindow?: '5h' | 'weekly';
+    valuations?: BucketValuation[];
     isDragDisabled?: boolean;
 }
 
@@ -105,7 +112,9 @@ interface AccountRowContentProps {
     onEditLabel: () => void;
     onDelete: () => void;
     onExport?: () => void;
+    onViewCycleHistory?: () => void;
     quotaWindow?: '5h' | 'weekly';
+    valuations?: BucketValuation[];
 }
 
 // ============================================================================
@@ -196,7 +205,9 @@ function SortableAccountRow({
     onEditLabel,
     onDelete,
     onExport,
+    onViewCycleHistory,
     quotaWindow,
+    valuations,
     isDragDisabled = false,
 }: SortableRowProps) {
     const { t } = useTranslation();
@@ -270,7 +281,9 @@ function SortableAccountRow({
                 onEditLabel={onEditLabel}
                 onDelete={onDelete}
                 onExport={onExport}
+                onViewCycleHistory={onViewCycleHistory}
                 quotaWindow={quotaWindow}
+                valuations={valuations}
             />
         </tr>
     );
@@ -291,9 +304,11 @@ function AccountRowContent({
     onEditLabel,
     onDelete,
     onExport,
+    onViewCycleHistory,
     quotaWindow,
+    valuations,
 }: AccountRowContentProps) {
-    const { t } = useTranslation();
+    const { t, i18n } = useTranslation();
     const { config } = useConfigStore();
     const validationBlockedLabel = getValidationBlockedStatusLabel(account.validation_blocked_reason, t);
 
@@ -420,26 +435,74 @@ function AccountRowContent({
                 ) : (
                     <div className="flex flex-col gap-1.5 py-0.5 w-full">
                         {quotaWindow === 'weekly' && weeklyItems.length > 0 ? (
-                            weeklyItems.map((item) => (
-                                <QuotaItem
-                                    key={item.id}
-                                    label={
-                                        <span className="flex items-center gap-1.5 truncate">
-                                            <span>{item.title}</span>
-                                            <span className="shrink-0">
-                                                {item.poolBadge}
+                            weeklyItems.map((item) => {
+                                const bucketId = item.bucketId || item.id;
+                                const valuation = findBucketForWeekly(valuations, bucketId);
+                                const valStructured = config?.quota_valuation?.enabled !== false
+                                    ? formatValuationStructured(
+                                        valuation,
+                                        config?.quota_valuation?.currency ?? 'usd',
+                                        config?.quota_valuation?.display_mode ?? 'remaining',
+                                        i18n.language.startsWith('zh')
+                                    )
+                                    : null;
+                                const valDisplay = config?.quota_valuation?.enabled !== false
+                                    ? formatValuationDisplay(
+                                        valuation,
+                                        config?.quota_valuation?.currency ?? 'usd',
+                                        config?.quota_valuation?.display_mode ?? 'remaining',
+                                        i18n.language.startsWith('zh')
+                                    )
+                                    : null;
+                                return (
+                                    <QuotaItem
+                                        key={item.id}
+                                        label={
+                                            <span className="flex items-center gap-1.5 truncate">
+                                                <span>{item.title}</span>
+                                                <span className="shrink-0">
+                                                    {item.poolBadge}
+                                                </span>
                                             </span>
-                                        </span>
-                                    }
-                                    title={`${item.title} (${item.poolBadge})`}
-                                    percentage={item.percentage}
-                                    resetTime={item.resetTime}
-                                    Icon={item.Icon}
-                                />
-                            ))
+                                        }
+                                        title={`${item.title} (${item.poolBadge})`}
+                                        percentage={item.percentage}
+                                        resetTime={item.resetTime}
+                                        Icon={item.Icon}
+                                        valuationStructured={valStructured}
+                                        valuationLine={valDisplay?.line}
+                                        valuationTitle={valDisplay?.title}
+                                    />
+                                );
+                            })
                         ) : (
                             displayModels.map((model) => {
                                 const resolved = modelQuotaForWindow(model.data, account.quota, quotaWindow);
+                                const pool = model.data
+                                    ? modelQuotaPoolKind(model.data.name, model.data.display_name)
+                                    : (model.id.toLowerCase().includes('claude') || model.id.toLowerCase().includes('gpt')
+                                        ? 'other'
+                                        : model.id.toLowerCase().includes('argon')
+                                        ? 'argon'
+                                        : 'gemini');
+                                const poolKind = pool === 'argon' ? 'argon' : pool === 'other' ? 'third_party' : 'gemini';
+                                const valuation = findBucketFor5h(valuations, poolKind, resolved.window === 'weekly' ? 'weekly' : '5h');
+                                const valStructured = config?.quota_valuation?.enabled !== false
+                                    ? formatValuationStructured(
+                                        valuation,
+                                        config?.quota_valuation?.currency ?? 'usd',
+                                        config?.quota_valuation?.display_mode ?? 'remaining',
+                                        i18n.language.startsWith('zh')
+                                    )
+                                    : null;
+                                const valDisplay = config?.quota_valuation?.enabled !== false
+                                    ? formatValuationDisplay(
+                                        valuation,
+                                        config?.quota_valuation?.currency ?? 'usd',
+                                        config?.quota_valuation?.display_mode ?? 'remaining',
+                                        i18n.language.startsWith('zh')
+                                    )
+                                    : null;
 
                                 return (
                                     <QuotaItem
@@ -450,6 +513,9 @@ function AccountRowContent({
                                         windowLabel={resolved.window === 'weekly' ? t('accounts.quota_window_weekly_short') : undefined}
                                         isProtected={Boolean(config?.quota_protection?.enabled && isModelProtected(account.protected_models, model.protectedKey))}
                                         Icon={model.Icon || Bot}
+                                        valuationStructured={valStructured}
+                                        valuationLine={valDisplay?.line}
+                                        valuationTitle={valDisplay?.title}
                                     />
                                 );
                             })
@@ -478,7 +544,7 @@ function AccountRowContent({
                     ? "bg-[#dbeafe] dark:bg-[#15243e] group-hover:bg-[#bfdbfe] dark:group-hover:bg-[#1e345b]"
                     : "bg-white dark:bg-base-100 group-hover:bg-gray-50 dark:group-hover:bg-base-200"
             )}>
-                <div className="flex items-center justify-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity max-w-[150px] mx-auto">
+                <div className="flex items-center justify-center gap-1 opacity-60 group-hover:opacity-100 transition-opacity max-w-[188px] mx-auto">
                     <button
                         className={cn(
                             "p-1.5 rounded-lg transition-all text-gray-500 dark:text-gray-400",
@@ -523,6 +589,16 @@ function AccountRowContent({
                     >
                         <Trash2 className="w-3.5 h-3.5" />
                     </button>
+                    {onViewCycleHistory && (
+                        <button
+                            className="p-1.5 rounded-lg transition-all text-gray-500 dark:text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
+                            title={t('accounts.cycle_history_title', '周期额度变化与消耗统计')}
+                            aria-label={t('accounts.cycle_history_title', '周期额度变化与消耗统计')}
+                            onClick={event => { event.stopPropagation(); onViewCycleHistory(); }}
+                        >
+                            <Activity className="w-3.5 h-3.5" />
+                        </button>
+                    )}
                     {onExport && (
                         <button
                             className="p-1.5 rounded-lg transition-all text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30"
@@ -560,8 +636,10 @@ function AccountTable({
     onEditLabel,
     onDelete,
     onExport,
+    onViewCycleHistory,
     onReorder,
     quotaWindow,
+    valuationsMap,
 }: AccountTableProps) {
     const { t } = useTranslation();
 
@@ -719,7 +797,7 @@ function AccountTable({
                                     )}
                                 </button>
                             </th>
-                            <th className="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap sticky right-0 w-[120px] bg-gray-50 dark:bg-base-200 z-20 shadow-[-12px_0_12px_-12px_rgba(0,0,0,0.1)] dark:shadow-[-12px_0_12px_-12px_rgba(255,255,255,0.05)] text-center">{t('accounts.table.actions')}</th>
+                            <th className="px-2 py-1 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider whitespace-nowrap sticky right-0 w-[188px] bg-gray-50 dark:bg-base-200 z-20 shadow-[-12px_0_12px_-12px_rgba(0,0,0,0.1)] dark:shadow-[-12px_0_12px_-12px_rgba(255,255,255,0.05)] text-center">{t('accounts.table.actions')}</th>
                         </tr >
                     </thead >
                     <SortableContext items={accountIds} strategy={verticalListSortingStrategy}>
@@ -738,8 +816,10 @@ function AccountTable({
                                     onRefresh={() => onRefresh(account.id)}
                                     onEditLabel={() => onEditLabel(account.id)}
                                     onDelete={() => onDelete(account.id)}
-                            onExport={() => onExport?.(account.id)}
+                                    onExport={() => onExport?.(account.id)}
+                                    onViewCycleHistory={() => onViewCycleHistory?.(account.id)}
                                     quotaWindow={quotaWindow}
+                                    valuations={valuationsMap?.[account.id]}
                                     isDragDisabled={isSortingActive}
                                 />
                             ))}
@@ -785,6 +865,7 @@ function AccountTable({
                                         onDelete={() => { }}
                                         isDisabled={Boolean(activeAccount.disabled)}
                                         quotaWindow={quotaWindow}
+                                        valuations={valuationsMap?.[activeAccount.id]}
                                     />
                                 </tr>
                             </tbody>

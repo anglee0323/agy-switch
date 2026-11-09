@@ -204,6 +204,8 @@
     "quota_window_5h": "Show five-hour quota and reset times; automatic switching still checks weekly limits. Argon is labelled Weekly separately.",
     "quota_window_weekly": "7-day quota",
     "quota_window_weekly_short": "Weekly",
+    "cycle_history_btn": "Cycle Delta",
+    "cycle_history_title": "Quota Cycle History & Analytics",
     "shared_pool": "Shared Pool",
     "dedicated_pool": "Dedicated Pool",
     "weekly_scope_gemini": "Covers Gemini 3.8, 3.7, 3.1, 2.5",
@@ -553,5 +555,24 @@
     "invalid_address": "Enter a valid HTTP or SOCKS proxy address without credentials. The previously applied proxy remains active.",
     "applying": "Applying…",
     "save_failed": "Could not save. Check the proxy address and settings file permissions."
+  },
+  "quota_valuation": {
+    "section_title": "Quota Valuation & Token Equivalent",
+    "section_desc": "Two-tier honest extrapolation of quota value based on active intervals and actual consumption",
+    "enable_title": "Enable Quota Valuation",
+    "enable_desc": "Extrapolate and display equivalent currency value (USD/CNY) and tokens on cards and tables",
+    "currency_label": "Currency",
+    "both": "Both ($ / ¥)",
+    "mode_label": "Display Mode",
+    "mode_remaining": "Remaining",
+    "mode_used_and_total": "Used / Total",
+    "rate_title": "USD → CNY Exchange Rate",
+    "rate_desc": "Auto-updated every 24h or customizable",
+    "auto_rate": "Auto-sync",
+    "rate_updated": "Exchange rate updated to 1 USD = {{rate}} CNY",
+    "reference_caps_title": "100% Full Quota Benchmark & Custom Reference Caps",
+    "reference_caps_desc": "When no consumption exists (100%), fallback to custom cap or historical calibrated median",
+    "enable_ref_cap": "Enable Full Quota Fallback",
+    "auto_calc": "Calibrated median"
   }
 }
