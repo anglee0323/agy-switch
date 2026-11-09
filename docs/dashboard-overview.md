@@ -61,6 +61,10 @@ proof of the cause of response latency. It uses the existing local usage scan an
 does not require an account snapshot or a new benchmark request.
 
 **Estimated API cost** uses matched public Google API rates for Gemini and Claude.
+Rates are parsed once per day from Google's Gemini pricing page and Anthropic's
+Claude pricing page. A page that cannot be parsed is reported as a warning and the
+built-in rate table is used, so a silent parser break cannot pass as fresh official
+pricing; the affected models are never guessed.
 Gemini reasoning labels such as `Gemini 3.8 Flash (High)` and internal experiment
 names such as `gemini-3.8-flash-exp-b` estimate the same version's basic model rate.
 The rule recognizes new experiment labels without a model-version allow-list.

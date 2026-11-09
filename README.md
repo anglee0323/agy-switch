@@ -116,6 +116,7 @@ From 4.10.1, **Settings → Experimental Features** offers **Chinese interface**
 | Check recent first-text latency and body output speed | Dashboard; medians from up to 10 local text responses across models and desktop/CLI, with sample count ([details](docs/response-performance.md)) |
 | Choose and reorder homepage summary cards | Settings > General > Dashboard cards; selections and drag order save automatically |
 | Compare five-hour and weekly quotas | Accounts; choose the quota window and list or card view |
+| Estimate what a quota is worth | Accounts; enable quota value in Settings to see consumed and remaining value in USD/CNY with token equivalents ([details](docs/quota-valuation.md)) |
 | Set account remarks or change account order | Accounts; edit a remark or drag an account into position |
 | Export or restore accounts | Accounts; use the trailing Export action for one account or a selection, then restore JSON through Add account ([details](docs/account-scopes.md)) |
 | Retry an unknown account plan | Accounts > Unknown; refresh quota to retry plan detection |
@@ -156,7 +157,7 @@ A reported Gemini 4 Argon weekly pool stays separate from shared Gemini quota. V
 
 ### Cost estimates
 
-The estimate covers the API-equivalent cost of recorded usage using known model prices. Gemini experiment and thinking labels such as `gemini-3.8-flash-exp-b` and `Gemini 3.8 Flash (High)` use the same version's basic model rates unless the price catalog provides an exact rate. Flash Lite and media models stay separate. Unknown or conflicting rates are marked Unpriced and excluded from the estimated total. The desktop app refreshes its pricing cache; CLI reads use that local cache. [Pricing rules](docs/dashboard-overview.md)
+The estimate covers the API-equivalent cost of recorded usage using known model prices. Gemini experiment and thinking labels such as `gemini-3.8-flash-exp-b` and `Gemini 3.8 Flash (High)` use the same version's basic model rates unless the price catalog provides an exact rate. Flash Lite and media models stay separate. Unknown or conflicting rates are marked Unpriced and excluded from the estimated total. Rates are parsed once a day from Google's Gemini and Anthropic's Claude pricing pages; a page that cannot be parsed falls back to the built-in table and is reported as a warning. The desktop app refreshes its pricing cache; CLI reads use that local cache. [Pricing rules](docs/dashboard-overview.md)
 
 ### Local usage freshness
 
