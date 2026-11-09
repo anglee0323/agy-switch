@@ -69,12 +69,26 @@ pub async fn get_api_pricing() -> Result<ApiPricingSnapshot, String> {
     let mut warnings = Vec::new();
 
     match gemini_result {
-        Ok(html) => prices.extend(parse_gemini_prices(&html, today)),
+        Ok(html) => {
+            let parsed = parse_gemini_prices(&html, today);
+            // A fetched page that yields no model is a parser break, not a fresh source:
+            // say so instead of presenting built-in prices as official ones.
+            if parsed.is_empty() {
+                warnings.push("Gemini 价格页：未解析到任何模型价格".to_string());
+            }
+            prices.extend(parsed);
+        }
         Err(error) => warnings.push(format!("Gemini 价格页：{}", error)),
     }
     match agent_platform_result {
-        Ok(html) => prices.extend(parse_agent_platform_prices(&html, today)),
-        Err(error) => warnings.push(format!("Google Agent Platform 价格页：{}", error)),
+        Ok(html) => {
+            let parsed = parse_agent_platform_prices(&html, today);
+            if parsed.is_empty() {
+                warnings.push("Claude 价格页：未解析到任何模型价格".to_string());
+            }
+            prices.extend(parsed);
+        }
+        Err(error) => warnings.push(format!("Claude 价格页：{}", error)),
     }
 
     let mut unique_prices = BTreeMap::new();
@@ -252,8 +266,8 @@ pub fn builtin_fallback_prices() -> Vec<ApiPricing> {
     vec![
         ApiPricing { model: "gemini-4-argon".into(), input: 2.0, output: 10.0, cached: 0.10 },
         ApiPricing { model: "gemini-3.8-flash".into(), input: 0.75, output: 3.75, cached: 0.075 },
-        ApiPricing { model: "gemini-3.6-flash".into(), input: 0.50, output: 2.50, cached: 0.05 },
-        ApiPricing { model: "gemini-3.5-flash-lite".into(), input: 0.20, output: 1.00, cached: 0.02 },
+        ApiPricing { model: "gemini-3.6-flash".into(), input: 0.75, output: 3.75, cached: 0.075 },
+        ApiPricing { model: "gemini-3.5-flash-lite".into(), input: 0.30, output: 2.50, cached: 0.03 },
         ApiPricing { model: "gemini-3.1-pro-preview".into(), input: 2.00, output: 12.00, cached: 0.20 },
         ApiPricing { model: "gemini-3.1-flash-lite".into(), input: 0.25, output: 1.50, cached: 0.025 },
         ApiPricing { model: "gemini-3-flash-preview".into(), input: 0.50, output: 3.00, cached: 0.05 },
@@ -415,8 +429,10 @@ fn parse_gemini_markdown_prices(content: &str, today: NaiveDate) -> Vec<ApiPrici
 
 fn parse_markdown_table_rows(table_content: &str) -> Vec<Vec<String>> {
     let mut rows = Vec::new();
-    let row_blocks = table_content.split("\n---");
-    for block in row_blocks {
+    // The published templates indent their row separators (`  ---`), so match the line
+    // rather than a bare `\n---` prefix.
+    let separator = Regex::new(r"(?m)^[ \t]*---[ \t]*$").expect("valid markdown separator regex");
+    for block in separator.split(table_content) {
         let mut cells = Vec::new();
         let mut current_cell: Option<String> = None;
         for line in block.lines() {
@@ -763,44 +779,74 @@ mod tests {
         assert!(parse_exchange_rate_json(invalid_json).is_err());
     }
 
+    /// The published template indents separators and wraps multi-line price cells, so the
+    /// fixture keeps that shape: an unindented fixture hides the parser break.
     #[test]
     fn parses_gemini_markdown_format() {
         let md = r#"
 ## Gemini 4 Argon  {% id="gemini-4-argon" %}
 
-{% tab title="Standard" %}
-{% table %}
-* Input price
-* Free
-* $2.00
----
-* Output price
-* Free
-* $10.00
----
-* Context caching price
-* Free
-* $0.10
-{% /table %}
-{% /tab %}
+{% tabs %}
+  {% tab title="Standard" %}
+  {% table %}
+  * Feature
+  * Free Tier
+  * Paid Tier, per 1M tokens in USD
+
+  ---
+
+  * Input price
+  * Not available
+  * $2.00 through November 30, 2026.
+  $4.00 starting December 1, 2026.
+
+  ---
+
+  * Output price (including thinking tokens)
+  * Not available
+  * $10.00 through November 30, 2026.
+  $20.00 starting December 1, 2026.
+
+  ---
+
+  * Context caching price
+  * Not available
+  * $0.10 through November 30, 2026.
+  $0.20 starting December 1, 2026.
+  {% /table %}
+  {% /tab %}
+  {% tab title="Batch" %}
+  {% table %}
+  * Input price
+  * Not available
+  * $1.00
+  {% /table %}
+  {% /tab %}
+{% /tabs %}
 
 ## Gemini 3.8 Flash  {% id="gemini-3.8-flash" %}
 
-{% tab title="Standard" %}
-{% table %}
-* Input price
-* Free
-* $0.75
----
-* Output price
-* Free
-* $3.75
----
-* Context caching price
-* Free
-* $0.075
-{% /table %}
-{% /tab %}
+{% tabs %}
+  {% tab title="Standard" %}
+  {% table %}
+  * Input price
+  * Free of charge
+  * $0.75
+
+  ---
+
+  * Output price (including thinking tokens)
+  * Free of charge
+  * $3.75
+
+  ---
+
+  * Context caching price
+  * Free of charge
+  * $0.075
+  {% /table %}
+  {% /tab %}
+{% /tabs %}
         "#;
         let prices = parse_gemini_prices(md, NaiveDate::from_ymd_opt(2026, 10, 5).unwrap());
         assert_eq!(prices.len(), 2);

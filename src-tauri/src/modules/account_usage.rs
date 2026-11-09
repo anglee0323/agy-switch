@@ -603,6 +603,7 @@ fn calculate_median(values: &mut [f64]) -> Option<f64> {
 }
 
 /// 折算单个配额桶的主流程（对外兼容接口，单测或单桶计算时直接跑完 Pass 1 与 Pass 2）
+#[cfg(test)]
 pub fn valuate_bucket(
     bucket: &QuotaBucket,
     group_name: &str,
