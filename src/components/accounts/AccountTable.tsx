@@ -436,7 +436,7 @@ function AccountRowContent({
                     <div className="flex flex-col gap-1.5 py-0.5 w-full">
                         {quotaWindow === 'weekly' && weeklyItems.length > 0 ? (
                             weeklyItems.map((item) => {
-                                const bucketId = (item as any).bucketId || item.id;
+                                const bucketId = item.bucketId || item.id;
                                 const valuation = findBucketForWeekly(valuations, bucketId);
                                 const valStructured = config?.quota_valuation?.enabled !== false
                                     ? formatValuationStructured(

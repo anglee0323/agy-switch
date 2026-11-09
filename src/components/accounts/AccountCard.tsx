@@ -212,7 +212,7 @@ function AccountCard({
                 ) : quotaWindow === 'weekly' && weeklyItems.length > 0 ? (
                     <div className="grid grid-cols-1 gap-2 content-start my-auto">
                         {weeklyItems.map((item) => {
-                            const bucketId = (item as any).bucketId || item.id;
+                            const bucketId = item.bucketId || item.id;
                             const valuation = findBucketForWeekly(valuations, bucketId);
                             const valStructured = config?.quota_valuation?.enabled !== false
                                 ? formatValuationStructured(
