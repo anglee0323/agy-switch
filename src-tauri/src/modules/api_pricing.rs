@@ -263,12 +263,19 @@ pub fn parse_exchange_rate_json(json_str: &str) -> Result<f64, String> {
 }
 
 pub fn builtin_fallback_prices() -> Vec<ApiPricing> {
+    // The fallback is only used when a live page cannot be parsed, but it must
+    // still follow the published cutovers instead of freezing an old rate.
+    let today = Utc::now().date_naive();
+    let (carbon_input, carbon_output, carbon_cached) =
+        if today >= NaiveDate::from_ymd_opt(2026, 12, 1).unwrap() { (4.0, 20.0, 0.20) } else { (2.0, 10.0, 0.10) };
+    let (flash_input, flash_output, flash_cached) =
+        if today >= NaiveDate::from_ymd_opt(2027, 1, 1).unwrap() { (1.50, 7.50, 0.15) } else { (0.75, 3.75, 0.075) };
     vec![
-        ApiPricing { model: "gemini-4-carbon".into(), input: 2.0, output: 10.0, cached: 0.10 },
-        ApiPricing { model: "gemini-4-argon".into(), input: 2.0, output: 10.0, cached: 0.10 },
+        ApiPricing { model: "gemini-4-carbon".into(), input: carbon_input, output: carbon_output, cached: carbon_cached },
+        ApiPricing { model: "gemini-4-argon".into(), input: carbon_input, output: carbon_output, cached: carbon_cached },
         ApiPricing { model: "gemini-4-hydrogen".into(), input: 1.50, output: 7.50, cached: 0.075 },
-        ApiPricing { model: "gemini-3.8-flash".into(), input: 0.75, output: 3.75, cached: 0.075 },
-        ApiPricing { model: "gemini-3.6-flash".into(), input: 0.75, output: 3.75, cached: 0.075 },
+        ApiPricing { model: "gemini-3.8-flash".into(), input: flash_input, output: flash_output, cached: flash_cached },
+        ApiPricing { model: "gemini-3.6-flash".into(), input: flash_input, output: flash_output, cached: flash_cached },
         ApiPricing { model: "gemini-3.5-flash-lite".into(), input: 0.30, output: 2.50, cached: 0.03 },
         ApiPricing { model: "gemini-3.1-pro-preview".into(), input: 2.00, output: 12.00, cached: 0.20 },
         ApiPricing { model: "gemini-3.1-flash-lite".into(), input: 0.25, output: 1.50, cached: 0.025 },
