@@ -48,6 +48,7 @@ pub fn saved_quota_lines(account: Option<&DashboardEntry>, now: i64, freshness_m
             format!("{}  {}: {}", if family == 0 { "Gemini" } else { "Claude / GPT" }, periods[period], percent(*value))
         })).collect();
         if argon_reported(account) { lines.push(format!("Gemini 4 Argon  {}: {}", periods[1], percent(argon_weekly(account, now, freshness_minutes)))); }
+        if carbon_reported(account) { lines.push(format!("Gemini 4 Carbon  {}: {}", periods[1], percent(carbon_weekly(account, now, freshness_minutes)))); }
         return lines;
     }
     vec![format!("{}: {}", texts.quota, texts.unknown_quota)]
@@ -72,6 +73,13 @@ pub fn account_heading_summary(count: usize, current: Option<&str>, source: &str
     format!("{count}  {status}")
 }
 
+pub fn carbon_reported(account: &DashboardEntry) -> bool {
+    account.quota.iter().flat_map(|q| q.groups.iter().flatten()).any(|g|
+        g.buckets.iter().any(|b| quota_pool(&b.bucket_id, &g.display_name) == Some(QuotaPool::Carbon)))
+}
+pub fn carbon_weekly(account: &DashboardEntry, now: i64, freshness_minutes: i32) -> Option<f64> {
+    pool_windows(account, now, freshness_minutes, QuotaPool::Carbon)[1]
+}
 pub fn argon_reported(account: &DashboardEntry) -> bool {
     account.quota.iter().flat_map(|q| q.groups.iter().flatten()).any(|g|
         g.buckets.iter().any(|b| quota_pool(&b.bucket_id, &g.display_name) == Some(QuotaPool::Argon)))
@@ -212,6 +220,28 @@ mod tests {
         assert_eq!(argon_weekly(&a, now + 301, 5), None);
         a.disabled = true;
         assert_eq!(argon_weekly(&a, now, 15), None);
+    }
+    #[test]
+    fn carbon_is_a_separate_weekly_observation_with_the_same_freshness_guards() {
+        let mut a = account();
+        let now = a.quota.as_ref().unwrap().last_updated;
+        let original = account_windows(&a, now, 15);
+        a.quota.as_mut().unwrap().groups.as_mut().unwrap().push(ReadOnlyGroup {
+            display_name: "Gemini 4 Carbon".into(), buckets: vec![
+                ReadOnlyBucket {
+                    bucket_id: "gemini-carbon-wtu-weekly".into(), window: "weekly".into(), remaining_fraction: Some(0.4), reset_time: "2030-01-01T00:00:00Z".into(),
+                },
+                ReadOnlyBucket {
+                    bucket_id: "gemini-carbon-5h".into(), window: "5h".into(), remaining_fraction: Some(0.6), reset_time: "2030-01-01T00:00:00Z".into(),
+                },
+            ],
+        });
+        assert_eq!(account_windows(&a, now, 15), original);
+        assert_eq!(carbon_weekly(&a, now, 15), Some(40.0));
+        assert!(carbon_reported(&a));
+        assert_eq!(carbon_weekly(&a, now + 301, 5), None);
+        a.disabled = true;
+        assert_eq!(carbon_weekly(&a, now, 15), None);
     }
     #[test] fn identity_heading_explains_failures_and_recovers_without_claiming_a_current_account() {
         assert_eq!(account_heading_summary(5, None, "checking", true), "5 个账号  识别中");

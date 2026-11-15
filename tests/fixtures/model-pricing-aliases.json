@@ -37,5 +37,20 @@
   { "model": "gemini-3.8-flash-tiered", "prices": ["gemini-3.8-flash"], "expected": "gemini-3.8-flash" },
   { "model": "Gemini 4 Argon (High)", "prices": ["gemini-3.8-flash", "gemini-4-argon"], "expected": "gemini-4-argon" },
   { "model": "Gemini 4 Argon (High)", "prices": ["gemini-3.8-pro"], "expected": null },
-  { "model": "gemini-3.7-flash-tiered", "prices": ["gemini-3.8-flash"], "expected": null }
+  { "model": "gemini-3.7-flash-tiered", "prices": ["gemini-3.8-flash"], "expected": null },
+  { "model": "gemini-4-carbon-high", "prices": ["gemini-4-carbon"], "expected": "gemini-4-carbon" },
+  { "model": "Gemini 4 Carbon (Medium)", "prices": ["gemini-4-carbon"], "expected": "gemini-4-carbon" },
+  { "model": "gemini-4-carbon", "prices": ["gemini-4-carbon"], "expected": "gemini-4-carbon" },
+  { "model": "gemini-4-carbon-high", "prices": ["gemini-4-argon"], "expected": null },
+  { "model": "gemini-4-carbon-image", "prices": ["gemini-4-carbon"], "expected": null },
+  { "model": "gemini-4-hydrogen-xhigh", "prices": ["gemini-4-hydrogen"], "expected": "gemini-4-hydrogen" },
+  { "model": "Gemini 4 Hydrogen (Extra)", "prices": ["gemini-4-hydrogen"], "expected": "gemini-4-hydrogen" },
+  { "model": "gemini-4-hydrogen-low", "prices": ["gemini-4-hydrogen"], "expected": "gemini-4-hydrogen" },
+  { "model": "gemini-4-hydrogen-xhigh", "prices": ["gemini-4-carbon"], "expected": null },
+  { "model": "gemini-4-hydrogen-tts", "prices": ["gemini-4-hydrogen"], "expected": null },
+  { "model": "claude-opus-5-5-high", "prices": ["Claude Opus 5.5"], "expected": "Claude Opus 5.5" },
+  { "model": "Claude Opus 5.5 Thinking-n", "prices": ["Claude Opus 5.5"], "expected": "Claude Opus 5.5" },
+  { "model": "claude-sonnet-5-5-thinking", "prices": ["Claude Sonnet 5.5"], "expected": "Claude Sonnet 5.5" },
+  { "model": "claude-opus-5-5-high", "prices": ["Claude Opus 5"], "expected": null },
+  { "model": "claude-opus-5-5-fast", "prices": ["Claude Opus 5.5"], "expected": null }
 ]

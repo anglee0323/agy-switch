@@ -25,15 +25,22 @@ interface ModelOption {
 
 // 兜底基准主模型（已预先归并多档位）
 const BASELINE_CANONICAL_MODELS: ModelOption[] = [
-    { id: 'gemini-4-argon', label: 'Gemini 4 Argon', group: 'gemini', iconType: 'gemini' },
+    { id: 'gemini-pro-orchestrator', label: 'Orchestrator (Carbon)', group: 'gemini', iconType: 'gemini', tag: 'ORCH' },
+    { id: 'gemini-pro-orchestrator-argon', label: 'Orchestrator (Argon)', group: 'gemini', iconType: 'gemini', tag: 'ORCH' },
+    { id: 'gemini-4-carbon', label: 'Gemini 4 Carbon', group: 'gemini', iconType: 'gemini', tag: 'PRO' },
+    { id: 'gemini-4-argon', label: 'Gemini 4 Argon', group: 'gemini', iconType: 'gemini', tag: 'PRO' },
+    { id: 'gemini-4-hydrogen', label: 'Gemini 4 Hydrogen', group: 'gemini', iconType: 'gemini', tag: 'FLASH' },
     { id: 'gemini-3.1-pro', label: 'Gemini 3.1 Pro', group: 'gemini', iconType: 'gemini', tag: 'PRO' },
     { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash', group: 'gemini', iconType: 'gemini', tag: 'FLASH' },
     { id: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash', group: 'gemini', iconType: 'gemini', tag: 'FLASH' },
+    { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash Lite', group: 'gemini', iconType: 'gemini', tag: 'LITE' },
     { id: 'gemini-3-flash', label: 'Gemini 3 Flash', group: 'gemini', iconType: 'gemini', tag: 'FLASH' },
     { id: 'gemini-3.1-flash-lite', label: 'Gemini 3.1 Flash Lite', group: 'gemini', iconType: 'gemini', tag: 'LITE' },
     { id: 'gemini-2.5-pro', label: 'Gemini 2.5 Pro', group: 'gemini', iconType: 'gemini', tag: 'PRO' },
     { id: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash', group: 'gemini', iconType: 'gemini', tag: 'FLASH' },
     { id: 'gemini-3.1-flash-image', label: 'Gemini 3.1 Flash Image', group: 'gemini', iconType: 'gemini', tag: 'IMAGE' },
+    { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 (Thinking)', group: 'claude', iconType: 'claude', tag: 'SONNET' },
+    { id: 'claude-opus-5-5', label: 'Claude Opus 5.5 (Thinking)', group: 'claude', iconType: 'claude', tag: 'OPUS' },
     { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6 (Thinking)', group: 'claude', iconType: 'claude', tag: 'SONNET' },
     { id: 'claude-opus-4-6-thinking', label: 'Claude Opus 4.6 (Thinking)', group: 'claude', iconType: 'claude', tag: 'OPUS' },
     { id: 'gpt-oss-120b', label: 'GPT-OSS 120B', group: 'other', iconType: 'bot', tag: 'OPENAI' },
@@ -517,6 +524,8 @@ export default function ModelDisplaySettings({ onClose, embedded = false }: Mode
                                         { key: '3p:5h', label: 'Claude / GPT 5h ($)' },
                                         { key: '3p:weekly', label: 'Claude / GPT Weekly ($)' },
                                         { key: 'argon:weekly', label: 'Argon Weekly ($)' },
+                                        { key: 'carbon:5h', label: 'Carbon 5h ($)' },
+                                        { key: 'carbon:weekly', label: 'Carbon Weekly ($)' },
                                     ].map((cap) => (
                                         <div key={cap.key} className="p-2.5 bg-gray-50/70 dark:bg-slate-800/40 rounded-xl border border-gray-200/60 dark:border-slate-800/80">
                                             <div className="text-[11px] font-medium text-gray-600 dark:text-gray-400 mb-1 truncate" title={cap.label}>

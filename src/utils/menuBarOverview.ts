@@ -24,10 +24,12 @@ export interface AccountQuotaView {
   windows: Record<QuotaWindow, Record<QuotaFamily, FamilyQuota>>;
   argonWeekly: FamilyQuota;
   argonReported: boolean;
+  carbonWeekly: FamilyQuota;
+  carbonReported: boolean;
 }
 export const familyOf = (name: string): QuotaFamily | null => {
   const kind = quotaPoolKind('', name);
-  return kind === 'argon' ? null : kind;
+  return kind === 'argon' || kind === 'carbon' ? null : kind;
 };
 const unknown = (reason: QuotaReason): FamilyQuota => ({ remaining: null, reason, resets: [], pools: 0 });
 const validReset = (value: string, now: number) => Number.isFinite(Date.parse(value)) && Date.parse(value) > now;
@@ -66,6 +68,7 @@ export function menuBarAccount(account: DashboardAccount, now: number, staleMinu
   }
   return { account, switchable: !unavailable,
     argonWeekly: quota('argon', 'weekly'), argonReported: pools.some(pool => pool.windows.some(row => row.kind === 'argon')),
+    carbonWeekly: quota('carbon', 'weekly'), carbonReported: pools.some(pool => pool.windows.some(row => row.kind === 'carbon')),
     windows: { '5h': { gemini: quota('gemini', '5h'), other: quota('other', '5h') }, weekly: { gemini: quota('gemini', 'weekly'), other: quota('other', 'weekly') } } };
 }
 
@@ -73,6 +76,14 @@ export function menuBarAccount(account: DashboardAccount, now: number, staleMinu
 export function aggregateArgon(accounts: AccountQuotaView[]) {
   const reported = accounts.filter(view => view.argonReported);
   const known = reported.flatMap(view => view.argonWeekly.remaining === null ? [] : [view.argonWeekly.remaining]);
+  const remaining = known.length ? known.reduce((sum, value) => sum + value, 0) / known.length : null;
+  return { remaining, used: remaining === null ? null : 100 - remaining, covered: known.length, total: reported.length };
+}
+
+/** Carbon is metered apart from the shared Gemini buckets when the provider reports it. */
+export function aggregateCarbon(accounts: AccountQuotaView[]) {
+  const reported = accounts.filter(view => view.carbonReported);
+  const known = reported.flatMap(view => view.carbonWeekly.remaining === null ? [] : [view.carbonWeekly.remaining]);
   const remaining = known.length ? known.reduce((sum, value) => sum + value, 0) / known.length : null;
   return { remaining, used: remaining === null ? null : 100 - remaining, covered: known.length, total: reported.length };
 }

@@ -644,6 +644,32 @@ mod tests {
         }
     }
     #[test]
+    fn carbon_quota_fusion_is_independent_of_group_order_and_shared_pool() {
+        let fixture = |id: &str, fraction: f64| serde_json::json!({
+            "bucket_id":id,"window":if id.ends_with("5h") {"5h"} else {"weekly"},
+            "remaining_fraction":fraction,"remaining_fraction_known":true,"reset_time":"2030-01-01T00:00:00Z"
+        });
+        let groups: Vec<crate::models::quota::QuotaGroup> = serde_json::from_value(json!([
+            {"display_name":"Gemini 4 Carbon","buckets":[fixture("gemini-carbon-wtu-weekly",0.4),fixture("gemini-carbon-5h",0.6)]},
+            {"display_name":"Gemini Models","buckets":[fixture("gemini-weekly",0.9),fixture("gemini-5h",0.8)]}
+        ])).unwrap();
+        for mut groups in [groups.clone(), groups.into_iter().rev().collect()] {
+            let mut models = serde_json::from_value::<Vec<crate::models::quota::ModelQuota>>(json!([
+                {"name":"gemini-4-carbon-high","percentage":100,"reset_time":""},
+                {"name":"gemini-3.8-flash","percentage":100,"reset_time":""}
+            ])).unwrap();
+            fuse_model_quotas(&mut models, &groups);
+            assert_eq!(models[0].percentage, 40);
+            assert_eq!(models[0].quota_bucket_id.as_deref(), Some("gemini-carbon-wtu-weekly"));
+            assert_eq!(models[1].percentage, 80);
+            groups.retain(|g| g.display_name != "Gemini 4 Carbon");
+            models[0].quota_bucket_id = None;
+            fuse_model_quotas(&mut models, &groups);
+            assert!(models[0].quota_bucket_id.is_none());
+            assert_eq!(models[0].percentage, 40);
+        }
+    }
+    #[test]
     fn quota_fusion_caps_by_weekly_when_weekly_is_more_restrictive_than_5h() {
         let groups: Vec<crate::models::quota::QuotaGroup> = serde_json::from_value(json!([
             {"display_name":"Gemini Models","buckets":[

@@ -7,7 +7,7 @@ export function weeklyQuotaItems(quota?: QuotaData) {
     .filter(b => b.window.trim().toLowerCase() === 'weekly' || b.bucket_id.toLowerCase().endsWith('-weekly'))
     .map(b => {
       const kind = quotaPoolKind(b.bucket_id, group.display_name);
-      return { id: `${group.display_name}-${b.bucket_id}`, bucketId: b.bucket_id, title: kind === 'argon' ? 'Gemini 4 Argon' : kind === 'gemini' ? 'Gemini' : kind === 'other' ? 'Claude / GPT' : group.display_name || b.display_name || b.bucket_id,
+      return { id: `${group.display_name}-${b.bucket_id}`, bucketId: b.bucket_id, title: kind === 'argon' ? 'Gemini 4 Argon' : kind === 'carbon' ? 'Gemini 4 Carbon' : kind === 'gemini' ? 'Gemini' : kind === 'other' ? 'Claude / GPT' : group.display_name || b.display_name || b.bucket_id,
         shared: kind === 'gemini' || kind === 'other', isClaude: kind === 'other',
         percentage: observedPercentage(b.remaining_fraction, b.remaining_fraction_known, true), resetTime: b.reset_time };
     }));
@@ -52,10 +52,13 @@ export function observedModelPercentage(model?: ModelQuota): number | null {
 export function modelQuotaPoolKind(name: string, displayName?: string): QuotaPoolKind | null {
   const lower = (name || '').trim().toLowerCase();
   if (lower.startsWith('gemini')) {
-    const argon = [name, displayName || ''].some(value =>
-      value.split(/[^a-z0-9]+/i).some(word => word.toLowerCase() === 'argon'),
-    );
-    return argon ? 'argon' : 'gemini';
+    const words = [name, displayName || ''].flatMap(value => value.split(/[^a-z0-9]+/i).map(word => word.toLowerCase()));
+    if (lower.startsWith('gemini-pro-orchestrator')) {
+      return words.includes('argon') || lower.includes('g1-pro') ? 'argon' : 'carbon';
+    }
+    if (words.includes('carbon') || lower.startsWith('gemini-4-carbon')) return 'carbon';
+    if (words.includes('argon') || lower.startsWith('gemini-4-argon')) return 'argon';
+    return 'gemini';
   }
   if (lower.startsWith('claude') || lower.startsWith('gpt')) return 'other';
   return null;
@@ -71,7 +74,7 @@ export function effectiveModelQuota(
     return { percentage: basePercentage, resetTime: baseResetTime };
   }
   const pool = modelQuotaPoolKind(model.name, model.display_name);
-  if (!pool || (basePercentage === null && pool !== 'argon')) {
+  if (!pool || (basePercentage === null && pool !== 'argon' && pool !== 'carbon')) {
     return { percentage: basePercentage, resetTime: baseResetTime };
   }
   const buckets = quota.quota_groups.flatMap(group =>

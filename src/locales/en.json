@@ -96,7 +96,8 @@
     "pricing_pending": "Prices unavailable",
     "priced_subtotal": "Partial estimate",
     "total_cost": "Estimated cost",
-    "cost_details": "Details"
+    "cost_details": "Details",
+    "quota_used_carbon": "Carbon weekly used"
   },
   "local_settings": {
     "title": "Settings",

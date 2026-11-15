@@ -96,7 +96,8 @@
     "pricing_pending": "暂无可用价格",
     "priced_subtotal": "部分估算",
     "total_cost": "预估费用",
-    "cost_details": "明细"
+    "cost_details": "明细",
+    "quota_used_carbon": "Carbon 周额度已用"
   },
   "local_settings": {
     "title": "设置",

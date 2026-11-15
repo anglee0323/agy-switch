@@ -2,15 +2,21 @@
 
 The quota summary can contain the shared Gemini and Claude/GPT pools and separate
 model pools. Gemini 4 Argon's reported `gemini-argon-wtu-weekly` bucket is a
-weekly-only pool. It must not be averaged into shared Gemini, borrowed for other
-Gemini models, or assigned an invented five-hour window.
+weekly-only pool. Gemini 4 Carbon can report its own `gemini-carbon-5h` and
+`gemini-carbon-wtu-weekly` buckets. Neither dedicated pool may be averaged into
+shared Gemini, borrowed for other Gemini models, or assigned an invented window.
+When the provider does not report a Carbon bucket, Carbon keeps its per-model
+observation instead of borrowing shared Gemini. Gemini 4 Hydrogen and the bare
+Orchestrator (Carbon) and Orchestrator (Argon) identities follow their planner
+pool; they are not treated as separate shared allowances.
 
 Account weekly cards/tables and CLI quota details retain its name and reset time.
 Accounts reporting the pool also get a green dot beside their name in the menu and
 tray panel, independent of display settings.
-The menu adds a dedicated weekly row when reported and weekly Gemini display is
-enabled. The dashboard shows a separate Argon weekly mean for accounts reporting
-that pool, respecting the Gemini/all aggregate scope. Shared summaries and account
+The menu adds a dedicated Argon weekly row when reported and weekly Gemini display
+is enabled. The dashboard shows separate Argon and Carbon weekly means for accounts
+reporting those pools, respecting the Gemini/all aggregate scope. Carbon buckets
+also appear in account cards, the account table and cycle details when reported. Shared summaries and account
 availability retain their shared-pool meaning. Missing or invalid observations
 remain unknown; a missing pool is not evidence of either zero or full allowance.
 
@@ -27,8 +33,8 @@ reported five-hour and weekly allowances. A depleted week cannot trigger switchi
 to an account just because its short window has recovered. Grouped menu/tray rows
 continue to show their individual source windows and reset times.
 
-Gemini 4 Argon is available as a display selection even before the catalog reports
-it. A reported dedicated pool can populate that selection without a catalog model;
+Gemini 4 Argon, Carbon and Hydrogen are available as display selections even
+before the catalog reports them. A reported dedicated pool can populate that selection without a catalog model;
 otherwise it shows unknown. Selecting or refreshing the row does not grant model
 access. Catalog models without a quota observation retain their names and metadata
 without inventing a percentage.

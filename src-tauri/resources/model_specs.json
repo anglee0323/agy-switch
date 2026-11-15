@@ -25,6 +25,36 @@
             "thinking_budget": 49152,
             "is_thinking": true
         },
+        "gemini-4-carbon": {
+            "max_output_tokens": 262144,
+            "thinking_budget": 49152,
+            "is_thinking": true
+        },
+        "gemini-4-hydrogen": {
+            "max_output_tokens": 262144,
+            "thinking_budget": 32768,
+            "is_thinking": true
+        },
+        "gemini-pro-orchestrator": {
+            "max_output_tokens": 262144,
+            "thinking_budget": 49152,
+            "is_thinking": true
+        },
+        "gemini-pro-orchestrator-argon": {
+            "max_output_tokens": 65536,
+            "thinking_budget": 49152,
+            "is_thinking": true
+        },
+        "claude-sonnet-5-5": {
+            "max_output_tokens": 128000,
+            "thinking_budget": 32768,
+            "is_thinking": true
+        },
+        "claude-opus-5-5": {
+            "max_output_tokens": 128000,
+            "thinking_budget": 32768,
+            "is_thinking": true
+        },
         "claude-sonnet-4-6": {
             "max_output_tokens": 64000,
             "thinking_budget": 32768,

@@ -880,6 +880,9 @@ fn build_accounts_table_at(accounts: &[AccountView], lang: Lang, selected_idx: O
                 if let Some(bucket) = pool_bucket(q, QuotaPool::Argon, "weekly") {
                     gemini_quota.push_str(&format!("\nArgon: {}", percentage_text(observed_quota_percentage(bucket.remaining_fraction, bucket.remaining_fraction_known))));
                 }
+                if let Some(bucket) = pool_bucket(q, QuotaPool::Carbon, "weekly") {
+                    gemini_quota.push_str(&format!("\nCarbon: {}", percentage_text(observed_quota_percentage(bucket.remaining_fraction, bucket.remaining_fraction_known))));
+                }
             } else {
                 for m in &q.models {
                     let text = match lang {

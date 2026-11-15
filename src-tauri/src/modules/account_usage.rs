@@ -113,7 +113,7 @@ pub struct QuotaCapacityCalibrationStore {
 pub struct BucketValuation {
     pub bucket_id: String,
     pub window: String,
-    pub pool: String, // "gemini" | "third_party" | "argon" | "unknown"
+    pub pool: String, // "gemini" | "third_party" | "argon" | "carbon" | "unknown"
     pub remaining_fraction: f64,
     pub reset_time: String,
     /// 价值来源："observed" | "exhausted" | "used_only" | "manual_reference" | "calibrated" | "none"
@@ -243,6 +243,7 @@ pub fn record_quota_cycle_refresh(account_id: &str, quota: &crate::models::quota
             Some(QuotaPool::Gemini) => "gemini",
             Some(QuotaPool::ThirdParty) => "3p",
             Some(QuotaPool::Argon) => "argon",
+            Some(QuotaPool::Carbon) => "carbon",
             None => continue,
         };
         let normalized_window = if bucket.window.to_ascii_lowercase().contains("week") {
@@ -516,14 +517,21 @@ fn blended_reference_price_per_m_tokens(pool: QuotaPool, prices: &[ApiPricing]) 
             }),
         QuotaPool::ThirdParty => prices.iter().find(|p| {
             let (exact, _) = pricing_keys(&p.model);
-            exact.contains("claudesonnet46") || exact.contains("claude-sonnet-4-6")
+            exact.contains("claudesonnet55")
         }).or_else(|| prices.iter().find(|p| {
+            let (exact, _) = pricing_keys(&p.model);
+            exact.contains("claudesonnet46") || exact.contains("claude-sonnet-4-6")
+        })).or_else(|| prices.iter().find(|p| {
             let (exact, _) = pricing_keys(&p.model);
             exact.contains("claude") || exact.contains("gpt")
         })),
         QuotaPool::Argon => prices.iter().find(|p| {
             let (exact, _) = pricing_keys(&p.model);
             exact.contains("argon")
+        }),
+        QuotaPool::Carbon => prices.iter().find(|p| {
+            let (exact, _) = pricing_keys(&p.model);
+            exact.contains("carbon")
         }),
     };
 
@@ -534,6 +542,7 @@ fn blended_reference_price_per_m_tokens(pool: QuotaPool, prices: &[ApiPricing]) 
             QuotaPool::Gemini => 2.0,      // 0.8 * 0.75 + 0.2 * 3.75 ~ 1.35 或 Pro 4:1 混合
             QuotaPool::ThirdParty => 5.4,  // 0.8 * 3.0 + 0.2 * 15.0
             QuotaPool::Argon => 3.6,       // 0.8 * 2.0 + 0.2 * 10.0
+            QuotaPool::Carbon => 3.6,      // 0.8 * 2.0 + 0.2 * 10.0
         }
     }
 }
@@ -645,6 +654,7 @@ pub fn valuate_bucket(
         Some(QuotaPool::Gemini) => "gemini",
         Some(QuotaPool::ThirdParty) => "3p",
         Some(QuotaPool::Argon) => "argon",
+        Some(QuotaPool::Carbon) => "carbon",
         None => "unknown",
     };
     let fraction_known = bucket.remaining_fraction_known != Some(false) && bucket.remaining_fraction.is_finite();
@@ -687,6 +697,7 @@ pub fn valuate_bucket_with_cold_share(
         Some(QuotaPool::Gemini) => "gemini",
         Some(QuotaPool::ThirdParty) => "third_party",
         Some(QuotaPool::Argon) => "argon",
+        Some(QuotaPool::Carbon) => "carbon",
         None => "unknown",
     };
 
@@ -800,6 +811,7 @@ pub fn valuate_bucket_with_cold_share(
             Some(QuotaPool::Gemini) => "gemini",
             Some(QuotaPool::ThirdParty) => "3p",
             Some(QuotaPool::Argon) => "argon",
+            Some(QuotaPool::Carbon) => "carbon",
             None => "unknown",
         };
         let window_key = bucket.window.to_ascii_lowercase();
@@ -993,6 +1005,7 @@ fn extract_synthetic_5h_bucket(
         QuotaPool::Gemini => ("gemini-5h", "Gemini 5h"),
         QuotaPool::ThirdParty => ("3p-5h", "Claude/GPT 5h"),
         QuotaPool::Argon => ("gemini-argon-wtu-5h", "Gemini 4 Argon 5h"),
+        QuotaPool::Carbon => ("gemini-carbon-5h", "Gemini 4 Carbon 5h"),
     };
 
     Some(QuotaBucket {
@@ -1116,6 +1129,7 @@ pub async fn calculate_all_account_valuations() -> Result<QuotaValuationResponse
                     Some(QuotaPool::Gemini) => "gemini",
                     Some(QuotaPool::ThirdParty) => "3p",
                     Some(QuotaPool::Argon) => "argon",
+                    Some(QuotaPool::Carbon) => "carbon",
                     None => continue,
                 };
                 let normalized_window = if bucket.window.to_ascii_lowercase().contains("week") {
@@ -1175,6 +1189,7 @@ pub async fn calculate_all_account_valuations() -> Result<QuotaValuationResponse
                     Some(QuotaPool::Gemini) => "gemini",
                     Some(QuotaPool::ThirdParty) => "3p",
                     Some(QuotaPool::Argon) => "argon",
+                    Some(QuotaPool::Carbon) => "carbon",
                     None => "unknown",
                 };
                 let normalized_window = if bucket.window.to_ascii_lowercase().contains("week") {
