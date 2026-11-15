@@ -482,10 +482,12 @@ function AccountRowContent({
                                     ? modelQuotaPoolKind(model.data.name, model.data.display_name)
                                     : (model.id.toLowerCase().includes('claude') || model.id.toLowerCase().includes('gpt')
                                         ? 'other'
+                                        : (model.id.toLowerCase().includes('carbon') || model.id.toLowerCase().includes('orchestrator')) && !model.id.toLowerCase().includes('argon')
+                                        ? 'carbon'
                                         : model.id.toLowerCase().includes('argon')
                                         ? 'argon'
                                         : 'gemini');
-                                const poolKind = pool === 'argon' ? 'argon' : pool === 'other' ? 'third_party' : 'gemini';
+                                const poolKind = pool === 'argon' ? 'argon' : pool === 'carbon' ? 'carbon' : pool === 'other' ? 'third_party' : 'gemini';
                                 const valuation = findBucketFor5h(valuations, poolKind, resolved.window === 'weekly' ? 'weekly' : '5h');
                                 const valStructured = config?.quota_valuation?.enabled !== false
                                     ? formatValuationStructured(

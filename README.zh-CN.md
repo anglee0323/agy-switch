@@ -153,11 +153,11 @@ PowerShell 中使用 `.\agy-switch.exe`。只读命令使用本机缓存，需�
 
 表示各账号在对应周期的剩余额度。快捷看板的整体额度是有效账号数据的等权平均值，同时显示可用账号数，不是可相加的 Token 总量。数据缺失或过期时显示为未知。额度条默认在大于 60% 时为绿色、20% 至 60% 时为黄色、低于 20% 时为红色。
 
-接口返回的 Gemini 4 Argon 周额度会独立展示，不混入普通 Gemini 共享池；是否可见取决于账号接口实际返回的数据。[数据来源与限制](docs/quota-pools.md)
+接口返回的 Gemini 4 Argon 周额度或 Gemini 4 Carbon 额度会独立展示，不混入普通 Gemini 共享池；是否可见取决于账号接口实际返回的数据。[数据来源与限制](docs/quota-pools.md)
 
 ### 费用估算
 
-费用估算根据已知模型价格，计算本机用量按 API 计费时对应的费用，不是实际订阅账单。`gemini-3.8-flash-exp-b`、`Gemini 3.8 Flash (High)` 等实验和推理标签，按同版本基础型号估算；报价表有完全匹配的价格时优先使用。Flash Lite 和媒体型号独立计价。未知或冲突的价格标记为未计价，不计入预估合计。价格每天从 Google Gemini 与 Anthropic Claude 官方价格页解析一次；解析不到时回退到内置价格表并给出提示。桌面应用会刷新价格缓存，命令行读取本机缓存。[计价规则](docs/dashboard-overview.md)
+费用估算根据已知模型价格，计算本机用量按 API 计费时对应的费用，不是实际订阅账单。`gemini-3.8-flash-exp-b`、`Gemini 3.8 Flash (High)` 等实验和推理标签，按同版本基础型号估算；Gemini 4 Carbon/Hydrogen 的档位与 Claude 5.5 的档位按各自型号计价；报价表有完全匹配的价格时优先使用。Flash Lite 和媒体型号独立计价。未知或冲突的价格标记为未计价，不计入预估合计。价格每天从 Google Gemini 与 Anthropic Claude 官方价格页解析一次；解析不到时回退到内置价格表并给出提示。桌面应用会刷新价格缓存，命令行读取本机缓存。[计价规则](docs/dashboard-overview.md)
 
 ### 本地用量刷新
 

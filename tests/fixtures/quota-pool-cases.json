@@ -3,9 +3,12 @@
   {"id":"gemini-5h","name":"Gemini 4 Argon","pool":"gemini"},
   {"id":"3p-weekly","name":"本地化名称","pool":"other"},
   {"id":"gemini-argon-wtu-weekly","name":"Gemini Models","pool":"argon"},
+  {"id":"gemini-carbon-wtu-weekly","name":"Gemini 4 Carbon","pool":"carbon"},
+  {"id":"gemini-carbon-5h","name":"","pool":"carbon"},
   {"id":"gemini-future-weekly","name":"Gemini Models","pool":null},
   {"id":"pool-0","name":"Gemini Models","pool":"gemini"},
   {"id":"pool-1","name":"Claude / GPT","pool":"other"},
   {"id":"pool-2","name":"Gemini 4 Argon","pool":"argon"},
+  {"id":"pool-2b","name":"Gemini 4 Carbon","pool":"carbon"},
   {"id":"pool-3","name":"Gemini Future Model","pool":null}
 ]

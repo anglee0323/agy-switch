@@ -18,18 +18,20 @@ export interface DashboardSnapshot {
   current_account_id: string | null; current_identity_source: "tools_record";
   accounts: DashboardAccount[];
 }
-export type QuotaPoolKind = 'gemini' | 'other' | 'argon';
+export type QuotaPoolKind = 'gemini' | 'other' | 'argon' | 'carbon';
 /** Keep in sync with models::quota::quota_pool. IDs outrank display labels. */
 export function quotaPoolKind(bucketId: string, groupName: string): QuotaPoolKind | null {
   const id = bucketId.trim().toLowerCase();
   if (id === 'gemini-5h' || id === 'gemini-weekly') return 'gemini';
   if (id === '3p-5h' || id === '3p-weekly') return 'other';
-  if (id === 'gemini-argon-wtu-weekly') return 'argon';
+  if (id === 'gemini-argon-wtu-weekly' || id.startsWith('gemini-argon-')) return 'argon';
+  if (id === 'gemini-carbon-wtu-weekly' || id === 'gemini-carbon-5h' || id.startsWith('gemini-carbon-')) return 'carbon';
   if (id.startsWith('gemini-') || id.startsWith('3p-')) return null;
   const name = groupName.trim().toLowerCase();
   if (name === 'gemini' || name === 'gemini models') return 'gemini';
   if (['claude', 'claude / gpt', 'claude/gpt', 'claude/gpt models', 'claude and gpt models'].includes(name)) return 'other';
-  return name === 'gemini 4 argon' ? 'argon' : null;
+  if (name === 'gemini 4 argon') return 'argon';
+  return name === 'gemini 4 carbon' ? 'carbon' : null;
 }
 export interface DashboardPool {
   key: string; name: string; source: "group" | "model";
@@ -117,7 +119,7 @@ export function dashboardAccountState(account: DashboardAccount, now = Date.now(
   // are preserved but their coverage cannot be established from this response.
   const incompleteGroups = Boolean(quota?.groups?.some(g => {
     const windows = new Set(g.buckets.map(b => b.window.trim().toLowerCase()));
-    const weeklyOnly = g.buckets.length > 0 && g.buckets.every(b => quotaPoolKind(b.bucket_id, g.display_name) === 'argon');
+    const weeklyOnly = g.buckets.length > 0 && g.buckets.every(b => ['argon', 'carbon'].includes(quotaPoolKind(b.bucket_id, g.display_name) ?? ''));
     return (!weeklyOnly && !windows.has("5h")) || !windows.has("weekly")
       || [...windows].some(window => window !== "5h" && window !== "weekly");
   }));

@@ -5,12 +5,12 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::PathBuf;
 
-const GEMINI_PRICING_URL: &str = "https://ai.google.dev/gemini-api/docs/pricing.md.txt";
+const GEMINI_PRICING_URL: &str = "https://aistudio.google.com/docs/pricing.md.txt";
 const AGENT_PLATFORM_PRICING_URL: &str =
     "https://platform.claude.com/docs/en/about-claude/pricing.md";
 const EXCHANGE_RATE_API_URL: &str = "https://open.er-api.com/v6/latest/USD";
 const CACHE_TTL_SECONDS: i64 = 24 * 60 * 60;
-const PARSER_REVISION: u32 = 4;
+const PARSER_REVISION: u32 = 5;
 const DEFAULT_USD_TO_CNY: f64 = 7.25;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -263,10 +263,19 @@ pub fn parse_exchange_rate_json(json_str: &str) -> Result<f64, String> {
 }
 
 pub fn builtin_fallback_prices() -> Vec<ApiPricing> {
+    // The fallback is only used when a live page cannot be parsed, but it must
+    // still follow the published cutovers instead of freezing an old rate.
+    let today = Utc::now().date_naive();
+    let (carbon_input, carbon_output, carbon_cached) =
+        if today >= NaiveDate::from_ymd_opt(2026, 12, 1).unwrap() { (4.0, 20.0, 0.20) } else { (2.0, 10.0, 0.10) };
+    let (flash_input, flash_output, flash_cached) =
+        if today >= NaiveDate::from_ymd_opt(2027, 1, 1).unwrap() { (1.50, 7.50, 0.15) } else { (0.75, 3.75, 0.075) };
     vec![
-        ApiPricing { model: "gemini-4-argon".into(), input: 2.0, output: 10.0, cached: 0.10 },
-        ApiPricing { model: "gemini-3.8-flash".into(), input: 0.75, output: 3.75, cached: 0.075 },
-        ApiPricing { model: "gemini-3.6-flash".into(), input: 0.75, output: 3.75, cached: 0.075 },
+        ApiPricing { model: "gemini-4-carbon".into(), input: carbon_input, output: carbon_output, cached: carbon_cached },
+        ApiPricing { model: "gemini-4-argon".into(), input: carbon_input, output: carbon_output, cached: carbon_cached },
+        ApiPricing { model: "gemini-4-hydrogen".into(), input: 1.50, output: 7.50, cached: 0.075 },
+        ApiPricing { model: "gemini-3.8-flash".into(), input: flash_input, output: flash_output, cached: flash_cached },
+        ApiPricing { model: "gemini-3.6-flash".into(), input: flash_input, output: flash_output, cached: flash_cached },
         ApiPricing { model: "gemini-3.5-flash-lite".into(), input: 0.30, output: 2.50, cached: 0.03 },
         ApiPricing { model: "gemini-3.1-pro-preview".into(), input: 2.00, output: 12.00, cached: 0.20 },
         ApiPricing { model: "gemini-3.1-flash-lite".into(), input: 0.25, output: 1.50, cached: 0.025 },
@@ -854,6 +863,71 @@ mod tests {
         assert_eq!((prices[0].input, prices[0].output, prices[0].cached), (2.0, 10.0, 0.10));
         assert_eq!(prices[1].model, "gemini-3.8-flash");
         assert_eq!((prices[1].input, prices[1].output, prices[1].cached), (0.75, 3.75, 0.075));
+    }
+
+    #[test]
+    fn parses_gemini_4_carbon_and_hydrogen_with_the_published_cutover() {
+        let md = r#"
+## Gemini 4 Carbon  {% id="gemini-4-carbon" %}
+
+{% tabs %}
+  {% tab title="Standard" %}
+  {% table %}
+  * Input price
+  * Not available
+  * $2.00 through November 30, 2026.
+  $4.00 starting December 1, 2026.
+
+  ---
+
+  * Output price (including thinking tokens)
+  * Not available
+  * $10.00 through November 30, 2026.
+  $20.00 starting December 1, 2026.
+
+  ---
+
+  * Context caching price
+  * Not available
+  * $0.10 through November 30, 2026.
+  $0.20 starting December 1, 2026.
+  Implicit caching only (explicit caching is not supported).
+  {% /table %}
+  {% /tab %}
+{% /tabs %}
+
+## Gemini 4 Hydrogen  {% id="gemini-4-hydrogen" %}
+
+{% tabs %}
+  {% tab title="Standard" %}
+  {% table %}
+  * Input price
+  * Not available
+  * $1.50
+
+  ---
+
+  * Output price (including thinking tokens)
+  * Not available
+  * $7.50
+
+  ---
+
+  * Context caching price
+  * Not available
+  * $0.075
+  {% /table %}
+  {% /tab %}
+{% /tabs %}
+        "#;
+        let before = parse_gemini_prices(md, NaiveDate::from_ymd_opt(2026, 11, 15).unwrap());
+        assert_eq!(before.len(), 2);
+        assert_eq!(before[0].model, "gemini-4-carbon");
+        assert_eq!((before[0].input, before[0].output, before[0].cached), (2.0, 10.0, 0.10));
+        assert_eq!(before[1].model, "gemini-4-hydrogen");
+        assert_eq!((before[1].input, before[1].output, before[1].cached), (1.50, 7.50, 0.075));
+        let after = parse_gemini_prices(md, NaiveDate::from_ymd_opt(2026, 12, 1).unwrap());
+        assert_eq!((after[0].input, after[0].output, after[0].cached), (4.0, 20.0, 0.20));
     }
 
     #[test]

@@ -3,7 +3,7 @@ import { formatCurrencyCompact, formatCurrencyAmount, CurrencyMode } from './cur
 export interface BucketValuation {
     bucket_id: string;
     window: string;
-    pool: 'gemini' | 'third_party' | 'argon' | 'unknown';
+    pool: 'gemini' | 'third_party' | 'argon' | 'carbon' | 'unknown';
     remaining_fraction: number;
     reset_time: string;
     provenance: 'observed' | 'exhausted' | 'used_only' | 'manual_reference' | 'calibrated' | 'estimated_reference' | 'none';
@@ -80,7 +80,7 @@ export function findBucketForWeekly(
  */
 export function findBucketFor5h(
     buckets: BucketValuation[] | undefined,
-    pool: 'gemini' | 'third_party' | 'argon',
+    pool: 'gemini' | 'third_party' | 'argon' | 'carbon',
     windowHint?: '5h' | 'weekly'
 ): BucketValuation | undefined {
     if (!buckets) return undefined;

@@ -153,11 +153,11 @@ Use the console executable as `.\agy-switch.exe` in PowerShell. Read commands us
 
 They are the remaining quota reported for each account and window. The quick dashboard's aggregate is an equal-weight average of valid account readings, with an available-account count; it is not a combined token balance. Missing or stale readings are shown as unknown. By default, bars are green above 60%, yellow from 20–60%, and red below 20%.
 
-A reported Gemini 4 Argon weekly pool stays separate from shared Gemini quota. Visibility depends on what the account API reports. [Data sources and limits](docs/quota-pools.md)
+A reported Gemini 4 Argon weekly pool or Gemini 4 Carbon pool stays separate from shared Gemini quota. Visibility depends on what the account API reports. [Data sources and limits](docs/quota-pools.md)
 
 ### Cost estimates
 
-The estimate covers the API-equivalent cost of recorded usage using known model prices. Gemini experiment and thinking labels such as `gemini-3.8-flash-exp-b` and `Gemini 3.8 Flash (High)` use the same version's basic model rates unless the price catalog provides an exact rate. Flash Lite and media models stay separate. Unknown or conflicting rates are marked Unpriced and excluded from the estimated total. Rates are parsed once a day from Google's Gemini and Anthropic's Claude pricing pages; a page that cannot be parsed falls back to the built-in table and is reported as a warning. The desktop app refreshes its pricing cache; CLI reads use that local cache. [Pricing rules](docs/dashboard-overview.md)
+The estimate covers the API-equivalent cost of recorded usage using known model prices. Gemini experiment and thinking labels such as `gemini-3.8-flash-exp-b` and `Gemini 3.8 Flash (High)` use the same version's basic model rates unless the price catalog provides an exact rate. Gemini 4 Carbon/Hydrogen effort tiers and Claude 5.5 effort tiers use their own model rates. Flash Lite and media models stay separate. Unknown or conflicting rates are marked Unpriced and excluded from the estimated total. Rates are parsed once a day from Google's Gemini and Anthropic's Claude pricing pages; a page that cannot be parsed falls back to the built-in table and is reported as a warning. The desktop app refreshes its pricing cache; CLI reads use that local cache. [Pricing rules](docs/dashboard-overview.md)
 
 ### Local usage freshness
 

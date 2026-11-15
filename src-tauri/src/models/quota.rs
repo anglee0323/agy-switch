@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum QuotaPool { Gemini, ThirdParty, Argon }
+pub enum QuotaPool { Gemini, ThirdParty, Argon, Carbon }
 
 /// Canonical bucket IDs take precedence over translated or abbreviated labels.
 /// A model-specific Gemini bucket must never become the shared Gemini pool.
@@ -11,13 +11,17 @@ pub fn quota_pool(bucket_id: &str, group_name: &str) -> Option<QuotaPool> {
         "gemini-5h" | "gemini-weekly" => return Some(QuotaPool::Gemini),
         "3p-5h" | "3p-weekly" => return Some(QuotaPool::ThirdParty),
         "gemini-argon-wtu-weekly" => return Some(QuotaPool::Argon),
+        "gemini-carbon-wtu-weekly" | "gemini-carbon-5h" => return Some(QuotaPool::Carbon),
         _ => {}
     }
+    if id.starts_with("gemini-argon-") { return Some(QuotaPool::Argon); }
+    if id.starts_with("gemini-carbon-") { return Some(QuotaPool::Carbon); }
     if id.starts_with("gemini-") || id.starts_with("3p-") { return None; }
     match group_name.trim().to_ascii_lowercase().as_str() {
         "gemini" | "gemini models" => Some(QuotaPool::Gemini),
         "claude" | "claude / gpt" | "claude/gpt" | "claude/gpt models" | "claude and gpt models" => Some(QuotaPool::ThirdParty),
         "gemini 4 argon" => Some(QuotaPool::Argon),
+        "gemini 4 carbon" => Some(QuotaPool::Carbon),
         _ => None,
     }
 }
@@ -25,9 +29,16 @@ pub fn quota_pool(bucket_id: &str, group_name: &str) -> Option<QuotaPool> {
 pub fn model_quota_pool(name: &str, display_name: Option<&str>) -> Option<QuotaPool> {
     let lower = name.to_ascii_lowercase();
     if lower.starts_with("gemini") {
-        let argon = [name, display_name.unwrap_or("")].iter().any(|value|
-            value.split(|c: char| !c.is_ascii_alphanumeric()).any(|word| word.eq_ignore_ascii_case("argon")));
-        Some(if argon { QuotaPool::Argon } else { QuotaPool::Gemini })
+        let words = |value: &str| value.split(|c: char| !c.is_ascii_alphanumeric())
+            .map(|word| word.to_ascii_lowercase()).collect::<Vec<_>>();
+        let labels: Vec<_> = [name, display_name.unwrap_or("")].iter().flat_map(|value| words(value)).collect();
+        let has = |word: &str| labels.iter().any(|value| value == word);
+        if lower.starts_with("gemini-pro-orchestrator") {
+            return Some(if has("argon") || lower.contains("g1-pro") { QuotaPool::Argon } else { QuotaPool::Carbon });
+        }
+        if has("carbon") || lower.starts_with("gemini-4-carbon") { Some(QuotaPool::Carbon) }
+        else if has("argon") || lower.starts_with("gemini-4-argon") { Some(QuotaPool::Argon) }
+        else { Some(QuotaPool::Gemini) }
     } else if lower.starts_with("claude") || lower.starts_with("gpt") { Some(QuotaPool::ThirdParty) }
     else { None }
 }
@@ -174,11 +185,18 @@ mod tests {
         let cases: Vec<serde_json::Value> = serde_json::from_str(include_str!("../../../tests/fixtures/quota-pool-cases.json")).unwrap();
         for case in cases {
             let actual = quota_pool(case["id"].as_str().unwrap(), case["name"].as_str().unwrap());
-            let actual = actual.map(|pool| match pool { QuotaPool::Gemini => "gemini", QuotaPool::ThirdParty => "other", QuotaPool::Argon => "argon" });
+            let actual = actual.map(|pool| match pool { QuotaPool::Gemini => "gemini", QuotaPool::ThirdParty => "other", QuotaPool::Argon => "argon", QuotaPool::Carbon => "carbon" });
             assert_eq!(actual, case["pool"].as_str(), "{case}");
         }
         assert_eq!(quota_group_label("Gemini 4 Argon"), "Gemini 4 Argon");
+        assert_eq!(quota_group_label("Gemini 4 Carbon"), "Gemini 4 Carbon");
         assert_eq!(model_quota_pool("gemini-4-argon-high", None), Some(QuotaPool::Argon));
+        assert_eq!(model_quota_pool("gemini-4-carbon-high", None), Some(QuotaPool::Carbon));
+        assert_eq!(model_quota_pool("gemini-4-hydrogen-xhigh", None), Some(QuotaPool::Gemini));
+        assert_eq!(model_quota_pool("gemini-pro-orchestrator", None), Some(QuotaPool::Carbon));
+        assert_eq!(model_quota_pool("gemini-pro-orchestrator-argon", None), Some(QuotaPool::Argon));
+        assert_eq!(model_quota_pool("gemini-pro-orchestrator-g1-pro", None), Some(QuotaPool::Argon));
         assert_eq!(model_quota_pool("gemini-test", Some("Gemini 4 Argon High")), Some(QuotaPool::Argon));
+        assert_eq!(model_quota_pool("gemini-test", Some("Gemini 4 Carbon High")), Some(QuotaPool::Carbon));
     }
 }

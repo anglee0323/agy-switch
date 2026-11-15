@@ -31,7 +31,7 @@ export interface CycleCheckpoint {
 export interface QuotaCycleRecord {
     cycle_id: string;
     account_id: string;
-    pool: 'gemini' | 'third_party' | 'argon' | 'unknown';
+    pool: 'gemini' | 'third_party' | 'argon' | 'carbon' | 'unknown';
     window: string;
     start_time: string;
     reset_time: string;
@@ -420,6 +420,7 @@ export default function QuotaCycleModal({
                                 { id: 'gemini', label: 'Gemini' },
                                 { id: 'third_party', label: isZh ? '第三方' : '3rd Party' },
                                 { id: 'argon', label: 'Argon' },
+                                { id: 'carbon', label: 'Carbon' },
                             ].map(item => (
                                 <button
                                     key={item.id}

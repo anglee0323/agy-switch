@@ -18,8 +18,8 @@ model prices used by the dashboard. It is an estimate, never a bill.
 - **Attribution** uses recorded active spans. A machine that switched accounts
   splits its local records across those spans instead of crediting one account with
   everything.
-- **Pools stay separate.** Gemini, Claude/GPT and Gemini 4 Argon are valued on their
-  own buckets. A shared pool is never blended into a dedicated one.
+- **Pools stay separate.** Gemini, Claude/GPT, Gemini 4 Argon and Gemini 4 Carbon
+  are valued on their own buckets. A shared pool is never blended into a dedicated one.
 - **Small consumption is not extrapolated.** Below 3% of a window the total is not
   inferred from usage, so a single request cannot inflate the estimate.
 - **Full windows need a baseline.** When nothing has been consumed, the 100% value
@@ -41,7 +41,7 @@ Settings → Quota & Models → model display offers:
 | Currency | USD, CNY, or both side by side |
 | Display mode | Remaining value, or consumed value against the estimated total |
 | USD → CNY rate | Auto-refresh once per day from a public rate feed, or a fixed user value |
-| Reference caps | A 100% baseline per pool and window (Gemini, Claude/GPT, Argon), replacing the calibrated median or the built-in per-plan reference |
+| Reference caps | A 100% baseline per pool and window (Gemini, Claude/GPT, Argon, Carbon), replacing the calibrated median or the built-in per-plan reference |
 
 Changing these settings only changes presentation and the reference baseline; it
 never changes switching policy, thresholds or saved account data.

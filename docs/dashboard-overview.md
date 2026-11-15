@@ -65,15 +65,18 @@ Rates are parsed once per day from Google's Gemini pricing page and Anthropic's
 Claude pricing page. A page that cannot be parsed is reported as a warning and the
 built-in rate table is used, so a silent parser break cannot pass as fresh official
 pricing; the affected models are never guessed.
-Gemini reasoning labels such as `Gemini 3.8 Flash (High)` and internal experiment
-names such as `gemini-3.8-flash-exp-b` estimate the same version's basic model rate.
+Gemini reasoning labels such as `Gemini 3.8 Flash (High)`, Gemini 4 Carbon/Hydrogen
+effort tiers such as `gemini-4-carbon-high` and `gemini-4-hydrogen-xhigh`, and
+internal experiment names such as `gemini-3.8-flash-exp-b` estimate the same
+version's basic model rate.
 The rule recognizes new experiment labels without a model-version allow-list.
 Exact catalog rates take priority, followed by the basic model rate or a single
 unambiguous preview rate. Flash Lite and media variants remain separate; missing
 versions or ambiguous prices stay unpriced. See [Google's thinking guide](https://ai.google.dev/gemini-api/docs/thinking)
 for thinking levels and output-token accounting.
-Claude thinking names match the same model version's rates, including
-`claude-opus-4-6-thinking` → `Claude Opus 4.6`; other variants stay separate.
+Claude thinking and effort names match the same model version's rates, including
+`claude-opus-4-6-thinking` → `Claude Opus 4.6` and `claude-opus-5-5-high` →
+`Claude Opus 5.5`; other variants stay separate.
 The card shows the request count, with pricing provenance and estimate scope in
 its tooltip. Missing prices produce a model count warning; the cost ring then
 labels its amount as a partial estimate. Unknown models are excluded, never

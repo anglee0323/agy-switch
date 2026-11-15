@@ -351,15 +351,16 @@ fn remaining_single_model(q: &QuotaData, model: &str, now: i64) -> Result<f64, &
     let groups = q.quota_groups.as_ref().ok_or("unknown_pool")?;
     let mut weekly = None::<f64>;
     let mut short = None::<f64>;
-    let mut argon_observation = None;
+    let mut frontier_observation = None;
     let mut observations = HashMap::new();
+    let frontier = matches!(pool, QuotaPool::Argon | QuotaPool::Carbon);
     for bucket in groups.iter().flat_map(|g| &g.buckets) {
         let id = bucket.bucket_id.to_ascii_lowercase();
         if quota_pool(&id, "") != Some(pool) {
             continue;
         }
         if bucket.remaining_fraction_known == Some(false)
-            || (pool == QuotaPool::Argon && bucket.remaining_fraction_known != Some(true))
+            || (frontier && bucket.remaining_fraction_known != Some(true))
             || !bucket.remaining_fraction.is_finite()
             || !(0.0..=1.0).contains(&bucket.remaining_fraction)
         {
@@ -381,8 +382,8 @@ fn remaining_single_model(q: &QuotaData, model: &str, now: i64) -> Result<f64, &
         if pool == QuotaPool::Argon {
             if window != "weekly" { return Err("unknown_pool"); }
             let observation = (bucket.remaining_fraction, bucket.reset_time.as_str());
-            if argon_observation.is_some_and(|old| old != observation) { return Err("unknown_pool"); }
-            argon_observation = Some(observation);
+            if frontier_observation.is_some_and(|old| old != observation) { return Err("unknown_pool"); }
+            frontier_observation = Some(observation);
         }
         if id.ends_with("weekly") || window == "weekly" {
             weekly = Some(weekly.map_or(value, |old| old.min(value)));
@@ -392,8 +393,15 @@ fn remaining_single_model(q: &QuotaData, model: &str, now: i64) -> Result<f64, &
             return Err("unknown_pool");
         }
     }
-    let weekly = weekly.ok_or("unknown_pool")?;
+    let weekly = match weekly {
+        Some(value) => value,
+        // Carbon can share the Gemini summary or omit its own bucket. Its
+        // per-model observation is still a valid, non-borrowed fallback.
+        None if pool == QuotaPool::Carbon => return Ok(short.unwrap_or(m.percentage as f64)),
+        None => return Err("unknown_pool"),
+    };
     if pool == QuotaPool::Argon { return Ok(weekly); }
+    if pool == QuotaPool::Carbon { return Ok(weekly.min(short.unwrap_or(weekly))); }
     let free = q
         .subscription_tier
         .as_deref()
@@ -1625,6 +1633,29 @@ mod tests {
         q.quota_groups.as_mut().unwrap()[0].buckets[0].remaining_fraction_known = Some(false);
         assert_eq!(remaining(&q, "gemini-4-argon-high", NOW), Err("unknown_pool"));
         assert_eq!(remaining(&q, "gemini-test", NOW), Ok(80.0));
+    }
+    #[test]
+    fn carbon_uses_its_own_pool_and_never_borrows_shared_gemini() {
+        let mut q = quota(0.9, 0.8);
+        let mut model = q.models[0].clone();
+        model.name = "gemini-4-carbon-high".into();
+        model.percentage = 100;
+        q.models.push(model);
+        // Without a Carbon bucket the model's own observation is used, never shared Gemini.
+        assert_eq!(remaining(&q, "gemini-4-carbon-high", NOW), Ok(100.0));
+        let group = serde_json::from_value(serde_json::json!({"display_name":"Gemini 4 Carbon","buckets":[
+            {"bucket_id":"gemini-carbon-wtu-weekly","window":"weekly","remaining_fraction":0.4,
+             "remaining_fraction_known":true,"reset_time":"2027-02-01T00:00:00Z"},
+            {"bucket_id":"gemini-carbon-5h","window":"5h","remaining_fraction":0.6,
+             "remaining_fraction_known":true,"reset_time":"2027-02-01T00:00:00Z"}
+        ]})).unwrap();
+        q.quota_groups.as_mut().unwrap().insert(0, group);
+        assert_eq!(remaining(&q, "gemini-test", NOW), Ok(80.0));
+        assert_eq!(remaining(&q, "gemini-4-carbon-high", NOW), Ok(40.0));
+        q.quota_groups.as_mut().unwrap()[0].buckets.pop();
+        assert_eq!(remaining(&q, "gemini-4-carbon-high", NOW), Ok(40.0));
+        q.quota_groups.as_mut().unwrap()[0].buckets[0].remaining_fraction_known = Some(false);
+        assert_eq!(remaining(&q, "gemini-4-carbon-high", NOW), Err("unknown_pool"));
     }
     #[test]
     fn queue_is_stable_and_loses_closed_evidence_on_activity() {
