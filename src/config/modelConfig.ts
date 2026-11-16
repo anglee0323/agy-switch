@@ -561,7 +561,7 @@ export function getDisplayQuotaModels(
     // 2. 将账号的实际模型按主模型 Key 汇聚（若存在多个档位，择优选取 High 或有效项）
     const accountCanonMap = new Map<string, ModelQuota>();
     for (const m of (accountModels || [])) {
-        if (!m.name) continue;
+        if (!m.name || m.name.toLowerCase().endsWith('-disabled')) continue;
         const canon = getCanonicalModelKey(m.name);
         const existing = accountCanonMap.get(canon);
         if (!existing) {
@@ -591,6 +591,18 @@ export function getDisplayQuotaModels(
             if (carbonModel) {
                 rawModel = { ...carbonModel, name: canonKey, display_name: undefined };
             }
+        } else if (!rawModel && canonKey === 'gemini-4-hydrogen' && !pinnedKeys.includes('gemini-3.8-flash')) {
+            rawModel = accountCanonMap.get('gemini-3.8-flash');
+        } else if (!rawModel && canonKey === 'gemini-3.8-flash' && !pinnedKeys.includes('gemini-4-hydrogen')) {
+            rawModel = accountCanonMap.get('gemini-4-hydrogen');
+        } else if (!rawModel && canonKey === 'claude-sonnet-5-5' && !pinnedKeys.includes('claude-sonnet-4-6')) {
+            rawModel = accountCanonMap.get('claude-sonnet-4-6');
+        } else if (!rawModel && canonKey === 'claude-sonnet-4-6' && !pinnedKeys.includes('claude-sonnet-5-5')) {
+            rawModel = accountCanonMap.get('claude-sonnet-5-5');
+        } else if (!rawModel && canonKey === 'claude-opus-5-5' && !pinnedKeys.includes('claude-opus-4-6-thinking')) {
+            rawModel = accountCanonMap.get('claude-opus-4-6-thinking');
+        } else if (!rawModel && canonKey === 'claude-opus-4-6-thinking' && !pinnedKeys.includes('claude-opus-5-5')) {
+            rawModel = accountCanonMap.get('claude-opus-5-5');
         } else if (!rawModel && canonKey === 'gemini-3.1-pro' && !pinnedKeys.includes('gemini-2.5-pro')) {
             rawModel = accountCanonMap.get('gemini-2.5-pro');
         } else if (!rawModel && canonKey === 'gemini-2.5-pro' && !pinnedKeys.includes('gemini-3.1-pro')) {

@@ -62,10 +62,12 @@ export function QuotaItem({
 
     // 1. 当 percentage === null 时（如未知/失效/未激活桶），保持极简紧凑单行灰显
     if (percentage === null) {
+        const hasSecondary = Boolean(secondaryWindow && secondaryWindow.percentage !== null);
         return (
             <div
                 className={cn(
-                    "h-[24px] px-2 rounded-md flex items-center justify-between text-gray-400 dark:text-gray-500 text-[10px] font-mono opacity-60 border border-gray-100/50 dark:border-white/5 bg-gray-50/20 dark:bg-white/5",
+                    "h-[24px] px-2 rounded-md flex items-center justify-between text-gray-400 dark:text-gray-500 text-[10px] font-mono border border-gray-100/50 dark:border-white/5 bg-gray-50/20 dark:bg-white/5",
+                    hasSecondary ? "opacity-85" : "opacity-60",
                     className
                 )}
                 title={title || (typeof label === 'string' ? label : undefined)}
@@ -75,6 +77,24 @@ export function QuotaItem({
                     {label}
                 </span>
                 <div className="flex items-center gap-1.5 shrink-0">
+                    {secondaryWindow && secondaryWindow.percentage !== null && (
+                        <span
+                            className="text-[9px] font-mono px-1.5 py-0.2 rounded border inline-flex items-center gap-1 font-medium bg-gray-100/80 dark:bg-white/[0.06] border-gray-200/80 dark:border-white/10 text-gray-600 dark:text-gray-300"
+                            title={
+                                secondaryWindow.resetTime
+                                    ? `${secondaryWindow.label}: ${Math.round(secondaryWindow.percentage)}% (${formatTimeRemaining(secondaryWindow.resetTime)})`
+                                    : `${secondaryWindow.label}: ${Math.round(secondaryWindow.percentage)}%`
+                            }
+                        >
+                            <span className="opacity-75">{secondaryWindow.label}</span>
+                            <span className={cn("font-bold", getTextColorClass(secondaryWindow.percentage))}>
+                                {Math.round(secondaryWindow.percentage)}%
+                            </span>
+                            {secondaryWindow.resetTime && (
+                                <span className="opacity-70 text-[8px]">· {formatTimeRemaining(secondaryWindow.resetTime)}</span>
+                            )}
+                        </span>
+                    )}
                     {windowLabel && <span className="text-[9px] px-1 py-0.2 rounded bg-gray-200/50 dark:bg-white/5">{windowLabel}</span>}
                     <span className="italic">—</span>
                 </div>
