@@ -85,14 +85,22 @@ export function findBucketFor5h(
 ): BucketValuation | undefined {
     if (!buckets) return undefined;
     if (windowHint === 'weekly') {
-        const weekly = buckets.find(b => b.pool === pool && b.window.toLowerCase().includes('week'));
+        const weekly = buckets.find(
+            b => b.pool === pool && (b.window.toLowerCase().includes('week') || b.bucket_id.toLowerCase().includes('week'))
+        );
         if (weekly) return weekly;
+        return buckets.find(b => b.pool === pool);
     }
-    // 优先匹配 5h 窗口
-    const exact = buckets.find(b => b.pool === pool && b.window.toLowerCase().includes('5h'));
+    // 优先匹配 5h 窗口，绝不把 weekly 错配到 Gemini / 3P 的 5h 行
+    const exact = buckets.find(
+        b => b.pool === pool && (b.window.toLowerCase().includes('5h') || (!b.window.toLowerCase().includes('week') && !b.bucket_id.toLowerCase().includes('week')))
+    );
     if (exact) return exact;
-    // Argon 或未分 5h 的池回退首个匹配池的桶
-    return buckets.find(b => b.pool === pool);
+    // 仅 Argon / Carbon 等纯周窗口池在 5h 视图回退其池桶
+    if (pool === 'argon' || pool === 'carbon') {
+        return buckets.find(b => b.pool === pool);
+    }
+    return undefined;
 }
 
 export interface ValuationDisplayResult {
@@ -331,7 +339,7 @@ export function formatValuationStructured(
 
     let cycleCompareText: string | undefined;
     let cycleCompareTone: 'increase' | 'decrease' | 'flat' | undefined;
-    if (delta_total_pct != null) {
+    if ((provenance === 'observed' || provenance === 'exhausted') && delta_total_pct != null && Math.abs(delta_total_pct) <= 100) {
         const pct = Math.round(delta_total_pct);
         if (pct > 0) {
             cycleCompareText = isZh ? `环比 +${pct}%` : `+${pct}% vs last`;
@@ -339,9 +347,6 @@ export function formatValuationStructured(
         } else if (pct < 0) {
             cycleCompareText = isZh ? `环比 ${pct}%` : `${pct}% vs last`;
             cycleCompareTone = 'decrease';
-        } else {
-            cycleCompareText = isZh ? '环比持平' : 'flat vs last';
-            cycleCompareTone = 'flat';
         }
     }
 

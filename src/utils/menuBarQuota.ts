@@ -68,6 +68,9 @@ export function effectiveModelQuota(
   model?: ModelQuota,
   quota?: QuotaData,
 ): { percentage: number | null; resetTime?: string } {
+  if (model?.name?.trim().toLowerCase().endsWith('-disabled')) {
+    return { percentage: null, resetTime: undefined };
+  }
   const basePercentage = observedModelPercentage(model);
   const baseResetTime = model?.reset_time;
   if (!model?.name || !quota?.quota_groups?.length) {
@@ -124,18 +127,59 @@ export function modelQuotaForWindow(
   requestedWindow: '5h' | 'weekly' = '5h',
 ): { percentage: number | null; resetTime?: string; window: '5h' | 'weekly' } {
   const pool = modelQuotaPoolKind(model?.name || '', model?.display_name);
+  if (model?.name?.trim().toLowerCase().endsWith('-disabled')) {
+    return { percentage: null, resetTime: undefined, window: pool === 'argon' ? 'weekly' : requestedWindow };
+  }
   if (pool === 'argon') return { ...effectiveModelQuota(model, quota), window: 'weekly' };
   const window = requestedWindow;
   const isWeeklyCache = model?.quota_bucket_id?.toLowerCase().endsWith('-weekly');
   const primary = model?.primary_quota;
-  const base = window === 'weekly' || (isWeeklyCache && !primary) ? null
-    : primary ? observedPercentage(primary.remaining_fraction, true, true) : observedModelPercentage(model);
+  const primaryPercentage = primary ? observedPercentage(primary.remaining_fraction, true, true) : null;
+  const hasPrimary = primaryPercentage !== null;
+  const weeklyBuckets = pool
+    ? (quota?.quota_groups || []).flatMap(group =>
+        group.buckets.filter(
+          bucket =>
+            quotaPoolKind(bucket.bucket_id, group.display_name) === pool &&
+            bucket.window.trim().toLowerCase() === 'weekly',
+        ),
+      )
+    : [];
+  const shortBuckets = pool
+    ? (quota?.quota_groups || []).flatMap(group =>
+        group.buckets.filter(
+          bucket =>
+            quotaPoolKind(bucket.bucket_id, group.display_name) === pool &&
+            bucket.window.trim().toLowerCase() === '5h',
+        ),
+      )
+    : [];
+  const candidateReset = (primary?.reset_time ?? model?.reset_time ?? '').trim();
+  const matchesBucketReset = (buckets: typeof weeklyBuckets, target: string) =>
+    Boolean(target) &&
+    buckets.some(b => {
+      const br = (b.reset_time || '').trim();
+      if (!br) return false;
+      if (br === target) return true;
+      const bMs = Date.parse(br);
+      const tMs = Date.parse(target);
+      return Number.isFinite(bMs) && Number.isFinite(tMs) && Math.abs(bMs - tMs) <= 60_000;
+    });
+  const primaryMatchesWeekly =
+    window === '5h' &&
+    matchesBucketReset(weeklyBuckets, candidateReset) &&
+    !matchesBucketReset(shortBuckets, candidateReset);
+  const base =
+    window === 'weekly' || (isWeeklyCache && !hasPrimary) || primaryMatchesWeekly
+      ? null
+      : hasPrimary
+        ? primaryPercentage
+        : observedModelPercentage(model);
   const baseReset = base === null ? undefined : primary?.reset_time ?? model?.reset_time;
   const fallback = { percentage: base, resetTime: baseReset, window };
   // A configured selector without a reported model remains unknown.
-  if (!pool || !model || (!primary && !model.quota_bucket_id && observedModelPercentage(model) === null)) return fallback;
-  const buckets = (quota?.quota_groups || []).flatMap(group => group.buckets.filter(bucket =>
-    quotaPoolKind(bucket.bucket_id, group.display_name) === pool && bucket.window.trim().toLowerCase() === window));
+  if (!pool || !model || (!hasPrimary && !model.quota_bucket_id && observedModelPercentage(model) === null)) return fallback;
+  const buckets = window === 'weekly' ? weeklyBuckets : shortBuckets;
   const first = buckets[0];
   if (!first) return fallback;
   if (buckets.some(b => b.bucket_id !== first.bucket_id || b.remaining_fraction !== first.remaining_fraction ||

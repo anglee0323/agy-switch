@@ -22,18 +22,27 @@ import { cn } from '../../utils/cn';
 import { formatCurrencyCompact } from '../../utils/currency';
 import { useConfigStore } from '../../stores/useConfigStore';
 
+export interface RawCycleCheckpoint {
+    ts?: number;
+    timestamp?: number;
+    remaining_fraction: number;
+    delta_fraction?: number;
+}
+
 export interface CycleCheckpoint {
     timestamp: number;
     remaining_fraction: number;
     delta_fraction: number;
 }
 
-export interface QuotaCycleRecord {
+export interface RawQuotaCycleRecord {
     cycle_id: string;
     account_id: string;
-    pool: 'gemini' | 'third_party' | 'argon' | 'carbon' | 'unknown';
+    pool: string;
     window: string;
-    start_time: string;
+    cycle_start_ts?: number;
+    start_time?: string;
+    reset_ts?: number;
     reset_time: string;
     first_observed_remaining: number;
     latest_remaining: number;
@@ -41,7 +50,35 @@ export interface QuotaCycleRecord {
     consumed_fraction: number;
     last_delta_fraction: number;
     sample_count: number;
+    status: string;
+    provenance?: string;
+    used_usd?: number;
+    estimated_total_usd?: number | null;
+    prev_cycle_total_usd?: number | null;
+    delta_total_usd?: number | null;
+    delta_total_pct?: number | null;
+    checkpoints?: RawCycleCheckpoint[];
+    email?: string;
+    subscription_tier?: string;
+}
+
+export interface QuotaCycleRecord {
+    row_key: string;
+    cycle_id: string;
+    account_id: string;
+    pool: 'gemini' | 'third_party' | 'argon' | 'carbon' | 'unknown';
+    window: string;
+    start_time: string;
+    reset_time: string;
+    reset_ts: number;
+    first_observed_remaining: number;
+    latest_remaining: number;
+    min_remaining: number;
+    consumed_fraction: number;
+    last_delta_fraction: number;
+    sample_count: number;
     status: 'active' | 'completed';
+    provenance?: string;
     used_usd?: number;
     estimated_total_usd?: number;
     prev_cycle_total_usd?: number;
@@ -50,6 +87,13 @@ export interface QuotaCycleRecord {
     checkpoints: CycleCheckpoint[];
     email?: string;
     subscription_tier?: string;
+}
+
+export interface RawQuotaCycleAccountGroup {
+    account_id: string;
+    email: string;
+    subscription_tier?: string | null;
+    records: RawQuotaCycleRecord[];
 }
 
 export interface QuotaCycleAccountSummary {
@@ -62,11 +106,120 @@ export interface QuotaCycleAccountSummary {
 }
 
 export interface QuotaCycleHistoryResponse {
-    cycles: QuotaCycleRecord[];
-    accounts_summary: QuotaCycleAccountSummary[];
-    currency: 'usd' | 'cny' | 'both';
+    accounts?: RawQuotaCycleAccountGroup[];
+    cycles?: RawQuotaCycleRecord[];
+    accounts_summary?: QuotaCycleAccountSummary[];
+    currency: 'usd' | 'cny' | 'both' | string;
     usd_to_cny_rate: number;
-    queried_at: number;
+    fetched_at?: number;
+    queried_at?: number;
+}
+
+function normalizePool(pool: string): 'gemini' | 'third_party' | 'argon' | 'carbon' | 'unknown' {
+    const lower = (pool || '').toLowerCase();
+    if (lower === 'gemini') return 'gemini';
+    if (lower === 'third_party' || lower === '3p') return 'third_party';
+    if (lower === 'argon') return 'argon';
+    if (lower === 'carbon') return 'carbon';
+    return 'unknown';
+}
+
+function formatPoolLabel(pool: QuotaCycleRecord['pool']): string {
+    switch (pool) {
+        case 'gemini':
+            return 'Gemini';
+        case 'third_party':
+            return 'Claude / GPT';
+        case 'argon':
+            return 'Gemini 4 Argon';
+        case 'carbon':
+            return 'Gemini 4 Carbon';
+        default:
+            return pool;
+    }
+}
+
+function formatPoolShort(pool: QuotaCycleRecord['pool']): string {
+    switch (pool) {
+        case 'gemini':
+            return 'Gem';
+        case 'third_party':
+            return '3P';
+        case 'argon':
+            return 'Arg';
+        case 'carbon':
+            return 'Cbn';
+        default:
+            return pool.slice(0, 3);
+    }
+}
+
+function normalizeRecord(
+    rec: RawQuotaCycleRecord,
+    accountId: string,
+    email?: string,
+    subscriptionTier?: string | null
+): QuotaCycleRecord {
+    const pool = normalizePool(rec.pool);
+    const windowNorm = (rec.window || '').toLowerCase().includes('week') ? 'weekly' : '5h';
+    const startTime =
+        rec.start_time ||
+        (rec.cycle_start_ts && rec.cycle_start_ts > 0
+            ? new Date(rec.cycle_start_ts * 1000).toISOString()
+            : '');
+    const resetTs =
+        rec.reset_ts ??
+        (rec.reset_time ? Math.floor(new Date(rec.reset_time).getTime() / 1000) || 0 : 0);
+
+    const rawCheckpoints = Array.isArray(rec.checkpoints) ? rec.checkpoints : [];
+    const checkpoints: CycleCheckpoint[] = rawCheckpoints
+        .map((cp, idx) => {
+            const prev =
+                idx > 0 ? rawCheckpoints[idx - 1].remaining_fraction : rec.first_observed_remaining;
+            const delta =
+                cp.delta_fraction ?? (idx === 0 ? 0 : cp.remaining_fraction - prev);
+            return {
+                timestamp: cp.timestamp ?? cp.ts ?? 0,
+                remaining_fraction: cp.remaining_fraction,
+                delta_fraction: delta,
+            };
+        })
+        .reverse();
+
+    const trustworthyDeltaPct =
+        (rec.provenance === 'observed' || rec.provenance === 'exhausted') &&
+        rec.delta_total_pct != null &&
+        Math.abs(rec.delta_total_pct) <= 100
+            ? rec.delta_total_pct
+            : undefined;
+
+    return {
+        row_key: `${accountId}:${pool}:${rec.cycle_id}`,
+        cycle_id: rec.cycle_id,
+        account_id: accountId,
+        pool,
+        window: windowNorm,
+        start_time: startTime,
+        reset_time: rec.reset_time,
+        reset_ts: resetTs,
+        first_observed_remaining: rec.first_observed_remaining,
+        latest_remaining: rec.latest_remaining,
+        min_remaining: rec.min_remaining,
+        consumed_fraction: rec.consumed_fraction,
+        last_delta_fraction: rec.last_delta_fraction,
+        sample_count: rec.sample_count,
+        status: rec.status === 'completed' ? 'completed' : 'active',
+        provenance: rec.provenance,
+        used_usd: rec.used_usd ?? 0,
+        estimated_total_usd: rec.estimated_total_usd ?? undefined,
+        prev_cycle_total_usd: rec.prev_cycle_total_usd ?? undefined,
+        delta_total_usd:
+            trustworthyDeltaPct != null ? (rec.delta_total_usd ?? undefined) : undefined,
+        delta_total_pct: trustworthyDeltaPct,
+        checkpoints,
+        email: email || rec.email,
+        subscription_tier: (subscriptionTier ?? rec.subscription_tier) || undefined,
+    };
 }
 
 interface QuotaCycleModalProps {
@@ -83,7 +236,7 @@ export default function QuotaCycleModal({
     const { i18n } = useTranslation();
     const isZh = i18n.language.startsWith('zh');
     const { config } = useConfigStore();
-    const currencyMode = config?.quota_valuation?.currency ?? 'usd';
+    const currencyMode = (config?.quota_valuation?.currency ?? 'usd') as 'usd' | 'cny' | 'both';
 
     const [loading, setLoading] = useState(false);
     const [data, setData] = useState<QuotaCycleHistoryResponse | null>(null);
@@ -95,37 +248,92 @@ export default function QuotaCycleModal({
     const [selectedWindow, setSelectedWindow] = useState<string>('all');
     const [selectedStatus, setSelectedStatus] = useState<string>('all');
 
-    // 展开检查点详情的行
-    const [expandedCycleId, setExpandedCycleId] = useState<string | null>(null);
+    // 展开检查点详情的行 (使用跨账号唯一 row_key)
+    const [expandedCycleKey, setExpandedCycleKey] = useState<string | null>(null);
 
     const loadData = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
-            const resp = await request<QuotaCycleHistoryResponse>('get_quota_cycle_history', {
-                accountId: selectedAccount === 'all' ? undefined : selectedAccount,
-            });
+            const resp = await request<QuotaCycleHistoryResponse>('get_quota_cycle_history', {});
             setData(resp);
         } catch (err: any) {
             setError(err?.toString() || 'Failed to fetch cycle history');
         } finally {
             setLoading(false);
         }
-    }, [selectedAccount]);
+    }, []);
 
     useEffect(() => {
         if (isOpen) {
-            if (initialAccountId) {
-                setSelectedAccount(initialAccountId);
-            }
+            setSelectedAccount(initialAccountId || 'all');
+            setExpandedCycleKey(null);
             loadData();
         }
     }, [isOpen, initialAccountId, loadData]);
 
+    // 将后端按账号分组的 records 或兼容 cycles 扁平化
+    const { allCycles, accountsSummary } = useMemo(() => {
+        if (!data) {
+            return { allCycles: [] as QuotaCycleRecord[], accountsSummary: [] as QuotaCycleAccountSummary[] };
+        }
+
+        const cycles: QuotaCycleRecord[] = [];
+        const summaries: QuotaCycleAccountSummary[] = [];
+
+        if (Array.isArray(data.accounts)) {
+            for (const acc of data.accounts) {
+                const tierLower = (acc.subscription_tier || '').toLowerCase();
+                const isFreeTier = tierLower === 'free' || tierLower.includes('starter');
+                const accCycles: QuotaCycleRecord[] = [];
+
+                for (const rec of acc.records || []) {
+                    const norm = normalizeRecord(rec, acc.account_id, acc.email, acc.subscription_tier);
+                    if (isFreeTier && norm.window === '5h') {
+                        continue;
+                    }
+                    accCycles.push(norm);
+                    cycles.push(norm);
+                }
+
+                if (accCycles.length > 0) {
+                    summaries.push({
+                        account_id: acc.account_id,
+                        email: acc.email,
+                        total_cycles: accCycles.length,
+                        active_cycles: accCycles.filter(c => c.status === 'active').length,
+                        total_consumed_usd: accCycles.reduce((s, c) => s + (c.used_usd ?? 0), 0),
+                        latest_reset_time: accCycles[0]?.reset_time,
+                    });
+                }
+            }
+        } else if (Array.isArray(data.cycles)) {
+            const accMap = new Map<string, QuotaCycleAccountSummary>();
+            for (const rec of data.cycles) {
+                const norm = normalizeRecord(rec, rec.account_id, rec.email, rec.subscription_tier);
+                cycles.push(norm);
+                const existing = accMap.get(norm.account_id) || {
+                    account_id: norm.account_id,
+                    email: norm.email || norm.account_id.slice(0, 8),
+                    total_cycles: 0,
+                    active_cycles: 0,
+                    total_consumed_usd: 0,
+                };
+                existing.total_cycles += 1;
+                if (norm.status === 'active') existing.active_cycles += 1;
+                existing.total_consumed_usd += norm.used_usd ?? 0;
+                accMap.set(norm.account_id, existing);
+            }
+            summaries.push(...(data.accounts_summary || Array.from(accMap.values())));
+        }
+
+        cycles.sort((a, b) => b.reset_ts - a.reset_ts);
+        return { allCycles: cycles, accountsSummary: summaries };
+    }, [data]);
+
     // 过滤后的周期列表
     const filteredCycles = useMemo(() => {
-        if (!data?.cycles) return [];
-        return data.cycles.filter(c => {
+        return allCycles.filter(c => {
             if (selectedAccount !== 'all' && c.account_id !== selectedAccount) return false;
             if (selectedPool !== 'all' && c.pool !== selectedPool) return false;
             if (selectedWindow !== 'all') {
@@ -136,11 +344,11 @@ export default function QuotaCycleModal({
             if (selectedStatus !== 'all' && c.status !== selectedStatus) return false;
             return true;
         });
-    }, [data?.cycles, selectedAccount, selectedPool, selectedWindow, selectedStatus]);
+    }, [allCycles, selectedAccount, selectedPool, selectedWindow, selectedStatus]);
 
     // 汇总指标计算
     const metrics = useMemo(() => {
-        if (!data?.cycles || data.cycles.length === 0) {
+        if (allCycles.length === 0) {
             return {
                 totalCycles: 0,
                 activeCycles: 0,
@@ -152,7 +360,7 @@ export default function QuotaCycleModal({
         }
         const active = filteredCycles.filter(c => c.status === 'active').length;
         const totalUsedUsd = filteredCycles.reduce((sum, c) => sum + (c.used_usd ?? 0), 0);
-        const rate = data.usd_to_cny_rate || 7.2;
+        const rate = data?.usd_to_cny_rate || 7.2;
         const totalCheckpoints = filteredCycles.reduce((sum, c) => sum + (c.checkpoints?.length || 0), 0);
 
         const cyclesWithDelta = filteredCycles.filter(c => c.delta_total_pct != null);
@@ -168,7 +376,7 @@ export default function QuotaCycleModal({
             totalCheckpoints,
             avgDeltaPct: avgDelta,
         };
-    }, [filteredCycles, data?.usd_to_cny_rate]);
+    }, [allCycles.length, filteredCycles, data?.usd_to_cny_rate]);
 
     // 趋势图展示的最近 10 个周期
     const chartCycles = useMemo(() => {
@@ -341,9 +549,9 @@ export default function QuotaCycleModal({
 
                                 return (
                                     <div
-                                        key={cycle.cycle_id}
+                                        key={cycle.row_key}
                                         className="flex-1 flex flex-col items-center gap-1 group relative h-full justify-end"
-                                        title={`${cycle.pool} (${cycle.window})\n${isZh ? '已消耗' : 'Consumed'}: ${consumedPct}% (${costStr})\n${formatTime(cycle.reset_time)}`}
+                                        title={`${cycle.email ? `${cycle.email}\n` : ''}${formatPoolLabel(cycle.pool)} (${cycle.window === 'weekly' ? (isZh ? '周配额' : 'Weekly') : '5H'})\n${isZh ? '已消耗' : 'Consumed'}: ${consumedPct}% (${costStr})\n${formatTime(cycle.reset_time)}`}
                                     >
                                         <div className="text-[9px] font-mono text-gray-500 dark:text-gray-400 opacity-80 group-hover:opacity-100 font-semibold">
                                             {consumedPct}%
@@ -362,7 +570,7 @@ export default function QuotaCycleModal({
                                             />
                                         </div>
                                         <div className="text-[8px] font-mono text-gray-400 truncate w-full text-center">
-                                            {cycle.pool.slice(0, 3)}·{cycle.window}
+                                            {formatPoolShort(cycle.pool)}·{cycle.window === 'weekly' ? (isZh ? '周' : 'W') : '5H'}
                                         </div>
                                     </div>
                                 );
@@ -383,7 +591,7 @@ export default function QuotaCycleModal({
                                 className="px-2.5 py-1 rounded-lg text-xs bg-gray-100 dark:bg-base-200 border-none font-medium text-gray-800 dark:text-gray-200 focus:ring-1 focus:ring-indigo-500"
                             >
                                 <option value="all">{isZh ? '全部账号' : 'All Accounts'}</option>
-                                {data?.accounts_summary?.map(a => (
+                                {accountsSummary.map(a => (
                                     <option key={a.account_id} value={a.account_id}>
                                         {a.email} ({a.total_cycles})
                                     </option>
@@ -502,18 +710,19 @@ export default function QuotaCycleModal({
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-white/5 font-mono text-[11px]">
                                 {filteredCycles.map(cycle => {
-                                    const isExpanded = expandedCycleId === cycle.cycle_id;
+                                    const isExpanded = expandedCycleKey === cycle.row_key;
                                     const startPct = Math.round(cycle.first_observed_remaining * 100);
                                     const latestPct = Math.round(cycle.latest_remaining * 100);
                                     const consumedPct = Math.round(cycle.consumed_fraction * 100);
                                     const deltaPct = cycle.delta_total_pct != null ? Math.round(cycle.delta_total_pct) : null;
                                     const rate = data?.usd_to_cny_rate || 7.2;
                                     const usedCny = (cycle.used_usd ?? 0) * rate;
+                                    const isWeekly = cycle.window === 'weekly';
 
                                     return (
-                                        <React.Fragment key={cycle.cycle_id}>
+                                        <React.Fragment key={cycle.row_key}>
                                             <tr
-                                                onClick={() => setExpandedCycleId(isExpanded ? null : cycle.cycle_id)}
+                                                onClick={() => setExpandedCycleKey(isExpanded ? null : cycle.row_key)}
                                                 className="hover:bg-gray-50/70 dark:hover:bg-white/[0.02] cursor-pointer transition-colors"
                                             >
                                                 <td className="py-2 px-3 text-gray-400">
@@ -536,11 +745,18 @@ export default function QuotaCycleModal({
                                                     )}
                                                 </td>
                                                 <td className="py-2 px-3">
-                                                    <span className="font-semibold text-gray-700 dark:text-gray-300 capitalize">
-                                                        {cycle.pool}
+                                                    <span className="font-semibold text-gray-700 dark:text-gray-300">
+                                                        {formatPoolLabel(cycle.pool)}
                                                     </span>
-                                                    <span className="ml-1.5 text-[10px] text-gray-400">
-                                                        {cycle.window}
+                                                    <span
+                                                        className={cn(
+                                                            'ml-1.5 text-[10px] px-1 py-0.2 rounded font-medium border',
+                                                            isWeekly
+                                                                ? 'bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20'
+                                                                : 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20'
+                                                        )}
+                                                    >
+                                                        {isWeekly ? (isZh ? '周配额' : 'Weekly') : '5H'}
                                                     </span>
                                                 </td>
                                                 <td className="py-2 px-3 text-gray-500 dark:text-gray-400">

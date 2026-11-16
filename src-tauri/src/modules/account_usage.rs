@@ -735,6 +735,7 @@ pub fn valuate_bucket_with_cold_share(
     let mut used_usd = 0.0_f64;
     let mut priced_events = 0_u64;
     let mut unpriced_events = 0_u64;
+    let mut has_cold_share_events = false;
 
     if let Some(expected_pool) = pool_opt {
         for event in events {
@@ -752,7 +753,7 @@ pub fn valuate_bucket_with_cold_share(
                     } else {
                         0.0
                     }
-                } else if cold_start_share > 0.0 {
+                } else if (is_active || !intervals.is_empty()) && cold_start_share > 0.0 {
                     cold_start_share
                 } else {
                     0.0
@@ -769,6 +770,9 @@ pub fn valuate_bucket_with_cold_share(
 
             if effective_share <= 0.0 {
                 continue;
+            }
+            if effective_share < 0.999 {
+                has_cold_share_events = true;
             }
 
             let matched_price = match_model_price(&event.model, prices);
@@ -826,35 +830,55 @@ pub fn valuate_bucket_with_cold_share(
                 estimated_remaining_usd = Some(0.0);
             }
         } else if used_fraction >= 0.03 && used_tokens > 0 {
-            provenance = "observed".to_string();
-            let total_tok = (used_tokens as f64 / used_fraction).round() as u64;
-            let rem_tok = (total_tok as f64 * remaining_fraction).round() as u64;
-            estimated_total_tokens = Some(total_tok);
-            estimated_remaining_tokens = Some(rem_tok);
+            let full_span_coverage = !has_cold_share_events
+                && first_span_ts.map_or(false, |ts| ts <= window_start + 300);
+            let ref_cap_opt = builtin_tier_reference_cap_usd(tier_key, pool_key, &window_key);
+            let raw_total_usd = (priced_events > 0).then(|| used_usd / used_fraction);
+            let sane_vs_ref = match (raw_total_usd, ref_cap_opt) {
+                (Some(t), Some(cap)) => t >= cap * 0.4 && t <= cap * 2.0,
+                _ => true,
+            };
 
-            if priced_events > 0 {
-                let total_usd = used_usd / used_fraction;
-                let rem_usd = total_usd * remaining_fraction;
-                estimated_total_usd = Some(total_usd);
-                estimated_remaining_usd = Some(rem_usd);
+            if sane_vs_ref || (full_span_coverage && cold_start_share >= 0.999) {
+                provenance = "observed".to_string();
+                let total_tok = (used_tokens as f64 / used_fraction).round() as u64;
+                let rem_tok = (total_tok as f64 * remaining_fraction).round() as u64;
+                estimated_total_tokens = Some(total_tok);
+                estimated_remaining_tokens = Some(rem_tok);
 
-                // 高置信度校准样本沉淀
-                if used_fraction >= 0.15 && unpriced_events == 0 && total_tok > 0 && tier_key != "unknown" {
-                    let usd_per_m = total_usd / (total_tok as f64 / 1_000_000.0);
-                    let samples = calibration_store.samples.entry(composite_key).or_default();
-                    if !samples.iter().any(|s| s.reset_time == bucket.reset_time) {
-                        samples.push(CalibrationSample {
-                            reset_time: bucket.reset_time.clone(),
-                            total_usd,
-                            usd_per_m_tokens: usd_per_m,
-                            recorded_at: now_ts,
-                        });
-                        if samples.len() > MAX_CALIBRATION_SAMPLES {
-                            samples.remove(0);
+                if priced_events > 0 {
+                    let total_usd = used_usd / used_fraction;
+                    let rem_usd = total_usd * remaining_fraction;
+                    estimated_total_usd = Some(total_usd);
+                    estimated_remaining_usd = Some(rem_usd);
+
+                    // 高置信度校准样本沉淀
+                    if full_span_coverage
+                        && sane_vs_ref
+                        && cold_start_share >= 0.999
+                        && used_fraction >= 0.15
+                        && unpriced_events == 0
+                        && total_tok > 0
+                        && tier_key != "unknown"
+                    {
+                        let usd_per_m = total_usd / (total_tok as f64 / 1_000_000.0);
+                        let samples = calibration_store.samples.entry(composite_key).or_default();
+                        if !samples.iter().any(|s| s.reset_time == bucket.reset_time) {
+                            samples.push(CalibrationSample {
+                                reset_time: bucket.reset_time.clone(),
+                                total_usd,
+                                usd_per_m_tokens: usd_per_m,
+                                recorded_at: now_ts,
+                            });
+                            if samples.len() > MAX_CALIBRATION_SAMPLES {
+                                samples.remove(0);
+                            }
+                            *calibration_dirty = true;
                         }
-                        *calibration_dirty = true;
                     }
                 }
+            } else {
+                provenance = "used_only".to_string();
             }
         } else if used_fraction > 0.0 && used_tokens > 0 {
             provenance = "used_only".to_string();
@@ -924,18 +948,38 @@ fn apply_reference_cap_pass2(
         .copied()
         .filter(|c| c.is_finite() && *c > 0.0);
 
-    let calibrated_cap = calibration_store.samples.get(&composite_key).and_then(|samples| {
-        let mut totals: Vec<f64> = samples.iter().map(|s| s.total_usd).collect();
-        calculate_median(&mut totals)
-    });
+    let ref_cap = builtin_tier_reference_cap_usd(tier_key, pool_key, window_key);
+    let valid_samples: Vec<&CalibrationSample> = calibration_store
+        .samples
+        .get(&composite_key)
+        .map(|samples| {
+            samples
+                .iter()
+                .filter(|s| {
+                    s.total_usd.is_finite()
+                        && s.total_usd > 0.0
+                        && ref_cap.map_or(true, |cap| s.total_usd >= cap * 0.4 && s.total_usd <= cap * 2.0)
+                })
+                .collect()
+        })
+        .unwrap_or_default();
 
-    let calibrated_usd_per_m = calibration_store.samples.get(&composite_key).and_then(|samples| {
-        let mut per_m: Vec<f64> = samples.iter().map(|s| s.usd_per_m_tokens).collect();
+    let calibrated_cap = if valid_samples.is_empty() {
+        None
+    } else {
+        let mut totals: Vec<f64> = valid_samples.iter().map(|s| s.total_usd).collect();
+        calculate_median(&mut totals)
+    };
+
+    let calibrated_usd_per_m = if valid_samples.is_empty() {
+        None
+    } else {
+        let mut per_m: Vec<f64> = valid_samples.iter().map(|s| s.usd_per_m_tokens).collect();
         calculate_median(&mut per_m)
-    });
+    };
 
     let estimated_ref_cap = if manual_cap.is_none() && calibrated_cap.is_none() {
-        builtin_tier_reference_cap_usd(tier_key, pool_key, window_key)
+        ref_cap
     } else {
         None
     };
@@ -977,10 +1021,22 @@ fn extract_synthetic_5h_bucket(
     let mut reset_timestamps = Vec::new();
 
     for m in models {
+        if m.name.to_ascii_lowercase().ends_with("-disabled") {
+            continue;
+        }
+        if m.quota_bucket_id
+            .as_deref()
+            .map_or(false, |id| id.to_ascii_lowercase().contains("week"))
+        {
+            continue;
+        }
         if model_quota_pool(&m.name, m.display_name.as_deref()) != Some(pool) {
             continue;
         }
         if let Some(ts) = parse_rfc3339_timestamp(&m.reset_time) {
+            if ts > now_ts + 6 * 3600 {
+                continue;
+            }
             if ts > now_ts {
                 reset_timestamps.push(ts);
             }
@@ -1041,8 +1097,8 @@ fn get_account_effective_buckets(
         }
     }
 
-    // 若缺少 5h 桶，由 models 自动合成
-    if !quota.models.is_empty() {
+    // 若缺少 5h 桶且无 quota_groups（仅兼容旧缓存），由 models 自动合成
+    if quota.quota_groups.as_ref().map_or(true, |g| g.is_empty()) && !quota.models.is_empty() {
         if !has_gemini_5h {
             if let Some(b) = extract_synthetic_5h_bucket(&quota.models, QuotaPool::Gemini, now_ts) {
                 result.push((b, "Gemini Models".to_string(), Some(QuotaPool::Gemini)));
@@ -1329,6 +1385,7 @@ fn sync_cycle_valuations(
                 "gemini" => "gemini",
                 "third_party" | "3p" => "3p",
                 "argon" => "argon",
+                "carbon" => "carbon",
                 _ => "unknown",
             };
             if pool_key == "unknown" {
@@ -1388,12 +1445,29 @@ fn sync_cycle_valuations(
                     active_cycle.updated_at = now_ts;
 
                     // 计算跨周期环比
-                    if let (Some(cur), Some(prev)) = (active_cycle.estimated_total_usd, active_cycle.prev_cycle_total_usd) {
-                        if prev > 1e-6 {
-                            let diff = cur - prev;
-                            active_cycle.delta_total_usd = Some(diff);
-                            active_cycle.delta_total_pct = Some((diff / prev) * 100.0);
+                    if matches!(active_cycle.provenance.as_str(), "observed" | "exhausted") {
+                        if let (Some(cur), Some(prev)) = (active_cycle.estimated_total_usd, active_cycle.prev_cycle_total_usd) {
+                            if prev > 1e-6 {
+                                let diff = cur - prev;
+                                let ratio = diff / prev;
+                                if ratio.abs() <= 1.0 {
+                                    active_cycle.delta_total_usd = Some(diff);
+                                    active_cycle.delta_total_pct = Some(ratio * 100.0);
+                                } else {
+                                    active_cycle.delta_total_usd = None;
+                                    active_cycle.delta_total_pct = None;
+                                }
+                            } else {
+                                active_cycle.delta_total_usd = None;
+                                active_cycle.delta_total_pct = None;
+                            }
+                        } else {
+                            active_cycle.delta_total_usd = None;
+                            active_cycle.delta_total_pct = None;
                         }
+                    } else {
+                        active_cycle.delta_total_usd = None;
+                        active_cycle.delta_total_pct = None;
                     }
 
                     // 回填到 BucketValuation 供前端内联展示
@@ -2079,5 +2153,131 @@ mod tests {
         assert_eq!(list[0].estimated_total_usd, Some(5.00));
         assert_eq!(list[1].status, "active");
         assert_eq!(list[1].prev_cycle_total_usd, Some(5.00), "新周期应继承上一周期的总额基准");
+    }
+
+    #[test]
+    fn outlier_calibration_and_cold_start_do_not_corrupt_inactive_or_weekly_buckets() {
+        let bucket = QuotaBucket {
+            bucket_id: "gemini-weekly".into(),
+            window: "weekly".into(),
+            remaining_fraction: 0.70,
+            remaining_fraction_known: Some(true),
+            reset_time: "2026-11-14T12:00:00Z".into(),
+            display_name: None,
+            description: None,
+        };
+        let reset_ts = parse_rfc3339_timestamp(&bucket.reset_time).unwrap();
+        let now_ts = reset_ts - 86400 * 3;
+        // First span started recently -> event happened before first_span_ts, and acc_inactive was not active
+        let spans = vec![AccountUsageSpan {
+            account_id: "acc_other".into(),
+            start_ts: now_ts - 600,
+            end_ts: now_ts,
+        }];
+        let events = vec![GenerationEvent {
+            model: "gemini-3.8-flash".into(),
+            input_tokens: 100_000,
+            output_tokens: 20_000,
+            cached_tokens: 0,
+            total_tokens: 120_000,
+            timestamp_seconds: now_ts - 3600,
+        }];
+        let prices = vec![ApiPricing {
+            model: "gemini-3.8-flash".into(),
+            input: 0.75,
+            output: 3.75,
+            cached: 0.075,
+        }];
+        // Pre-seed a corrupted $0.70 calibration sample for pro:gemini:weekly
+        let mut cal_store = QuotaCapacityCalibrationStore::default();
+        cal_store.samples.insert(
+            "pro:gemini:weekly".into(),
+            vec![CalibrationSample {
+                reset_time: "2026-11-01T12:00:00Z".into(),
+                total_usd: 0.70,
+                usd_per_m_tokens: 1.0,
+                recorded_at: now_ts - 1000,
+            }],
+        );
+        let mut cal_dirty = false;
+        let mut config = AppConfig::default();
+        config.quota_valuation.use_reference_cap = true;
+
+        let mut bv = valuate_bucket_with_cold_share(
+            &bucket,
+            "Gemini Models",
+            "acc_inactive",
+            "pro",
+            false,
+            None,
+            None,
+            now_ts,
+            &spans,
+            &events,
+            &prices,
+            &mut cal_store,
+            &mut cal_dirty,
+            &config,
+            7.2,
+            0.25,
+        );
+        apply_reference_cap_pass2(
+            &mut bv,
+            "pro",
+            "gemini",
+            "weekly",
+            Some(QuotaPool::Gemini),
+            true,
+            &prices,
+            &cal_store,
+            &config,
+            7.2,
+        );
+
+        assert_eq!(bv.used_tokens, 0, "inactive account must not receive pre-span cold_start events");
+        assert!(!cal_dirty, "partial/cold-start runs must not record calibration samples");
+        assert_eq!(bv.provenance, "estimated_reference");
+        assert_eq!(bv.estimated_total_usd, Some(35.0), "corrupted $0.70 calibration sample must be ignored");
+    }
+
+    #[test]
+    fn free_weekly_quota_groups_do_not_synthesize_fake_5h_bucket() {
+        let mut q = crate::models::quota::QuotaData::new();
+        q.subscription_tier = Some("Antigravity Starter Quota".into());
+        q.quota_groups = Some(vec![crate::models::quota::QuotaGroup {
+            display_name: "Gemini Models".into(),
+            description: None,
+            buckets: vec![QuotaBucket {
+                bucket_id: "gemini-weekly".into(),
+                window: "weekly".into(),
+                remaining_fraction: 1.0,
+                remaining_fraction_known: Some(true),
+                reset_time: "2026-11-23T12:00:00Z".into(),
+                display_name: None,
+                description: None,
+            }],
+        }]);
+        q.models.push(crate::models::quota::ModelQuota {
+            name: "gemini-3.8-flash".into(),
+            percentage: 100,
+            percentage_known: Some(true),
+            observed_remaining_fraction: Some(1.0),
+            primary_quota: None,
+            quota_bucket_id: Some("gemini-weekly".into()),
+            reset_time: "2026-11-23T12:00:00Z".into(),
+            display_name: None,
+            supports_images: None,
+            supports_thinking: None,
+            thinking_budget: None,
+            recommended: None,
+            max_tokens: None,
+            max_output_tokens: None,
+            supported_mime_types: None,
+        });
+
+        let now_ts = parse_rfc3339_timestamp("2026-11-16T12:00:00Z").unwrap();
+        let buckets = get_account_effective_buckets(&q, now_ts);
+        assert_eq!(buckets.len(), 1);
+        assert_eq!(buckets[0].0.bucket_id, "gemini-weekly");
     }
 }

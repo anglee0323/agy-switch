@@ -3,18 +3,19 @@ use rquest;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-// Prefer the production model catalog and fall back for endpoint availability.
+// Query the live daily endpoint used by Antigravity first, then fall back to sandbox/prod.
 const QUOTA_API_ENDPOINTS: [&str; 3] = [
-    "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
     "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
     "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:fetchAvailableModels",
+    "https://cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels",
 ];
 
-// Production serves the complete shared quota; daily can return HTTP 200 with only 3p.
+// Query daily first so shared Gemini quotas stay aligned with the Antigravity client;
+// if an endpoint returns an incomplete 3p-only summary, fall back without merging.
 const QUOTA_SUMMARY_ENDPOINTS: [&str; 3] = [
-    "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
     "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
     "https://daily-cloudcode-pa.sandbox.googleapis.com/v1internal:retrieveUserQuotaSummary",
+    "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
 ];
 
 /// Critical retry threshold: considered near recovery when quota reaches 95%
@@ -437,6 +438,15 @@ async fn fetch_quota_summary(
         crate::constants::NATIVE_OAUTH_USER_AGENT.as_str()).await
 }
 
+fn summary_has_gemini_group(groups: &[crate::models::quota::QuotaGroup]) -> bool {
+    groups.iter().any(|group| {
+        group.buckets.iter().any(|bucket| {
+            crate::models::quota::quota_pool(&bucket.bucket_id, &group.display_name)
+                == Some(crate::models::quota::QuotaPool::Gemini)
+        })
+    })
+}
+
 async fn fetch_quota_summary_from_endpoints(
     client: &rquest::Client, access_token: &str, email: &str, project_id: Option<&str>, endpoints: &[&str], user_agent: &str,
 ) -> Option<Vec<crate::models::quota::QuotaGroup>> {
@@ -445,6 +455,7 @@ async fn fetch_quota_summary_from_endpoints(
         .filter(|pid| !pid.is_empty())
         .unwrap_or("aicode-consumers");
     let primary_payload = json!({ "project": default_project });
+    let mut partial_fallback: Option<Vec<crate::models::quota::QuotaGroup>> = None;
 
     for ep_url in endpoints {
         let attempts = [
@@ -459,11 +470,11 @@ async fn fetch_quota_summary_from_endpoints(
             ),
         ];
 
-        for (attempt_idx, (user_agent, current_payload)) in attempts.iter().enumerate() {
+        for (attempt_idx, (attempt_ua, current_payload)) in attempts.iter().enumerate() {
             let res = client
                 .post(*ep_url)
                 .bearer_auth(access_token)
-                .header(rquest::header::USER_AGENT, *user_agent)
+                .header(rquest::header::USER_AGENT, *attempt_ua)
                 .json(current_payload)
                 .send()
                 .await;
@@ -520,8 +531,22 @@ async fn fetch_quota_summary_from_endpoints(
                         .collect();
 
                     if groups.iter().all(|g| g.buckets.is_empty()) { break; }
-                    tracing::debug!("[{}] QuotaSummary fetched {} groups", email, groups.len());
-                    return Some(groups);
+                    if summary_has_gemini_group(&groups) {
+                        tracing::debug!("[{}] QuotaSummary fetched {} groups", email, groups.len());
+                        return Some(groups);
+                    }
+                    crate::modules::logger::log_warn(&format!(
+                        "QuotaSummary API {} returned no Gemini pool, checking fallback",
+                        ep_url
+                    ));
+                    if partial_fallback.is_none() {
+                        partial_fallback = Some(groups);
+                    }
+                    // Bare "antigravity" UA can drop Gemini on daily; retry remaining attempts if any.
+                    if *attempt_ua == "antigravity" && attempt_idx + 1 < attempts.len() {
+                        continue;
+                    }
+                    break;
                 }
                 Err(e) => {
                     crate::modules::logger::log_warn(&format!(
@@ -534,7 +559,7 @@ async fn fetch_quota_summary_from_endpoints(
         }
     }
 
-    None
+    partial_fallback
 }
 
 /// Retain the primary model observation when no matching pool was reported.
@@ -542,6 +567,9 @@ async fn fetch_quota_summary_from_endpoints(
 fn fuse_model_quotas(models: &mut [crate::models::quota::ModelQuota], groups: &[crate::models::quota::QuotaGroup]) {
     use crate::models::quota::{model_quota_pool, quota_pool};
     for model in models {
+        if model.name.to_ascii_lowercase().ends_with("-disabled") {
+            continue;
+        }
         let Some(pool) = model_quota_pool(&model.name, model.display_name.as_deref()) else { continue; };
         let buckets: Vec<_> = groups.iter().flat_map(|group| group.buckets.iter()
             .filter(move |bucket| quota_pool(&bucket.bucket_id, &group.display_name) == Some(pool))).collect();
@@ -735,6 +763,18 @@ mod tests {
         assert_eq!(model.percentage_known, Some(false));
         assert_eq!(model.observed_remaining_fraction, None);
         assert_eq!(model.display_name.as_deref(), Some("Gemini 4 Argon"));
+
+        let disabled_info: ModelInfo = serde_json::from_value(json!({"displayName":"Gemini 4 Hydrogen"})).unwrap();
+        let mut disabled_model = model_from_info("gemini-4-hydrogen-disabled".into(), disabled_info).unwrap();
+        let groups: Vec<crate::models::quota::QuotaGroup> = serde_json::from_value(json!([
+            {"display_name":"Gemini Models","buckets":[
+                {"bucket_id":"gemini-5h","window":"5h","remaining_fraction":1.0,"remaining_fraction_known":true,"reset_time":"2030-01-01T02:00:00Z"},
+                {"bucket_id":"gemini-weekly","window":"weekly","remaining_fraction":1.0,"remaining_fraction_known":true,"reset_time":"2030-01-07T00:00:00Z"}
+            ]}
+        ])).unwrap();
+        fuse_model_quotas(std::slice::from_mut(&mut disabled_model), &groups);
+        assert_eq!(disabled_model.percentage_known, Some(false));
+        assert_eq!(disabled_model.observed_remaining_fraction, None);
     }
     #[test]
     fn offered_tiers_are_not_proof_of_a_subscription() {
@@ -845,8 +885,47 @@ mod tests {
         assert_eq!(result.len(), 1);
         assert_eq!(server.join().unwrap().len(), 3);
     }
+    const PARTIAL_3P_SUMMARY: &str = r#"{"groups":[{"displayName":"Claude and GPT models","buckets":[{"bucketId":"3p-weekly","window":"weekly","remainingFraction":1,"resetTime":"2030-01-07T00:00:00Z"}]}]}"#;
+
+    #[tokio::test]
+    async fn incomplete_3p_only_summary_falls_back_without_merging_environments() {
+        let (url, server) = summary_server(vec![(200, PARTIAL_3P_SUMMARY), (200, SUMMARY)]);
+        let endpoints = [format!("{url}/0"), format!("{url}/1")];
+        let client = rquest::Client::builder().no_proxy().build().unwrap();
+        let result = fetch_quota_summary_from_endpoints(
+            &client,
+            "fixture",
+            "fixture@example.invalid",
+            Some("fixture-project"),
+            &endpoints.iter().map(String::as_str).collect::<Vec<_>>(),
+            "fixture-agent",
+        )
+        .await
+        .unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].display_name, "Gemini");
+        assert_eq!(server.join().unwrap().len(), 2);
+
+        let (url_only_partial, server_partial) = summary_server(vec![(200, PARTIAL_3P_SUMMARY), (500, "{}")]);
+        let endpoints_partial = [format!("{url_only_partial}/0"), format!("{url_only_partial}/1")];
+        let partial = fetch_quota_summary_from_endpoints(
+            &client,
+            "fixture",
+            "fixture@example.invalid",
+            Some("fixture-project"),
+            &endpoints_partial.iter().map(String::as_str).collect::<Vec<_>>(),
+            "fixture-agent",
+        )
+        .await
+        .unwrap();
+        assert_eq!(partial.len(), 1);
+        assert_eq!(partial[0].buckets[0].bucket_id, "3p-weekly");
+        assert_eq!(server_partial.join().unwrap().len(), 2);
+    }
+
     #[test]
-    fn production_summary_precedes_successful_but_incomplete_daily_endpoints() {
-        assert_eq!(QUOTA_SUMMARY_ENDPOINTS[0], "https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary");
+    fn daily_endpoints_precede_cloudcode_production_endpoints() {
+        assert_eq!(QUOTA_API_ENDPOINTS[0], "https://daily-cloudcode-pa.googleapis.com/v1internal:fetchAvailableModels");
+        assert_eq!(QUOTA_SUMMARY_ENDPOINTS[0], "https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary");
     }
 }

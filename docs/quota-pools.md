@@ -47,11 +47,14 @@ cases are in `tests/fixtures/quota-pool-cases.json`.
 ## Data source and verification limits
 
 The account refresh uses `fetchAvailableModels` and `retrieveUserQuotaSummary`
-with the account's own OAuth token and project. Production
-(`cloudcode-pa.googleapis.com`) is queried before daily and sandbox endpoints:
-the latter can return HTTP 200 containing only the
-Claude/GPT group. Omitted groups stay omitted; results from different endpoint
-environments are not combined into a fabricated complete observation.
+with the account's own OAuth token and project. Daily
+(`daily-cloudcode-pa.googleapis.com`) is queried first to match the live
+Antigravity desktop client, falling back to `daily-cloudcode-pa.sandbox` and
+production (`cloudcode-pa.googleapis.com`). If an endpoint returns HTTP 200
+containing only the Claude/GPT group (for example under an unversioned user
+agent), it is held only as a partial fallback while later endpoints are checked;
+omitted groups stay omitted and results from different endpoint environments are
+not combined into a fabricated complete observation.
 Summary permission failures retry the native user agent and an empty project
 payload before falling back. Malformed or empty responses also try the next
 endpoint. Refresh queries the subscription tier again while retaining a cached
