@@ -11,11 +11,6 @@ interface QuotaItemProps {
     percentage: number | null;
     resetTime?: string;
     windowLabel?: string;
-    secondaryWindow?: {
-        label: string;
-        percentage: number | null;
-        resetTime?: string;
-    } | null;
     isProtected?: boolean;
     className?: string;
     Icon?: React.ComponentType<{ size?: number; className?: string }>;
@@ -30,7 +25,6 @@ export function QuotaItem({
     percentage,
     resetTime,
     windowLabel,
-    secondaryWindow,
     isProtected,
     className,
     Icon,
@@ -62,12 +56,10 @@ export function QuotaItem({
 
     // 1. 当 percentage === null 时（如未知/失效/未激活桶），保持极简紧凑单行灰显
     if (percentage === null) {
-        const hasSecondary = Boolean(secondaryWindow && secondaryWindow.percentage !== null);
         return (
             <div
                 className={cn(
-                    "h-[24px] px-2 rounded-md flex items-center justify-between text-gray-400 dark:text-gray-500 text-[10px] font-mono border border-gray-100/50 dark:border-white/5 bg-gray-50/20 dark:bg-white/5",
-                    hasSecondary ? "opacity-85" : "opacity-60",
+                    "h-[24px] px-2 rounded-md flex items-center justify-between text-gray-400 dark:text-gray-500 text-[10px] font-mono opacity-60 border border-gray-100/50 dark:border-white/5 bg-gray-50/20 dark:bg-white/5",
                     className
                 )}
                 title={title || (typeof label === 'string' ? label : undefined)}
@@ -77,24 +69,6 @@ export function QuotaItem({
                     {label}
                 </span>
                 <div className="flex items-center gap-1.5 shrink-0">
-                    {secondaryWindow && secondaryWindow.percentage !== null && (
-                        <span
-                            className="text-[9px] font-mono px-1.5 py-0.2 rounded border inline-flex items-center gap-1 font-medium bg-gray-100/80 dark:bg-white/[0.06] border-gray-200/80 dark:border-white/10 text-gray-600 dark:text-gray-300"
-                            title={
-                                secondaryWindow.resetTime
-                                    ? `${secondaryWindow.label}: ${Math.round(secondaryWindow.percentage)}% (${formatTimeRemaining(secondaryWindow.resetTime)})`
-                                    : `${secondaryWindow.label}: ${Math.round(secondaryWindow.percentage)}%`
-                            }
-                        >
-                            <span className="opacity-75">{secondaryWindow.label}</span>
-                            <span className={cn("font-bold", getTextColorClass(secondaryWindow.percentage))}>
-                                {Math.round(secondaryWindow.percentage)}%
-                            </span>
-                            {secondaryWindow.resetTime && (
-                                <span className="opacity-70 text-[8px]">· {formatTimeRemaining(secondaryWindow.resetTime)}</span>
-                            )}
-                        </span>
-                    )}
                     {windowLabel && <span className="text-[9px] px-1 py-0.2 rounded bg-gray-200/50 dark:bg-white/5">{windowLabel}</span>}
                     <span className="italic">—</span>
                 </div>
@@ -121,38 +95,12 @@ export function QuotaItem({
                     {Icon && <Icon size={13} className="shrink-0 text-gray-500 dark:text-gray-400" />}
                     <span className="truncate min-w-0">{label}</span>
                     {windowLabel && (
-                        <span className={cn(
-                            "text-[10px] px-1 py-0.2 rounded font-medium shrink-0 border",
-                            windowLabel === '5H'
-                                ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/20"
-                                : "bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-500/20"
-                        )}>
+                        <span className="text-[10px] px-1 py-0.2 rounded bg-gray-200/70 dark:bg-white/10 text-gray-500 dark:text-gray-400 font-normal shrink-0">
                             {windowLabel}
                         </span>
                     )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0 pl-1.5 font-bold font-mono">
-                    {secondaryWindow && secondaryWindow.percentage !== null && (
-                        <span
-                            className={cn(
-                                "text-[9px] font-mono px-1.5 py-0.2 rounded border inline-flex items-center gap-1 font-medium",
-                                "bg-gray-100/80 dark:bg-white/[0.06] border-gray-200/80 dark:border-white/10 text-gray-600 dark:text-gray-300"
-                            )}
-                            title={
-                                secondaryWindow.resetTime
-                                    ? `${secondaryWindow.label}: ${Math.round(secondaryWindow.percentage)}% (${formatTimeRemaining(secondaryWindow.resetTime)})`
-                                    : `${secondaryWindow.label}: ${Math.round(secondaryWindow.percentage)}%`
-                            }
-                        >
-                            <span className="opacity-75">{secondaryWindow.label}</span>
-                            <span className={cn("font-bold", getTextColorClass(secondaryWindow.percentage))}>
-                                {Math.round(secondaryWindow.percentage)}%
-                            </span>
-                            {secondaryWindow.resetTime && (
-                                <span className="opacity-70 text-[8px]">· {formatTimeRemaining(secondaryWindow.resetTime)}</span>
-                            )}
-                        </span>
-                    )}
                     {isProtected && (
                         <span title={t('accounts.quota_protected')}><Lock className="w-2.5 h-2.5 text-amber-500" /></span>
                     )}

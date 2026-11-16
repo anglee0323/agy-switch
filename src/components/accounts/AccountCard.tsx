@@ -244,12 +244,6 @@ function AccountCard({
                                     title={`${item.title} (${item.poolBadge})`}
                                     percentage={item.percentage}
                                     resetTime={item.resetTime}
-                                    windowLabel={t('accounts.quota_window_weekly_short')}
-                                    secondaryWindow={
-                                        item.shortPercentage !== null && item.shortPercentage !== undefined
-                                            ? { label: '5H', percentage: item.shortPercentage, resetTime: item.shortResetTime }
-                                            : null
-                                    }
                                     Icon={item.Icon}
                                     valuationStructured={valStructured}
                                     valuationLine={valDisplay?.line}
@@ -262,9 +256,6 @@ function AccountCard({
                     <div className="grid grid-cols-1 gap-2 content-start my-auto">
                         {displayModels.map((model) => {
                             const resolved = modelQuotaForWindow(model.data, account.quota, quotaWindow);
-                            const weeklyResolved = resolved.window === '5h'
-                                ? modelQuotaForWindow(model.data, account.quota, 'weekly')
-                                : null;
                             const pool = model.data
                                 ? modelQuotaPoolKind(model.data.name, model.data.display_name)
                                 : (model.id.toLowerCase().includes('claude') || model.id.toLowerCase().includes('gpt')
@@ -298,16 +289,7 @@ function AccountCard({
                                     label={model.label}
                                     percentage={resolved.percentage}
                                     resetTime={resolved.resetTime}
-                                    windowLabel={resolved.window === 'weekly' ? t('accounts.quota_window_weekly_short') : '5H'}
-                                    secondaryWindow={
-                                        weeklyResolved && weeklyResolved.percentage !== null
-                                            ? {
-                                                label: t('accounts.quota_window_weekly_short'),
-                                                percentage: weeklyResolved.percentage,
-                                                resetTime: weeklyResolved.resetTime,
-                                            }
-                                            : null
-                                    }
+                                    windowLabel={resolved.window === 'weekly' ? t('accounts.quota_window_weekly_short') : undefined}
                                     isProtected={isModelProtected(model.protectedKey)}
                                     Icon={model.Icon}
                                     valuationStructured={valStructured}
