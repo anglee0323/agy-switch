@@ -65,6 +65,22 @@ test('window display retains a tighter primary model observation and rejects con
   quota.quota_groups[0].buckets.push({...bucket,remaining_fraction:.3});
   assert.equal(modelQuotaForWindow(model,quota,'5h').percentage,null);
 });
+test('5h view never mistakes a weekly-capped primary_quota reset for 5h quota', () => {
+  const quota = {quota_groups:[{display_name:'Gemini Models',buckets:[
+    {bucket_id:'gemini-weekly',window:'weekly',remaining_fraction:.2497,remaining_fraction_known:true,reset_time:'2026-11-21T13:23:03Z'},
+    {bucket_id:'gemini-5h',window:'5h',remaining_fraction:1,remaining_fraction_known:true,reset_time:'2026-11-16T11:58:08Z'},
+  ]}]};
+  const model={name:'gemini-4-hydrogen-high',percentage:25,percentage_known:true,observed_remaining_fraction:.2497,quota_bucket_id:'gemini-weekly',reset_time:'2026-11-21T13:23:03Z',primary_quota:{remaining_fraction:.2497,reset_time:'2026-11-21T13:23:03Z'}};
+  assert.deepEqual(modelQuotaForWindow(model,quota,'5h'),{percentage:100,resetTime:'2026-11-16T11:58:08Z',window:'5h'});
+  assert.deepEqual(modelQuotaForWindow(model,quota,'weekly'),{percentage:24.97,resetTime:'2026-11-21T13:23:03Z',window:'weekly'});
+  const weekly = weeklyQuotaItems(quota);
+  assert.equal(weekly[0].shortPercentage, 100);
+  assert.equal(weekly[0].shortResetTime, '2026-11-16T11:58:08Z');
+  const disabledModel = { name: 'gemini-4-hydrogen-disabled', percentage: 0, percentage_known: false, reset_time: '', primary_quota: { remaining_fraction: null, reset_time: '' } };
+  assert.equal(modelQuotaForWindow(disabledModel, quota, '5h').percentage, null);
+  assert.equal(modelQuotaForWindow(disabledModel, quota, 'weekly').percentage, null);
+  assert.equal(effectiveModelQuota(disabledModel, quota).percentage, null);
+});
 test('unavailable 5h data never borrows weekly and Argon stays explicitly weekly', () => {
   const model={name:'gemini-test',percentage:25,percentage_known:true,quota_bucket_id:'gemini-weekly',reset_time:'2030-01-07T00:00:00Z'};
   const quota={quota_groups:[{display_name:'Gemini Models',buckets:[

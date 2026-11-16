@@ -567,6 +567,9 @@ async fn fetch_quota_summary_from_endpoints(
 fn fuse_model_quotas(models: &mut [crate::models::quota::ModelQuota], groups: &[crate::models::quota::QuotaGroup]) {
     use crate::models::quota::{model_quota_pool, quota_pool};
     for model in models {
+        if model.name.to_ascii_lowercase().ends_with("-disabled") {
+            continue;
+        }
         let Some(pool) = model_quota_pool(&model.name, model.display_name.as_deref()) else { continue; };
         let buckets: Vec<_> = groups.iter().flat_map(|group| group.buckets.iter()
             .filter(move |bucket| quota_pool(&bucket.bucket_id, &group.display_name) == Some(pool))).collect();
@@ -760,6 +763,18 @@ mod tests {
         assert_eq!(model.percentage_known, Some(false));
         assert_eq!(model.observed_remaining_fraction, None);
         assert_eq!(model.display_name.as_deref(), Some("Gemini 4 Argon"));
+
+        let disabled_info: ModelInfo = serde_json::from_value(json!({"displayName":"Gemini 4 Hydrogen"})).unwrap();
+        let mut disabled_model = model_from_info("gemini-4-hydrogen-disabled".into(), disabled_info).unwrap();
+        let groups: Vec<crate::models::quota::QuotaGroup> = serde_json::from_value(json!([
+            {"display_name":"Gemini Models","buckets":[
+                {"bucket_id":"gemini-5h","window":"5h","remaining_fraction":1.0,"remaining_fraction_known":true,"reset_time":"2030-01-01T02:00:00Z"},
+                {"bucket_id":"gemini-weekly","window":"weekly","remaining_fraction":1.0,"remaining_fraction_known":true,"reset_time":"2030-01-07T00:00:00Z"}
+            ]}
+        ])).unwrap();
+        fuse_model_quotas(std::slice::from_mut(&mut disabled_model), &groups);
+        assert_eq!(disabled_model.percentage_known, Some(false));
+        assert_eq!(disabled_model.observed_remaining_fraction, None);
     }
     #[test]
     fn offered_tiers_are_not_proof_of_a_subscription() {
