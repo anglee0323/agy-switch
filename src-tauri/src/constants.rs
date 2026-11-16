@@ -172,9 +172,28 @@ pub static CURRENT_VERSION: LazyLock<String> = LazyLock::new(|| {
     config.version
 });
 
+/// Format the Antigravity Hub User-Agent string (`antigravity/hub/<version> (os_type=<os>; arch=<arch>)`)
+pub fn format_hub_user_agent(version: &str) -> String {
+    let os_type = match std::env::consts::OS {
+        "macos" => "macos",
+        "windows" => "windows",
+        "linux" => "linux",
+        _ => "linux",
+    };
+    let arch = match std::env::consts::ARCH {
+        "aarch64" => "arm64",
+        "x86_64" => "amd64",
+        other => other,
+    };
+    format!(
+        "antigravity/hub/{} (os_type={}; arch={})",
+        version, os_type, arch
+    )
+}
+
 /// Native OAuth Authorization User-Agent
 pub static NATIVE_OAUTH_USER_AGENT: LazyLock<String> =
-    LazyLock::new(|| format!("vscode/1.X.X (Antigravity/{})", CURRENT_VERSION.as_str()));
+    LazyLock::new(|| format_hub_user_agent(CURRENT_VERSION.as_str()));
 
 /// Current resolved Antigravity version (e.g., "4.3.0")
 pub fn get_current_version() -> String {
@@ -303,5 +322,13 @@ mod tests {
             floor
         };
         assert_eq!(best, "4.3.0");
+    }
+
+    #[test]
+    fn test_hub_user_agent_format() {
+        let ua = format_hub_user_agent("4.3.0");
+        assert!(ua.starts_with("antigravity/hub/4.3.0 (os_type="), "unexpected UA: {ua}");
+        assert!(ua.contains("; arch="), "unexpected UA: {ua}");
+        assert!(ua.ends_with(')'), "unexpected UA: {ua}");
     }
 }

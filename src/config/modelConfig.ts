@@ -66,6 +66,38 @@ export const MODEL_CONFIG: Record<string, ModelConfig> = {
         group: 'Gemini 4',
         tags: ['carbon', 'low'],
     },
+    'gemini-4-argon': {
+        label: 'Gemini 4 Argon',
+        shortLabel: 'G4 Argon',
+        protectedKey: 'gemini-pro',
+        Icon: Gemini.Color,
+        group: 'Gemini 4',
+        tags: ['argon'],
+    },
+    'gemini-4-argon-high': {
+        label: 'Gemini 4 Argon (High)',
+        shortLabel: 'G4 Argon',
+        protectedKey: 'gemini-pro',
+        Icon: Gemini.Color,
+        group: 'Gemini 4',
+        tags: ['argon', 'high'],
+    },
+    'gemini-4-argon-medium': {
+        label: 'Gemini 4 Argon (Medium)',
+        shortLabel: 'G4 Argon',
+        protectedKey: 'gemini-pro',
+        Icon: Gemini.Color,
+        group: 'Gemini 4',
+        tags: ['argon', 'medium'],
+    },
+    'gemini-4-argon-low': {
+        label: 'Gemini 4 Argon (Low)',
+        shortLabel: 'G4 Argon',
+        protectedKey: 'gemini-pro',
+        Icon: Gemini.Color,
+        group: 'Gemini 4',
+        tags: ['argon', 'low'],
+    },
     'gemini-4-hydrogen': {
         label: 'Gemini 4 Hydrogen',
         shortLabel: 'G4 Hydrogen',
@@ -537,7 +569,9 @@ export function getDisplayQuotaModels(
         } else {
             const mLower = m.name.toLowerCase();
             const exLower = existing.name.toLowerCase();
-            if (mLower.includes('high') && !exLower.includes('high')) {
+            const mKnown = m.percentage_known !== false && !mLower.endsWith('-disabled');
+            const exKnown = existing.percentage_known !== false && !exLower.endsWith('-disabled');
+            if ((mKnown && !exKnown) || (mKnown === exKnown && mLower.includes('high') && !exLower.includes('high'))) {
                 accountCanonMap.set(canon, m);
             }
         }
@@ -547,7 +581,17 @@ export function getDisplayQuotaModels(
 
     for (const canonKey of pinnedKeys) {
         let rawModel = accountCanonMap.get(canonKey);
-        if (!rawModel && canonKey === 'gemini-3.1-pro' && !pinnedKeys.includes('gemini-2.5-pro')) {
+        if (!rawModel && canonKey === 'gemini-pro-orchestrator-argon') {
+            const argonModel = accountCanonMap.get('gemini-4-argon');
+            if (argonModel) {
+                rawModel = { ...argonModel, name: canonKey, display_name: undefined };
+            }
+        } else if (!rawModel && canonKey === 'gemini-pro-orchestrator') {
+            const carbonModel = accountCanonMap.get('gemini-4-carbon');
+            if (carbonModel) {
+                rawModel = { ...carbonModel, name: canonKey, display_name: undefined };
+            }
+        } else if (!rawModel && canonKey === 'gemini-3.1-pro' && !pinnedKeys.includes('gemini-2.5-pro')) {
             rawModel = accountCanonMap.get('gemini-2.5-pro');
         } else if (!rawModel && canonKey === 'gemini-2.5-pro' && !pinnedKeys.includes('gemini-3.1-pro')) {
             rawModel = accountCanonMap.get('gemini-3.1-pro');
