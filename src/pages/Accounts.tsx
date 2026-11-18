@@ -28,7 +28,7 @@ import { cn } from "../utils/cn";
 import { useTranslation } from "react-i18next";
 import { save } from "@tauri-apps/plugin-dialog";
 import { format } from "date-fns";
-import { saveAccountExport } from "../services/accountService";
+import { saveAccountExport, fetchAccountQuota } from "../services/accountService";
 import type { Account } from "../types/account";
 import { getAccountTier, type AccountTier } from "../utils/accountTier";
 
@@ -406,9 +406,12 @@ function Accounts() {
         const ids = Array.from(selectedIds);
         setRefreshingIds(new Set(ids));
 
+        // 直接调用服务层逐个刷新，整批完成后一次性同步账号列表；
+        // 避免每个账号完成都触发一次全量 fetchAccounts。
         const results = await Promise.allSettled(
-          ids.map((id) => refreshQuota(id)),
+          ids.map((id) => fetchAccountQuota(id)),
         );
+        await fetchAccounts();
 
         results.forEach((result, index) => {
           const id = ids[index];
