@@ -285,7 +285,7 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
             const url = typeof res === 'string' ? res : res.url;
 
             if (!url) {
-                throw new Error(t('accounts.add.oauth.error_no_url', 'OAuth URLを取得できませんでした'));
+                throw new Error(t('accounts.add.oauth.error_no_url'));
             }
 
             setOauthUrl(url); // 确保链接在 UI 中可见，方便用户手动复制
@@ -295,7 +295,7 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
 
             if (!popup) {
                 setStatus('error');
-                setMessage(t('accounts.add.oauth.popup_blocked', 'ポップアップがブロックされました'));
+                setMessage(t('accounts.add.oauth.popup_blocked'));
                 return;
             }
 
@@ -369,14 +369,14 @@ function AddAccountDialog({ onAdd, showText = true }: AddAccountDialogProps) {
         if (!manualCode.trim()) return;
 
         setStatus('loading');
-        setMessage(t('accounts.add.oauth.manual_submitting', '認可コードを送信中...'));
+        setMessage(t('accounts.add.oauth.manual_submitting'));
 
         try {
             await invoke('submit_oauth_code', { code: manualCode.trim(), state: null });
 
             // 提交成功反馈
             setStatus('success');
-            setMessage(t('accounts.add.oauth.manual_submitted', '認可コードを送信しました。バックエンドで処理中です...'));
+            setMessage(t('accounts.add.oauth.manual_submitted'));
 
             setManualCode('');
 
