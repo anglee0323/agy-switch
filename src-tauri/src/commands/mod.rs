@@ -640,7 +640,7 @@ pub async fn set_window_theme(window: tauri::Window, theme: String) -> Result<()
 pub async fn update_account_label(account_id: String, label: String) -> Result<(), String> {
     // 验证标签长度（按字符数计算，支持中文）
     if label.chars().count() > 15 {
-        return Err("标签长度不能超过15个字符".to_string());
+        return Err("Label must be 15 characters or fewer.".into());
     }
 
     modules::logger::log_info(&format!(
@@ -649,43 +649,13 @@ pub async fn update_account_label(account_id: String, label: String) -> Result<(
         if label.is_empty() { "无" } else { &label }
     ));
 
-    // 1. 读取账号文件
-    let data_dir = modules::account::get_data_dir()?;
-    let account_path = data_dir
-        .join("accounts")
-        .join(format!("{}.json", account_id));
-
-    if !account_path.exists() {
-        return Err(format!("账号文件不存在: {}", account_id));
-    }
-
-    let content =
-        std::fs::read_to_string(&account_path).map_err(|e| format!("读取账号文件失败: {}", e))?;
-
-    let mut account_json: serde_json::Value =
-        serde_json::from_str(&content).map_err(|e| format!("解析账号文件失败: {}", e))?;
-
-    // 2. 更新 custom_label 字段
-    if label.is_empty() {
-        account_json["custom_label"] = serde_json::Value::Null;
-    } else {
-        account_json["custom_label"] = serde_json::Value::String(label.clone());
-    }
-
-    // 3. 保存到磁盘
-    let json_str = serde_json::to_string_pretty(&account_json)
-        .map_err(|e| format!("序列化账号数据失败: {}", e))?;
-    std::fs::write(&account_path, json_str).map_err(|e| format!("写入账号文件失败: {}", e))?;
-
-    modules::logger::log_info(&format!(
-        "账号标签已更新: {} ({})",
-        account_id,
-        if label.is_empty() {
-            "已清除".to_string()
-        } else {
-            label
-        }
-    ));
+    // 与配额刷新、切换、导入等写入方共用同一把账号文件锁：
+    // 读取-修改-保存必须在一个临界区内完成，避免并发写入互相覆盖；
+    // 保存走 save_account 的原子写，避免崩溃时损坏账号文件。
+    let _write = modules::account::lock_account_file_updates()?;
+    let mut account = modules::account::load_account(&account_id)?;
+    account.custom_label = if label.is_empty() { None } else { Some(label.clone()) };
+    modules::account::save_account(&account)?;
 
     Ok(())
 }
