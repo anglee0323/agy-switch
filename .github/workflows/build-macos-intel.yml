@@ -1,0 +1,57 @@
+name: Build macOS Intel
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: macOS (Intel x64)
+    runs-on: macos-15-intel
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          cache-bin: false
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build complete ad-hoc signed app bundle
+        env:
+          # Complete bundle sealing; not Developer ID signing or notarization.
+          APPLE_SIGNING_IDENTITY: "-"
+        run: npm run tauri build -- --target x86_64-apple-darwin --bundles app -- --locked
+
+      - name: Verify app bundle and CLI
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p 'require("./package.json").version')"
+          APP="$(ls -d src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.app)"
+          [[ "$(lipo -archs "$APP/Contents/MacOS/agy-switch-desktop")" == "x86_64" ]]
+          [[ "$("$APP/Contents/MacOS/agy-switch-desktop" --version)" == "agy-switch $VERSION" ]]
+          node scripts/test-cli.mjs "$APP/Contents/MacOS/agy-switch-desktop"
+
+      - name: Package app bundle
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p 'require("./package.json").version')"
+          APP="$(ls -d src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.app)"
+          mkdir -p artifacts
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "artifacts/agy-switch-${VERSION}-macos-x64.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agy-switch-macos-x64
+          path: artifacts/*.zip
+          retention-days: 14
