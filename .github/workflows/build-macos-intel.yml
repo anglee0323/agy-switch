@@ -29,17 +29,31 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build complete ad-hoc signed app bundle
-        env:
-          # Complete bundle sealing; not Developer ID signing or notarization.
-          APPLE_SIGNING_IDENTITY: "-"
+      # The macOS bundler signs the main executable but leaves the console
+      # binary it copies into Contents/MacOS unsigned, so its own codesign step
+      # fails the outer bundle. Bundle without signing and seal the bundle here.
+      - name: Build app bundle
         run: npm run tauri build -- --target x86_64-apple-darwin --bundles app -- --locked
+
+      - name: Sign app bundle
+        run: |
+          set -euo pipefail
+          APP="$(ls -d src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.app)"
+          while IFS= read -r -d '' file; do
+            if file "$file" | grep -q 'Mach-O'; then
+              codesign --force --sign - --timestamp=none "$file"
+            fi
+          done < <(find "$APP/Contents" -type f -perm -u+x -print0)
+          codesign --force --sign - --timestamp=none "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
 
       - name: Verify app bundle and CLI
         run: |
           set -euo pipefail
           VERSION="$(node -p 'require("./package.json").version')"
           APP="$(ls -d src-tauri/target/x86_64-apple-darwin/release/bundle/macos/*.app)"
+          [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Contents/Info.plist")" == "com.lbjlaq.antigravity-tools-lite" ]]
+          [[ "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")" == "$VERSION" ]]
           [[ "$(lipo -archs "$APP/Contents/MacOS/agy-switch-desktop")" == "x86_64" ]]
           [[ "$("$APP/Contents/MacOS/agy-switch-desktop" --version)" == "agy-switch $VERSION" ]]
           node scripts/test-cli.mjs "$APP/Contents/MacOS/agy-switch-desktop"
